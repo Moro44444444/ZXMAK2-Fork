@@ -924,3 +924,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Recorded the requirement to support both physical CD/DVD drives and virtual CD images through an IDE/ATAPI master/slave device, with explicit insert/eject UI and read-only media semantics.
 - The work is intentionally deferred until the BaseConf/ZX-Evo hardware and ROM/OS contract is verified; current ATA CD scaffolding is not presented as working support.
 - Production code, B34, runtime packages, and runtime acceptance were not changed.
+
+## 2026-09-19 — Warm Reset and CMOS reset hotkey backlog
+
+- Recorded `F12` as an additional Warm Reset shortcut while retaining `Alt+Ctrl+Insert` for compatibility.
+- Recorded `Ctrl+F12` as a host-level CMOS reset command with confirmation, `.cmos` backup, documented defaults, persistence, and a follow-up machine reset.
+- Debugger-local F12 behavior (Stack/Breakpoints) must remain unchanged; no production code or runtime acceptance changed.
