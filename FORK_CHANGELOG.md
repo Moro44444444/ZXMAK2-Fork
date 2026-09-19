@@ -918,3 +918,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - `PROJECT_JOURNAL.md` is now explicitly the canonical long-lived record of requirements, attempts, results, backups, and limitations; `FORK_CHANGELOG.md` remains the concise history. Runtime acceptance is recorded only after an explicit user test.
 - Added to backlog: `New Card…` and `Eject Card` on the SD toolbar control, plus persistence of the mounted SD image across ZXMAK2 restarts with an explicit empty state after Eject.
 - Production code and the B34 runtime were not changed; no build or runtime acceptance was performed.
+
+## 2026-09-19 — CD/DVD IDE/ATAPI backlog
+
+- Recorded the requirement to support both physical CD/DVD drives and virtual CD images through an IDE/ATAPI master/slave device, with explicit insert/eject UI and read-only media semantics.
+- The work is intentionally deferred until the BaseConf/ZX-Evo hardware and ROM/OS contract is verified; current ATA CD scaffolding is not presented as working support.
+- Production code, B34, runtime packages, and runtime acceptance were not changed.
