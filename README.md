@@ -51,29 +51,15 @@ You may also be interested about this emulator history:
 - ZXMAK - first ZXMAK emulator written in C++, released in 2001-2003: http://zxmak.narod.ru/
 
 
-## What's new:
+## What's new
 
-2.9.2.39319:
-- the last released version on CodePlex
+### ZX-Evo BaseConf Alpha 0.1 â€” B33-R1
 
-2.9.3.4:
-- first minor changes after CodePlex shut down; removed nuget and TFS settings linked to CodePlex
+- Reworked ZX-Evolution BaseConf emulation against the official r1364 documentation: memory paging, hardware ports, timing, interrupts, palette and all seven documented video modes.
+- Fixed border/multicolor phase, mid-frame video switching and several audio timing/DC issues.
+- Fixed the PentEvo virtual FDD path used by ERS: Rage now starts with one short Enter, while NedoOS and Bad Apple compatibility is preserved.
+- Corrected Nemo IDE port decoding and added convenient HDD image selection, persistence and ejection in Machine Settings. HDD access, FAT browsing and file launching have been runtime-tested.
+- Disk images opened through the normal UI are writable by default; write protection remains available as an explicit option.
+- Added a clean portable ZX-Evo BaseConf package for testing: [download Alpha 0.1](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
 
-2.9.3.5
-- Managed DirectX removed, the code rewritten to use direct calls to DirectX. Eliminated LoaderLock issue (Managed DirectX bug). Now emulator has full support of x64 mode. 
-
-2.9.3.6
-- a little change for port decode, covoxPentagon, CovoxScorpion were removed and replaced with CovoxMono è CovoxStereo. You can configure it with text editor in VMZ file.
-- fixed ContextMenu bug - blinking menu (popup menu Wizard on Settings window)
-- changed Kempston port decode setting for Spectrum 48 model (incorrect change, see next version)
-
-2.9.3.7:
-- fixed Kempston port decode setting for Spectrum 48 model. Now Timing_Tests-48k_v1.0.tap pass all tests again.
-- moved a little change for joystick bug from MDX version (the last commit on CodePlex). I'm not sure if it can be reproduced with native DirectX. But moved this fix, because the fix is pretty easy.
-- due to remove of MDX dependency, I set useLegacyV2RuntimeActivationPolicy="false" in ZXMAK2.exe.config, may be it will improve performance.
-- the code moved to GITHUB  :)
-
-2.9.3.8:
-- added Intel HEX file loader (load data into zx spectrum address space)
-- fixed multi-drive trdos support
-
+Known Alpha limitation: replacing an SD or HDD image for a second time in the same emulator process may still require restarting the emulator. Automatic OS boot from HDD will be handled separately.
