@@ -667,3 +667,376 @@ ROM или прикладного теста, отдельно помечены 
 - Still pending: exact immediate transition/horizontal-vcount/INT, border sync, 48K/128K contention, IO/WAIT pin-edge/stall overlap/refill, full video/port audit, FLASH/NMI/12BD, SD replacement, physical FPS/audio/tape and comprehensive runtime acceptance.
 - Decision: accept compiled supported-AVR-video / steady-raster epoch model with explicit software frame-boundary approximation only; not complete hardware timing compliance.
 
+## ZXMAK2-v13-ZXEVO-BC-RASTERDIAG-B18-20260917-213256 - BaseConf raster diagnostic indicator
+- Base: ZXMAK2-v13-ZXEVO-BC-RASTERCTRL-B17-R1-20260916-004056; checkpoint verified before editing. All 806 pinned source files and all 79 release files matched the accepted B17-R1 backup; the current and backup journals also matched. Machine: ZX-Evo BSconf.
+- One diagnostic node only: expose the existing B17 Scroll Lock / AVR video state and requested-versus-active raster state in the existing `View -> Debug Info` OSD. No raster timing, INT, contention, clock, DRAM arbitration, sound, keyboard mapping, persistence, ROM, configuration or non-Evo machine behavior changed.
+- Seven production files changed: `ZXMAK2.Engine/Interfaces/IUlaDevice.cs`, `ZXMAK2.Hardware/Evo/CmosPentEvo.cs`, `ZXMAK2.Host/Interfaces/IFrameInfo.cs`, `ZXMAK2.Host/Entities/FrameInfo.cs`, `ZXMAK2.Engine/VirtualMachine.cs`, `ZXMAK2.Host.WinForms/Controls/RenderVideo.cs` and `ZXMAK2.Host.WinForms/Mdx/Renderers/OsdRenderer.cs`. No project file changed.
+- Added optional `IFrameDiagnosticProvider`; only `CmosPentEvo` implements it. The engine transports its text through `FrameInfo` and the optional host-side `IFrameDiagnosticInfo`, and WinForms appends it to the already optional Debug Info overlay. The original `IFrameInfo` contract and five-argument `FrameInfo` constructor remain compatible; legacy machines receive an empty string and retain their old overlay.
+- Indicator format: `ZX-Evo B18: Scroll=N AVR=HH TV/VGA=B raster req=M:name active=M:name[ pending]`. `Scroll` counts rising-edge Scroll Lock presses during the process lifetime; `AVR` is the supported video mask; `TV/VGA` is bit 0; requested and active modes/names expose the B17 software-frame-boundary handoff, with `pending` only while they differ.
+- Compiled B18 probe passed provider discovery, AVR=31 / TV-VGA=1 / requested 3:128K versus active 0:normal pending, next-frame activation, `FrameInfo` transport and OSD property wiring. Preserved B17 activation, B16 RDCFG, B15 raster-table and B14 full regression probes all passed against the rebuilt release.
+- Six Release projects rebuilt: Host, CPU, Engine, Hardware, WinForms and EXE. Relative to B17-R1 exactly the seven expected source files differ; the other 799 pinned files are byte-identical.
+- Accepted ROM remains unchanged: ERS v0.61.01 FE, SHA256 620146534df8a49c6b9042df45812d1e7f90683dd8f7b813ca2c5ecac96dc1ca.
+- Backup: L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-RASTERDIAG-B18-20260917-213256. Separate runtime package: K:\Download\ZXMAK2-v13-ZXEVO-BC-RASTERDIAG-B18-20260917-213256\release. Build and probe transcripts are retained in the backup.
+- Runtime acceptance is explicitly pending the user's test. Check `View -> Debug Info`, eight released plain Scroll Lock presses, requested/active convergence and return to the initial AVR/raster state. Do not infer physical TV/VGA output from bit 0.
+- Still pending and deliberately outside B18: exact immediate transition/horizontal-vcount/INT, border sync, 48K/128K contention, IO/WAIT pin-edge/stall overlap/refill, full video/port audit, FLASH/NMI/12BD, SD replacement, physical FPS/audio/tape and comprehensive runtime acceptance.
+- Decision: accept the compiled diagnostic visibility node only; do not claim B17/B18 runtime acceptance until the user completes the runtime test.
+
+### Пользовательская проверка B18 — 2026-09-17
+
+- Пользователь проверил все восемь состояний Scroll Lock и предоставил восемь снимков экрана. Диагностическая строка меняет `AVR`, `TV/VGA`, requested и active raster в соответствии с переключением; визуально также меняется развёртка.
+- Диагностический индикатор B18 принят как работающий в runtime.
+- Эта проверка является качественным подтверждением переключения и видимого изменения кадра. Она не измеряет точные координаты пикселей, частоту строк/кадров, фазу INT, contention или физические TV/VGA-сигналы.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOCONTRACT-B19-20260917-231704
+
+- База: принятый B18. Перед началом 806 закреплённых исходных файлов, runtime из 79 файлов и оба журнала сверены с B18 без расхождений. Производственный код в B19 не изменялся.
+- Один логический узел: точный паспорт реализованных видеорежимов BaseConf r1364 и карта расхождений текущего эмулятора. Паспорт: `BASECONF_VIDEO_MODES_B19.md`.
+- Нормативный источник: `pentevo-fpga.r1364.tar.gz`, SHA256 `7A509FBCEF3AF85380EC475AD622A0682E714AF54625851FCB9AA678DA0BBB82`. Выбранные неизменённые RTL-файлы сохранены в `backup\ZXMAK2-v13-ZXEVO-BC-VIDEOCONTRACT-B19-20260917-231704\reference`.
+- Установлено по `video_modedecode.v`, `video_addrgen.v`, `video_fetch.v` и `video_render.v`: r1364 реализует семь селекторных путей — ZX attr 256×192; Pentagon hardware multicolor 256×192; Pentagon 16c 256×192; ATM 16c 320×200; ATM hardware multicolor 640×200; ATM text 80×25; BaseConf one-page text 80×25.
+- Существенная коррекция терминологии: enum `Evo256x192` выбирает Pentagon hardware multicolor, а не 256-цветный framebuffer. `EvoAlco16c` соответствует Pentagon 16c.
+- `texts/video_modes.txt` является общей матрицей форматов/полосы памяти. Указанные там `256c` и `16+16c` не имеют декодера, адресогенератора, fetch или render-пути в BaseConf r1364 и не входят в обязательную матрицу совместимости r1364.
+- Текущие семь маршрутов рендереров и основные схемы страниц/пикселей структурно присутствуют, но точными пока не приняты: общий raster/picture-window/border/INT, mid-frame policy, contention/floating bus, физический TV/VGA и mode-specific golden vectors остаются открыты.
+- Шесть Release-проектов перестроены. Новый compiled `VideoModeContractProbe` прошёл 46 проверок селекторов, семи маршрутов, классов кадров, 16-элементных палитр, packed 16c и идентичности HM-пути. Полный сохранённый каскад B18/B17/B16/B15/B14 прошёл без регрессий.
+- Отдельный backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOCONTRACT-B19-20260917-231704`. Новый runtime-пакет не создаётся: бинарный производственный контракт не менялся, текущий runtime остаётся B18.
+- Решение: B19 принять как документационную и compiled-контрольную точку, без runtime-приёмки видеорежимов. Следующий узел B20 — только общая основа raster/picture window/border/INT; отдельные форматы и TRD не смешивать с B20.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOBASE-B20-20260917-233050 — общая временная база видео
+
+- База: B19; перед правкой текущие 806 закреплённых исходных файлов, 79 файлов release, журналы и `BASECONF_VIDEO_MODES_B19.md` сверены с checkpoint B19 без расхождений.
+- Выполнен только B20: общая для семи путей геометрия raster/picture window, эпоха INT, длительность INT и фаза border. Форматы пикселей, палитры, mode controller и TRD не изменялись.
+- По RTL r1364 выставлены начала picture: 140-й цикл (70-й renderer tact) для 256×192 и 108-й цикл (54-й tact) для широких 320/640/text; первые строки wide 76/42/60/59, standard на четыре строки позже.
+- Общий viewport начинается на том же месте для всех путей: горизонтально с 54-го tact, вертикально за 28 строк до wide-picture. Для короткой 60 Hz развертки нижний border ограничен фактической длиной кадра.
+- Renderer epoch привязан к аппаратному INT: normal/60 Hz — v=0,h=2; 48K — v=1,h=126; 128K — v=1,h=130. INT длится 32 базовых tact (256 master tact). DRAM video fetch переведён в ту же эпоху.
+- Для 48K/128K включена аппаратная 4T-защёлка border с вычисленной фазой; normal/60 Hz сохраняют немедленное обновление. Изменение внесено одинаково в Spectrum, ATM 320, ATM 640, ATM text, Evo text и Evo A16 renderers.
+- Изменены ровно шесть production-файлов: `UlaPentEvo.cs`, `Atm320Renderer.cs`, `Atm640Renderer.cs`, `AtmTxtRenderer.cs`, `EvoTxtRenderer.cs`, `EvoA16Renderer.cs`.
+- После каждой правки выполнены шесть Release rebuild. Итоговый B20 `VideoTimingProbe` прошёл 12 512 проверок; B20 raster-table probe — 17 355 101 проверку; B19/B18/B16 и адаптированный к INT-эпохе полный B14 regression probe прошли. Старые B17/B15/B14 probes сохранены неизменными в прежних checkpoint; их физическая нулевая точка fetch закономерно заменена отдельными B20-копиями.
+- Это compiled-приёмка общей временной основы, не runtime-приёмка изображения. Физический VGA/TV, точные пиксели каждого формата, mid-frame переключение, contention/floating bus и wall-clock FPS/audio остаются открыты.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOBASE-B20-20260917-233050`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VIDEOBASE-B20-20260917-233050\release`.
+- Следующий отдельный узел после пользовательской проверки B20: B21 mode controller и bootable TRD-оболочка. В B20 к нему не переходили.
+
+### Пользовательская runtime-проверка B20 — 2026-09-18
+
+- Пользователь подтвердил, что название активной развёртки и геометрия кадра меняются, переключение работает, видимых артефактов нет.
+- B20 принят качественно в пределах runtime-задачи: стабильное переключение и отсутствие видимых повреждений кадра. Проверка не измеряет координаты с точностью до tact, частоты, фазу INT или физический TV/VGA.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-20260918-000040 — picture controller и bootable TRD shell
+
+- База: B20 после пользовательской качественной runtime-приёмки. Перед началом 806 закреплённых исходных файлов и 79 файлов release совпали с after-снимком B20; журналы и паспорт B19 также совпали.
+- Один production-файл изменён: `src/ZXMAK2.Hardware/Evo/UlaPentEvo.cs`. Добавлен явный `BaseConfVideoModeController` с именованными семью маршрутами r1364.
+- Контроллер проверяет все 32 сырых сочетания RG/RGEX. Pentagon selector игнорируется для RG 0/2/6/7, как в RTL; RG 1/4/5 и Pentagon code 3 детерминированно дают ZX fallback.
+- Запрос формата отделён от активного renderer. B21 применяет renderer route на следующей программной границе кадра, совместно с существующей политикой raster B17/B20; requested/active/pending доступны как hardware values.
+- Это явная программная политика эмулятора, а не утверждение о точном mid-frame FPGA edge. Точная аппаратная семантика смены формата остаётся отдельной задачей.
+- Создан `tools/BaseConfVideoTest/BcVideoMenu.asm` и воспроизводимый полный `BCVIDTEST.TRD` размером 655360 байт. В каталоге два файла: автозапускаемый `boot.B` и `BCMENU.C`, загружаемый по адресу 32768.
+- B21 TRD содержит оболочку с семью корректно названными r1364 mode slots, управлением Q/A, Enter, 1..7 и Space. Слоты намеренно сообщают `FORMAT PATTERN: B22+`: B21 проверяет boot/menu/dispatch, но не выдаёт placeholder за тест пиксельного формата.
+- Использован официальный Windows binary sjasmplus v1.24.0; архив `sjasmplus-1.24.0.win.zip`, SHA256 `7E1F8840842039BDB97E51A59ABDA2E5C25A9DA160097E8F79A62583AB72D0E0`, сохранён в reference B21.
+- Проверки: B21 controller probe — 321; B21 timing probe — 12736; B21 TRD probe — 30. B19 video contract, B18 diagnostic, B16 RDCFG, B20 raster table и полный B14 regression cascade прошли.
+- Старый B20 timing probe ожидаемо не соответствует новой frame-boundary picture policy и сохранён неизменным в B20. Его заменяет отдельный B21 timing probe; остальные старые probes не менялись.
+- Runtime-приёмка B21 ожидает пользовательскую проверку автозапуска TRD, отображения семи пунктов, Q/A/Enter, прямых клавиш 1..7 и возврата Space. Форматные изображения ещё не тестируются.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-20260918-000040`. Runtime и TRD: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-20260918-000040`.
+- Следующий изолированный узел после приёмки оболочки: B22, только ZX 256×192 attr golden vectors и визуальный pattern в первом слоте TRD.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-R1-20260918-004015 — исправление boot.B
+
+- Пользовательская runtime-проверка исходного B21 выявила отказ: другие TRD читаются, а `BCVIDTEST.TRD` пытается стартовать без видимого результата; `LIST` также ничего не показывал. Исходный B21 runtime не принят и сохранён без перезаписи.
+- Причина локализована в BASIC-загрузчике: после автозапуска `boot.B` он выполнял обычный `LOAD "BCMENU" CODE` без повторного входа в TR-DOS, поэтому команда уходила в магнитофонный загрузчик BASIC ROM.
+- Исправлен только этот узел. Строка 10 теперь выполняет `RANDOMIZE USR VAL "15619": REM: LOAD "BCMENU" CODE`; отдельная строка 20 запускает загруженный код через `RANDOMIZE USR VAL "32768"`. Контроллер видеорежимов, тайминги и menu machine code не менялись; B22 не начат.
+- Добавлен постоянный `tools/BaseConfVideoTest/TrdShellProbe.cs`. Он монтирует образ через штатный `TrdSerializer` ZXMAK2, проверяет каталог и системный сектор, делает полный байтовый serialize round-trip, требует последовательность `USR 15619 / REM / LOAD`, autostart marker и семь menu slots.
+- После каждой исходной правки шесть Release-проектов перестроены. Итоговый B21-R1 TRD probe прошёл 655905 проверок; B21 controller 321, B21 timing 12736, B19 contract 46, B18 diagnostic, B16 RDCFG 201030, B20 raster table 17355101 и полный B14 cascade прошли без регрессий.
+- Новый `BCVIDTEST.TRD`: 655360 байт, SHA256 `8CD7E0B1EAE5F91077B8CBB841C4BEAD45940A205836C96CFA9C63DAB7516F4A`. Emulator release намеренно взят без изменений из B21; исправлен только TRD/README.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-R1-20260918-004015`. Новый runtime/TRD: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VIDEOMENU-B21-R1-20260918-004015`.
+- Runtime-приёмка B21-R1 ожидает повторную пользовательскую проверку boot/menu. Не заявлять приёмку и не начинать B22 до этого теста.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOPATTERN-B22-20260918-041824 — общий pattern-suite семи видеомаршрутов
+
+- База: B21-R1 после пользовательского подтверждения исправленного TRD boot/menu. В production-коде эмулятора B22 изменений не вносит; изменены только тестовая оболочка, TRD-probe и документация.
+- В `tools/BaseConfVideoTest/BcVideoMenu.asm` добавлены общая физическая bitmap/attribute pattern-запись, выбор семи raw RG/RGEX селекторов r1364 (`3,19,11,0,2,6,7`) через `EFF7` и `FF77`, а также ожидание программной границы кадра после выбора.
+- Семь слотов теперь показывают `B22 TEST SLOT` и `COMMON PATTERN / ROUTE ACTIVE`; названия режимов сохранены: ZX 256×192 attr, Pentagon 256 HWM, Pentagon 256 16c, ATM 320×200 16c, ATM 640×200 HWM, ATM text 80×25, BaseConf text 80×25.
+- `TrdShellProbe-B22` проверяет полный 640 KiB TRD round-trip через `TrdSerializer`, каталог/автозагрузку, семь пунктов и B22 slot markers. Результат: 655906 PASS. Сохранённый compiled cascade B21/B20/B19/B18/B16/B14 прошёл.
+- После правки выполнены sjasmplus assembly, шесть Release rebuild и все compiled probes. Физическая картинка, соответствие каждого pixel format и отсутствие артефактов остаются runtime-проверкой пользователя; приёмка не заявляется.
+- Отдельный runtime/backup B22 создаётся после этой контрольной точки; следующий логический узел до пользовательского теста не начинать.
+
+### Пользовательская runtime-проверка B22 — отклонено
+
+- Получены семь последовательных снимков. ZX attr показывает подписанный pattern; Pentagon HWM, ATM 640 HWM и оба text-режима дают чёрный экран; Pentagon 16c и ATM 320 выводят полосы без читаемой подписи.
+- Переключение семи renderer routes подтверждено различающимся выводом, но общий Spectrum-page pattern не соответствует физической раскладке остальных форматов. B22 runtime не принят.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOPATTERN-B22-R1-20260918-044100 — format-aware pattern suite
+
+- Исправлен только тестовый TRD. Production-код эмулятора не изменён и следующий видеоузел не начат.
+- Каждый слот теперь подготавливает собственную раскладку: ZX bitmap/attrs; Pentagon HWM bitmap и построчные attrs; Pentagon packed 16c страницы 4+5; ATM 320 страницы 1+5; ATM 640 bitmap page 5 + attrs page 1; ATM text symbols page 5 + attrs page 1; BaseConf one-page text page 8.
+- Для обоих текстовых режимов Spectrum ROM font 32..127 загружается через `XXBF.D2` в 2 KiB character generator. Все семь экранов содержат собственную подпись B22-R1, pattern marker и приглашение Space.
+- Стек теста перенесён из области HWM attrs в безопасную страницу по адресу `BFF0`. Физические страницы временно отображаются в окно `C000` через BaseConf/7FFD paging; после возврата в меню восстанавливается стандартный маршрут и страница.
+- TRD: 655360 байт, SHA256 `8B8258D0B721E2B953AFB5C2E304A665EB9F0C805835A26C4270D215D2BBEDB4`. `TrdShellProbe-B22-R1`: 655916 PASS, включая штатный ZXMAK2 serialize round-trip, каталог, page mapper, font-write sequence, packed-pixel table и семь raw selectors.
+- После каждой правки выполнены sjasmplus assembly, шесть Release rebuild и сохранённый B21/B20/B19/B18/B16/B14 cascade; все проверки PASS.
+- Runtime-приёмка B22-R1 ожидает повторные семь пользовательских снимков. До неё следующий логический узел не начинать.
+
+### Пользовательская runtime-проверка B22-R1 — отклонено уже на BOOT
+
+- Пользователь уточнил, что искажённые символы и случайные цветные блоки появляются сразу после автозапуска `boot.B`, до выбора любого из семи тестов. Поэтому этот снимок не является результатом renderer route и не позволяет оценивать видеорежимы.
+- Причина локализована в тестовом ASM: стартовая загрузка font RAM сначала выполняла одиночный `OUT #7FFD`, ошибочно считая его самостоятельным селектором физической страницы `C000`. После ERS/TR-DOS активной могла быть единичная карта памяти и произвольные дескрипторы окон; запись также меняла бит выбора карты и разрывала соответствие CPU-экрана и видеостраницы.
+- B22-R1 runtime не принят. Production-код эмулятора по этому наблюдению не обвиняется и следующий логический узел не начат.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOPATTERN-B22-R2-20260918-051327 — безопасный BOOT/pager
+
+- Сверено с официальным руководством BaseConf и RTL r1364: `#00BE..#07BE` читают инверсные номера страниц обеих карт, `#08BE/#09BE` — `ramnrom/dos7ffd`, `#0ABE` — последнее значение `#7FFD`; `#FFF7/#F7F7` являются документированными descriptor/direct-page портами окна `C000`.
+- BOOT теперь сначала сохраняет активную карту и точный дескриптор `C000`, временно открывает только `XXBF.D0`, отключает `dos7ffd` для рабочего окна, выбирает линейную физическую страницу через `#F7F7`, загружает шрифт через `XXBF.D2` и до рисования меню восстанавливает исходный descriptor. Значение `#7FFD` не изменяется.
+- BaseConf text page исправлена с 7FFD-кодированного `$20` на линейный физический номер `8`. Возврат Space также восстанавливает исходный `C000`, а не принудительно пишет страницу через `#7FFD`.
+- `TrdShellProbe-B22-R2` требует чтения `#0ABE/#08BE`, записи `#FFF7/#F7F7`, state-preserving font enable и отсутствие старого standalone `#7FFD` mapper. Результат: 655920 PASS; TRD 655360 байт, SHA256 `2943B63888036DF094D3F5A402085C5F3FBD4C0ED038527FD192FC154576C52B`.
+- Все 23 Release-проекта перестроены последовательно Visual Studio 2022 MSBuild. Сохранённые B21 controller/timing, B19 contract, B18 diagnostic, B16 RDCFG, B20 raster и полный B14 refresh cascade прошли.
+- Runtime/backup: `ZXMAK2-v13-ZXEVO-BC-VIDEOPATTERN-B22-R2-20260918-051327`. Первая пользовательская проверка — только чистый BOOT/menu; runtime-приёмка и переход дальше не заявляются.
+
+### Пользовательская runtime-проверка B22-R2 BOOT — принята
+
+- Пользовательский снимок сразу после автозапуска подтверждает чистое стандартное меню `BASECONF VIDEO B22-R2`: заголовок, семь mode slots, курсор и обе строки управления читаются; прежних повреждённых глифов и случайных цветных блоков нет.
+- Принят только BOOT/menu и исправление безопасного pager/font-init. Запуск пунктов, возврат Space и изображения семи renderer routes этим снимком не проверялись; B22 целиком ещё не принят.
+- Следующий логический узел не начат.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOPALETTE-B23-20260918-102642 — глобальная BaseConf-палитра и чистый ATM 640 HWM test
+
+- Основание: пользователь сравнил один и тот же ZX-Evo экран в ZXMAK2 и UnrealSpeccy. ZXMAK2 показывал только уровни каналов `00/AA/FF`, тогда как эталон использовал все четыре двухбитных уровня `00/55/AA/FF`. Отдельно на B22-R2 ATM 640×200 HWM были видны небольшие фрагменты под строкой `PRESS SPACE TO MENU`.
+- Повторная сверка выполнена по официальному `zxevo_base_configuration.pdf` и актуальному RTL `tslabs/zx-evo`: палитра содержит 16 логических цветов из 64 аппаратных, запись выполняется через shadow `#FF`, вход PentEvo имеет раскладку `grbG--RB`, а RGB-выход — инверсный `GgRrBb`. Существующая перестановка входных битов, инверсия и декодирование порта в ZXMAK2 совпали со спецификацией.
+- Найден production-дефект в `UlaAtm450.SetPaletteAtm`: все семь renderer-путей совместно использовали один массив палитры, но собственные таблицы ink/paper пересчитывал только активный renderer. После записи палитры в одном режиме и последующего переключения другой renderer использовал старый Spectrum cache. Теперь каждая аппаратная запись обновляет декодированные таблицы всех семи BaseConf render paths.
+- Адресация ATM 640×200 в `Atm640Renderer` и `BcVideoMenu.asm` подтверждена по официальной формуле: 40 блоков 16×1; bitmap page 5/7 по смещениям `X+Y*40` и `#2000+X+Y*40`; attributes page 1/3 с теми же смещениями. Исправлять production renderer по этому наблюдению не потребовалось.
+- Артефакты теста локализованы в стандартной области системных переменных Spectrum `#5Cxx`, которая физически находится в page 5 и в ATM 640 HWM видна примерно на строках 179–180. B22-R2 разрешал ROM interrupt, и обработчик записывал туда счётчики. B23 держит interrupts disabled и заменяет `EI/HALT` на достаточную busy-wait задержку, по-прежнему пересекающую программную границу кадра.
+- Новые compiled probes: `VideoPaletteProbe-B23` — 1807 PASS, все 256 PentEvo значений и обновление кешей семи renderer-путей; `TrdShellProbe-B23` — 655922 PASS, включая штатный ZXMAK2 round-trip, безопасный BaseConf pager и отсутствие ROM `EI/HALT` wait. Сохранённые B21 controller/timing, B19 contract, B18 diagnostic, B16 RDCFG, B20 raster table и полный B14 cascade прошли без регрессий.
+- Полная Release solution пересобрана после функциональной правки и повторно после документации. Сохранились только известные предупреждения об отсутствующих `AllRules.ruleset` и `MinimumRecommendedRules.ruleset`; ошибок сборки нет.
+- `BCVIDTEST.TRD`: 655360 байт, SHA256 `14423989A5819D9C2A74D11D54CE2205D947145BB716752B5B42A84419B89CCA`.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VIDEOPALETTE-B23-20260918-102642`. Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOPALETTE-B23-20260918-102642`.
+- Runtime-приёмка B23 не заявляется. Пользователю нужно повторить палитровый экран и слот 5 ATM 640×200 HWM; ожидаются четырёхуровневая палитра как в UnrealSpeccy и отсутствие фрагментов около строк 179–180. Остальные шесть слотов и возврат Space также остаются пользовательской проверкой.
+
+### Пользовательская runtime-проверка B23 — принята
+
+- Пользователь представил одновременный снимок ZXMAK2 и UnrealSpeccy с одной конфигурацией ZX-Evo: четырёхуровневая программируемая палитра в ZXMAK2 визуально соответствует эталону UnrealSpeccy; прежняя насыщенная reset Spectrum palette больше не наблюдается.
+- Отдельно подтверждено, что в ATM 640×200 HWM исчезли фрагменты под `PRESS SPACE TO MENU`. Пользователь также подтвердил прохождение остальных тестов `BCVIDTEST.TRD`.
+- B23 принимается по runtime: глобальная BaseConf palette, семь format-aware test slots, чистый ATM 640×200 HWM и возврат в меню работают в проверенном сценарии. Это не является измерительной сертификацией точной аналоговой цветопередачи, pixel clock, INT или аппаратной фазы растра.
+
+## ZXMAK2-v13-ZXEVO-BC-AUDIOBUFFER-B24-20260918-113541 — чистый старт DirectSound и безопасный underrun
+
+- Основание: пользователь в наушниках обнаружил слабый фон и мелкие щелчки сразу после чистого запуска ZXMAK2, а также усиление артефактов синхронно с обращениями к дисководу. На той же программе UnrealSpeccy/RealSpec воспроизводили чистый звук.
+- Повторно сверены официальные разделы BaseConf о звуке и VG93 и актуальный RTL `zports.v`. В BaseConf нет генератора звука механики дисковода: `#FE` управляет beeper/tapeout, `#FB` — unsigned Covox, AY использует `#FFFD/#BFFD`; VG93 использует shadow-порты `#1F/#3F/#5F/#7F/#FF`. Текущие `FddPentEvo` decode и системный регистр соответствуют этому контракту и в B24 не менялись.
+- Найдена независимая причина на стороне Windows-аудиовывода: DirectSound начинал циклическое воспроизведение до очистки вновь созданного аппаратного ring buffer. При нехватке очередного блока код заполнял весь пропуск последним ненулевым стереосэмплом, создавая DC-площадку и последующий слышимый скачок.
+- В `src/ZXMAK2.Host.WinForms/Mdx/DirectSound.cs` все сегменты ring buffer теперь обнуляются до `Play`. При underrun оба signed 16-bit канала линейно сводятся от последнего сэмпла к цифровому нулю внутри одного блока, после чего сохранённое состояние также становится нулём.
+- Добавлен `tools/BaseConfAudioTest/DirectSoundBufferProbe.cs`: он исполняет приватный underrun path, проверяет точную независимую стереорампу, достижение нуля, сброс retained sample и порядок initial-clear-before-play. Результат — 16 PASS.
+- После функциональной правки и после добавления probe выполнена полная Release-сборка всех 23 проектов. Ошибок нет; остались только прежние предупреждения об отсутствующих `AllRules.ruleset` и `MinimumRecommendedRules.ruleset`. Повторно прошли `VideoPaletteProbe-B23` — 1807 PASS и `TrdShellProbe-B23` — 655922 PASS.
+- В B24 намеренно не менялись `Wd1793`, `FddPentEvo`, AY, видеокод и TRD. Сверка выявила два следующих самостоятельных узла: точные условия VG93 Force Interrupt по index/ready и документированная общая линия BaseConf `#FB/#FE` с переключением beeper/Covox и Num Lock beeper/tapeout. Их нельзя смешивать с исправлением host buffer.
+- Runtime-приёмка B24 не заявляется. Пользовательская проверка должна включать наушники: чистый запуск, неподвижный idle, загрузку с FDD при мигающей иконке и ту же игру/программу для сравнения с UnrealSpeccy или RealSpec.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-AUDIOBUFFER-B24-20260918-113541`. Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-AUDIOBUFFER-B24-20260918-113541`.
+
+### Пользовательская runtime-проверка B24 — отклонено
+
+- Пользователь проверил B24 в наушниках. Небольшой фон остаётся сразу после чистого запуска эмулятора; во время активности дисковода, совпадающей с миганием FDD-индикатора, остаются дополнительные скрежет/щелчки; в сравнительной игре звук ZXMAK2 остаётся менее чистым, чем в UnrealSpeccy.
+- Следовательно, очистка DirectSound ring buffer и безопасная underrun-рампа B24 являются защитными исправлениями host-output, но не устраняют наблюдаемую первопричину. B24 runtime не принят; при этом правку нельзя автоматически откатывать как вредную без отдельного основания.
+- По предоставленной пользователем актуальной ветке UnrealSpeccy PentEvo `tools/unreal_fix/0.39.0/Unreal_NS` подтверждено: финальный микс использует включённый по умолчанию `RejectDC`; текущий ZXMAK2 такого финального DC reject не имеет.
+- Текущая архитектура ZXMAK2 требует отдельной проверки: `SoundDeviceBase` переводит unsigned DAC zero в signed `-32768`, `FrameSound` усредняет AY/Beeper/Covox, а конфигурация ZX-Evo держит Beeper `#FE` и Covox `#FB` независимыми источниками. По BaseConf это общая физическая линия, которую запись `#FB` передаёт Covox, а следующая запись `#FE` возвращает Beeper.
+- В `Wd1793` нет реализованного генератора механического звука FDD; шум, коррелирующий с VG93, считать паразитным аудиоэффектом до доказательства обратного. Отдельно выявлено расхождение частоты AY: ZX-Evo наследует `1773400`, актуальная ветка UnrealSpeccy PentEvo задаёт `1750000`; это кандидат на различие тона, но не объяснение фонового шума само по себе.
+- Следующий объединённый узел: B25+B26 — измерение mean/RMS/peak/межбуферных скачков отдельно по AY/Beeper/Covox и итоговому PCM, затем минимальное исправление DC/тишины на основании результата. До новой правки не повторять B24 и не начинать VG93 или общий `#FB/#FE` тракт.
+
+## ZXMAK2-v13-ZXEVO-BC-AUDIODC-B25-B26-20260918-161532 — измерение и финальный RejectDC
+
+- Основа этапа сверена с backup B24 без изменений production/release-файлов. Учтён runtime-результат B24: видеорежимы не поломались, но слабый постоянный фон слышен сразу после старта, при работе FDD возникает хруст, а звук демо остаётся менее чистым, чем в UnrealSpeccy.
+- B25 локализовал дефект до DirectSound. При цифровом idle AY выдавал постоянные `-32768/-32768`, а итоговый микс AY/Beeper/Covox — `-10922/-10922` с тем же RMS и нулевой AC-составляющей. Запись unsigned zero в Beeper/Covox давала переход до `-32768` с максимальным шагом `21859`. Это измеряемая постоянная составляющая и источник чувствительности к переключениям, а не звук механики FDD.
+- В B26 добавлен опциональный финальный stereo RejectDC после сведения всех источников: `y = 0.995 * (x - x1) + 0.99 * y1`, по схеме актуального UnrealSpeccy. Состояние фильтра сохраняется между host-кадрами; первый входной sample используется как начальная база и выдаётся цифровым нулём, поэтому холодный старт не создаёт отдельный DC-переход.
+- Политика включена только устройством `AYCHRV`, которое в `machines.config` используется только машиной `ZX-Evo BSconf`. Старый двухаргументный `FrameSound` сохраняет прежнее поведение для остальных машин.
+- Изменены production-файлы `ISoundRenderer.cs`, `BusManager.cs`, `FrameSound.cs`, `AYCHRV.cs`; добавлен диагностический `tools/BaseConfAudioTest/AudioPathProbe.cs`. DirectSound-исправление B24 сохранено.
+- Финальный `AudioPathProbe`: 43 PASS; оба фильтрованных idle-кадра имеют mean/RMS/peak `0`, разрыва на границе кадров нет. Release solution пересобрана без ошибок; остались только прежние предупреждения об отсутствующих ruleset-файлах.
+- Повторно прошли: DirectSound B24 — 16 PASS; palette B23 — 1807; TRD B23 — 655922; B21 controller — 321; B21 timing — 12736; B19 contract — 46; B18 diagnostic; B16 RDCFG — 201030; B20 raster table — 17355101; полный B14/B20 Refresh cascade — PASS.
+- Не менялись частота AY, логика VG93/Force Interrupt, арбитраж общей линии `#FB/#FE`, видео, `BCVIDTEST.TRD`, ROM и machine configuration.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-AUDIODC-B25-B26-20260918-161532`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-AUDIODC-B25-B26-20260918-161532\release`.
+- Runtime-приёмка не заявляется. Требуется пользовательская проверка в наушниках: запуск, не менее минуты idle, FDD activity и та же демо/игра в прямом сравнении с UnrealSpeccy.
+
+### Пользовательская runtime-проверка B25+B26 — частично принята
+
+- Пользователь подтвердил в наушниках: после старта и в idle теперь полная тишина, прежний постоянный фон исчез. Видеорежимы не поломались. Для области startup/idle финальный RejectDC B25+B26 принят.
+- При работе дисковода остался отдельный скрежет/хруст. Музыка стала, возможно, немного чище, но при прямом сравнении всё ещё звучит грязнее UnrealSpeccy. Полная audio runtime-приёмка B25+B26 поэтому не заявляется.
+- Контрольный запуск неизменённого исходного ZXMAK2 с GitHub показал: скрежета FDD там нет, однако музыка и в оригинале менее чистая, чем в UnrealSpeccy. Тем самым дефекты разделены: FDD-скрежет является регрессией текущей fork/runtime-комплектации, а оставшаяся разница AY/music унаследована от исходного ZXMAK2 и должна исследоваться отдельно.
+
+## ZXMAK2-v13-ZXEVO-BC-CLEANPROFILE-B27-20260918-170648 — чистый runtime-профиль ZX-Evo
+
+- В runtime-пакете B25+B26 найден сохранённый `ZXMAK2.vmz` от 14.09.2026, который `MainViewModel` безусловно загружает поверх `machines.config`. Поэтому B04/B05 фактически не участвовали в пользовательской проверке: сохранённый Beeper имел `mask=7`, `bitMic=3`, Covox — `noDos=True`, Keyboard — `mask=255`.
+- Широкая маска Beeper и включённый MIC D3 позволяют записям нестрого в low `#FE`, а также изменениям D3/бордюра во время загрузки, попадать в звуковой тракт. Это наиболее конкретный кандидат на fork-only скрежет. FDD-индикатор лишь читает `Wd1793.LedRd/LedWr` в конце кадра и не генерирует звук или прерывание.
+- Добавлен канонический переносимый профиль `tools/ZXEvoBsconf.vmz`, совпадающий с текущим блоком `ZX-Evo BSconf`: Beeper exact low `#FE`, `D4`, `bitMic=-1`, `noDos=false`; Covox exact low `#FB`, `noDos=false`; Keyboard `mask=#F7/port=#FE`. В пакет он копируется как `release/ZXMAK2.vmz`.
+- Production-код, частота AY, RejectDC, DirectSound, VG93, видео, ROM, TRD и `machines.config` в B27 не менялись. Из runtime-папки исключены старые `.cmos/.nvram/.vmide/.log` состояния.
+- `CleanProfileProbe` прошёл 40 проверок структуры, атрибутов, порядка и разрешения типов. Полная Release solution собрана без ошибок и с двумя прежними ruleset warnings. Повторно прошли AudioPath 43, DirectSound 16, palette 1807, TRD 655922, B21 controller/timing 321/12736.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CLEANPROFILE-B27-20260918-170648\release`. Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-CLEANPROFILE-B27-20260918-170648`.
+- Runtime-приёмка B27 не заявляется. Первая проверка — та же загрузка с FDD в наушниках. Чистоту музыки против UnrealSpeccy этим этапом не оценивать как критерий B27: она выделена в следующий самостоятельный AY/mixer/cadence узел.
+
+### Пользовательская runtime-проверка B27 — принята
+
+- Пользователь подтвердил: постоянного фона нет, при работе дисковода наводок/скрежета нет. Регрессия fork/runtime-профиля устранена каноническим `ZXMAK2.vmz`.
+- Первоначальное сравнение музыкальной чистоты с UnrealSpeccy признано некорректным: в выбранной демке UnrealSpeccy показывал много активных каналов и, вероятно, использовался многоканальный/multisound-путь, тогда как ZXMAK2 выводил обычный AY-путь.
+- На демке с тем же обычным AY-звуком пользователь не подтвердил ухудшение ZXMAK2; субъективно звук оказался даже немного насыщеннее. Направление отдельной «очистки AY» закрыто без изменений кода.
+- B27 принимается по runtime-критериям startup/idle и FDD activity. Это не осциллографическая сертификация аналогового тракта и не утверждение о внутреннем режиме UnrealSpeccy без отдельной инструментальной проверки.
+
+### Новая пользовательская регрессия после B27 — Rage на SCL
+
+- Пользователь сообщил отдельный сценарий только для некоторых программ: демка Rage на том же SCL-образе при однократном Enter показывает активность FDD, затем остаётся на чёрном экране; если повторить выбор и удерживать Enter, загрузка проходит. В UnrealSpeccy с тем же образом достаточно одного Enter.
+- Это не связано с уже закрытым аудиоузлом: FDD-иконка здесь рассматривается только как признак активности контроллера.
+- Первичные кандидаты разделены: (1) преобразование SCL в `DiskImage` (`SclSerializer`/каталог/сектора), затем виртуальный FDD-путь PentEvo через `#13BD` и временное отображение RAM-страницы `#FE` с выходом через `#BE`; (2) WD1793 timing/DRQ/INTRQ и завершение команд; (3) CPU/DRAM WAIT во время нестандартного загрузчика. Сам факт удержания Enter не доказывает дефект клавиатуры — он может менять только момент запуска/повторной попытки.
+- В `Wd1793` условия Force Interrupt `index/ready` помечены незавершёнными, но в доступном коде UnrealSpeccy эти ветви также немедленно завершаются; исправлять их вслепую нельзя.
+
+## Следующий узел B28 — Rage/SCL loader diagnostic
+
+- Сначала воспроизвести два сценария на одном чистом B27-профиле и одном SCL: одиночный Enter до чёрного экрана и удержание Enter до успешного запуска.
+- Проверить SCL-дескрипторы, размер файла, порядок/границы секторных данных и результат преобразования в `DiskImage` до запуска CPU.
+- Затем снять для обоих проходов FDD-команды, PC/tact, DRQ/INTRQ, смену дорожки/сектора, состояние `#13BD`, вход/выход RAM-страницы `#FE` через `#BE` и момент остановки активности.
+- Сопоставить результат с виртуальным FDD-путём и обычным VG93-путём; только после локализации менять один узел. Клавиатуру, аудио и видеорежимы в B28 не менять.
+- Runtime-приёмка B28 не заявляется до повторного пользовательского теста Rage.
+
+### B28 diagnostic package — Rage FDD trace
+
+- `RAGE.SCL` проверен до запуска CPU: `SclSerializer` сформировал стандартный диск 80x2; каталог и данные всех 7 файлов/163 секторов совпали с исходным SCL, 113/113 проверок PASS. Формат SCL исключён как непосредственная причина.
+- В `FddPentEvo` добавлена условная диагностическая трасса, активная только при `logIo=true`: операции `#13BD`, выбранный drive/mask, попытка и результат входа в виртуальный FDD RAM page `#FE`, запрос выхода через `#BE`, PC/tact и компактный снимок WD1793 после команды. В `MemoryPentEvo` добавлены только read-only диагностические свойства состояния отображения.
+- Подготовлен отдельный профиль `tools/ZXEvoBsconf-RageTrace.vmz`; канонический `tools/ZXEvoBsconf.vmz` не изменён. Алгоритмы FDD/WD1793, audio, keyboard и video не менялись.
+- Полная Release solution собрана без ошибок; остались два прежних ruleset warnings. Пакет проверен: обе папки имеют `logIo=True`, `noDelay=False`, одинаковые бинарники и `RAGE.SCL`, старых `.cmos/.nvram/.vmide/.log` нет.
+- Повторные проверки после сборки: SCL Rage 113 PASS; B21 controller 321 PASS; B21 timing 12736 PASS; B23 TRD 655922 PASS.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-RAGETRACE-B28-20260918-211640`. Два независимых прохода: `single-enter` пишет `ZXMAK2-B28-single-enter.log`, `held-enter` пишет `ZXMAK2-B28-held-enter.log`.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-RAGETRACE-B28-20260918-211640`.
+- Это диагностическая сборка, не исправление. Runtime-приёмка не заявляется; для локализации нужны оба пользовательских журнала.
+
+### B28-R2 — разделение SD/Ramdisk и прямого SCL
+
+- Пользователь установил решающее различие: один и тот же `RAGE.SCL` при прямом открытии в эмулируемый FDD запускается одним Enter, а после загрузки из SD-образа через EVO Service (`Ramdisk: RAGE`) воспроизводит чёрный экран до удержания Enter.
+- Следовательно, первичный узел смещён с общего SCL/FDD к цепочке SD-образ → EVO Service/Ramdisk → виртуальный диск/boot handler. Это также объясняет наличие `Ramdisk: RAGE` при `Mount A–D: NONE`.
+- Подготовлен уточнённый пакет `K:\Download\ZXMAK2-v13-ZXEVO-BC-RAGETRACE-B28-R2-20260918-222848` с двумя проходами: `service-sd` и `direct-scl`. Нужны оба лога для сравнения.
+- До получения логов патч FDD не выполняется; runtime-приёмка не заявляется.
+
+### B28-R3 — virtual handler M1 trace
+
+- B28-R2 логи подтвердили: в `direct-scl` WD1793 реально читает 80-дорожечный образ; в `service-sd` физический FDD остаётся not-ready, а весь сценарий проходит через `#13BD` и RAM handler `#FE` с выходом `#BE`.
+- Добавлена ещё только диагностическая запись: первые 16 M1 fetch из страницы `#FE` после каждого виртуального FDD-перехвата. Она ограничена `logIo=True`; логика отображения и обработки не менялась.
+- Следующее сравнение: два исхода одного SD/EVO Service пути (`Ramdisk: RAGE`) — одиночный Enter против удержания Enter. Пакет: `K:\Download\ZXMAK2-v13-ZXEVO-BC-RAGETRACE-B28-R3-20260918-223928`.
+- Release собрана без ошибок, SCL Rage 113 PASS. Runtime-приёмка не заявляется.
+
+## ZXMAK2-v13-ZXEVO-BC-VFDDRTL-B29-20260918-231349 — virtual FDD по RTL BaseConf
+
+- Парные B28-R3 журналы и повторный одиночный запуск локализовали сбой в обработчике виртуального диска: после Enter ERS зацикливался на `PC #0248/#024E/#02F4`, непрерывно снимая и возвращая маску дисковода. Прямой SCL через физический VG93 при этом работает.
+- Причина сверена с официальными `zdos.v`, `atm_pager.v` и руководством BaseConf. При входе в `trdemu` RAM-страница `#FE` аппаратно защищена от записи до первого следующего M1. Это не даёт завершающей записи блочной I/O-инструкции (`INI/INIR`) испортить начало обработчика. В ZXMAK2 страница ранее становилась доступной для записи сразу.
+- `MemoryPentEvo` теперь включает временную защиту записи страницы `#FE` на входе и снимает её на первом M1. Вход разрешён при активном DOS и любой ROM-странице в окне `#0000`, как задают сигналы `dos && romnram`, а не только при точном совпадении с ROM_DOS.
+- `FddPentEvo` теперь повторяет аппаратное отключение physical VG93 для выбранного masked drive: замаскированные обращения поглощаются даже во время уже активного handler, а system write не успевает изменить физический WD/выбранный drive до перехвата.
+- Порт маски FDD приведён к реальному decode: low `#BD` плюс `A12..A8=#13`; старшие `A15..A13` являются aliases (`mask #1FFF`). Специальных условий для Rage или клавиши Enter нет.
+- Полная Release solution собрана без ошибок; остались только два прежних ruleset warnings. Проверки: SCL Rage — 113 PASS, B21 controller — 321 PASS, B21 timing — 12736 PASS, B23 TRD — 655922 PASS.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VFDDRTL-B29-20260918-232134\release`. Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VFDDRTL-B29-20260918-231349`.
+- Runtime-приёмка B29 не заявляется. Нужен пользовательский повтор сценария SD image → EVO Service → `Ramdisk: RAGE` → один короткий Enter; затем контроль прямого открытия `RAGE.SCL` и ранее принятых звука/видеорежимов.
+
+### Пользовательское наблюдение после B29 — отдельный video/INT sync узел
+
+- Пользователь подтвердил: Rage и виртуальный FDD теперь работают с первого Enter; дисковый сценарий закрыт как практическая проблема.
+- На визуальном эталоне B18 бордюрный эффект и мультиколор синхронны. В B24/B27 и последней версии эффект выполняется, но имеет заметный сдвиг фазы/тактов на полном экране.
+- Зафиксирована рабочая гипотеза для следующего этапа: при аудиоизменениях B24–B26 могла проявиться или сохраниться ошибка общей кадровой/`INT`-синхронизации, `FrameReady` или raster epoch. Это гипотеза, не установленная причина; audio-код без отдельного подтверждения не менять.
+- Следующий этап: сопоставить B18 с B24/B27 по `INT`, началу кадра, border timing и multicolor fetch, затем сделать минимальную video-only правку. Runtime-приёмка без нового пользовательского теста не заявляется.
+
+### Постоянное правило для следующего этапа — официальное соответствие ZX Evolution
+
+- Все дальнейшие исправления ZX-Evo/BaseConf должны в первую очередь соответствовать официальной документации ZX Evolution и исходному BaseConf RTL: `zclock`, `z80`, `video_sync`, `video_fetch`, `dram/arbiter`, `zports` и официальным описаниям видеорежимов.
+- Визуальные снимки B18 используются только как runtime-контрольный эталон правильного результата. Нельзя подгонять тайминги по картинке в обход документированной аппаратной фазы.
+- Для следующего video/INT этапа обязательны: ссылка на конкретный RTL/документ, описание аппаратного сигнала или состояния, минимальная правка и отдельная проверка регрессий Rage/FDD, звука и уже принятых видеорежимов.
+- Это правило сохраняется при переносе проекта в новый чат или на другой аккаунт; перед началом работы нужно перечитать этот раздел и последние записи B27–B29.
+
+### Пользовательская runtime-приёмка B29
+
+- Пользователь подтвердил, что Rage из SD/EVO Service/Ramdisk после B29 запускается одним коротким Enter и работает. Практическая приёмка исправления virtual FDD завершена.
+- Отдельно обнаруженная небольшая ошибка фазы border/multicolor не относится к FDD и вынесена в B30.
+
+## ZXMAK2-v13-ZXEVO-BC-VIDEOPHASE-B30-20260919-004505 — фаза 256×192 относительно INT
+
+- Сравнение B18 с B20–B29 локализовало регрессию: B20 одновременно заменил эффективную горизонтальную фазу трёх 256×192 renderer-путей с 65 на 69 tact относительно normal INT. Audio B24–B26 эту фазу не менял и причиной не является.
+- Официальный `video_sync_h.v` r1364 сохранён источником аппаратной геометрии: raw `HPIX_BEG_PENT=140`, `HINT_BEG=2`; raster periods, vertical windows, INT epoch, DRAM fetch и 4T border logic B20 не откатывались.
+- Исправлена граница между двумя системами координат: raw 7 MHz `hpix` остаётся 140, а для 256×192 action table `SpectrumRenderer` введён явный adapter `StandardRendererPhaseBaseTacts=4`. Поэтому параметр first-paper равен 66, а с normal `c_ulaIntBegin=1` эффективная фаза снова равна 65, как в принятой B18.
+- Adapter применяется только к общему стандартному пути ZX 256×192 / Pentagon HWM / Pentagon 16c. Широкие ATM 320/640/text, frame/INT periods, audio, FDD, ROM, palette и mode controller не менялись.
+- Release solution собрана без ошибок; сохранены два прежних ruleset warnings. Новый compiled `VideoTimingProbe-B30` прошёл 12 748 проверок. Регрессии: SCL Rage 113, B21 controller 321, palette 1807, TRD 655922, audio baseline 19 и DirectSound 16 — PASS.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-VIDEOPHASE-B30-20260919-004505`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-VIDEOPHASE-B30-20260919-004715\release`.
+- Runtime-приёмка B30 не заявляется. Пользователю нужно повторить тот же border/multicolor фрагмент, сравнить с B18 и проверить Rage одним Enter, звук и переключение уже принятых видеорежимов.
+
+### Пользовательская runtime-приёмка B30 — принято
+
+- Пользователь проверил B30 на том же полноэкранном border/multicolor-фрагменте и подтвердил результат: `B30 Good`.
+- Приложенный снимок показывает согласованный полноэкранный цветовой эффект без наблюдавшегося в B24/B27/B29 фазового рассогласования.
+- B30 принят по целевому runtime-критерию border/multicolor sync. Это не расширяет приёмку на ещё не проверенные аппаратные edge cases, альтернативные растры или mid-frame переключения.
+
+## ZXMAK2-v13-ZXEVO-BC-NEDOOS-B31-20260919-015150 — запрет virtual-FDD trap в режиме PEN2
+
+- Пользователь локализовал новую регрессию по сборкам: NedoOS через `sd_boot.$C` загружается в B28-R3, но после B29 и в B30 после запуска остаётся чёрный экран. При этом `Bad apple.$C` с отдельным файлом данных запускается, Rage после B29 работает одним коротким Enter, а border/multicolor B30 принят. Поэтому SD-чтение, ERS `$C`-загрузчик и видео в целом не откатываются.
+- Повторная сверка B28-R3 → B29 подтвердила, что регрессию мог затронуть только virtual-FDD узел: в B29 условие входа было расширено до `DOSEN && любое ROM в #0000`, но из официального BaseConf `base_trdemu` r1364 не был перенесён третий gate.
+- Официальный `fpga/base_trdemu/trunk/z80/zdos.v` задаёт `trdemu_on = vg_rdwr_fclk && fdd_mask[vg_a] && dos && romnram && !atm_pen2`. `atm_pager.v` затем отображает RAM page `#FE` и применяет `trdemu_wr_disable`. Локальные копии исходного RTL сохранены в backup B31 под `reference/fpga-r1364/base_trdemu`.
+- В `MemoryPentEvo.TryEnterFddIoRam()` добавлен только отсутствовавший запрет при `PEN2=true`. Теперь palette-write на shadow `#FF` не может ошибочно подменить окно `#0000` страницей `#FE`; настоящий masked FDD access при `DOSEN + ROM + !PEN2` по-прежнему входит в handler.
+- B29-механизм Rage не откатывался: `FddPentEvo.cs` побайтно совпадает с принятой B29 (`C89F0BDC...F0DE`), отображение page `#FE` и `trdemu_wr_disable` до первого M1 сохранены. B30-видео не менялось: `UlaPentEvo.cs` побайтно совпадает с принятой B30 (`7F16FE20...1537`). No-index diff `MemoryPentEvo.cs` относительно B31-before содержит только комментарий и `PEN2` gate.
+- Release solution собрана без ошибок; остались два прежних предупреждения об отсутствующих ruleset-файлах. Новый compiled `FddTrapProbe-B31` прошёл 14 проверок: положительный `DOS+ROM+!PEN2`, три отрицательных gate, page `#FE`, защита записи и её снятие на первом M1.
+- Регрессии после сборки: `VideoTimingProbe-B30` 12748, SCL Rage 113, B21 controller 321, palette 1807, TRD 655922 на закреплённом B23-образе, audio baseline 19 и DirectSound 16 — PASS.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-NEDOOS-B31-20260919-014522`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-NEDOOS-B31-20260919-015150\release`.
+- Runtime-приёмка B31 не заявляется. Пользователю нужно проверить: (1) `sd_boot.$C` и появление NedoOS; (2) Rage из SD/EVO Service/Ramdisk одним коротким Enter; (3) принятый B30 border/multicolor-фрагмент; дополнительно — запуск Bad Apple `$C`.
+
+### Пользовательская runtime-приёмка B31 — принято
+
+- Пользователь подтвердил загрузку NedoOS через `sd_boot.$C`.
+- Rage из SD/EVO Service/Ramdisk продолжает работать после исправления; регрессии принятого B29 virtual-FDD не обнаружено.
+- Принятый в B30 border/multicolor-эффект сохранился без регрессии.
+- Bad Apple успешно запускается тремя путями: из ERS File browser, из меню и из NedoOS.
+- Других сбоев во время проверки не выявлено. B31 принята по целевым runtime-критериям NedoOS, Rage, border/multicolor и Bad Apple; это не считается исчерпывающей сертификацией всех программ и аппаратных edge cases.
+
+## Следующее обязательное направление — ZX-BUS и расширительные платы
+
+- Пользователь уточнил, что в модели ZX-Evolution BaseConf нужно представить два стандартных разъёма ZX-BUS, чтобы выбирать конфигурацию машины и устанавливать в слоты дополнительные звуковые или иные платы.
+- В текущей конфигурации `ZX-Evo BSconf` таких слотов и отдельного ZX-BUS слоя нет: встроенные `AYCHRV`, Beeper и Covox подключены непосредственно в VM-профиле. Поиск исходников подтверждает отсутствие готовой реализации ZXBUS.
+- Это должны быть два слота на общей системной шине, а не две независимые Z80-шины. Перед кодом требуется сверить официальный сигнал/портовый контракт: адресный decode, IRQ/NMI, WAIT, reset, конфликт портов и порядок подключения нескольких плат.
+- Это направление добавлено в backlog и не заменяет утверждённый текущий план B32+; сначала продолжаем работу по нему. Обязательная последовательность: (1) полная ревизия соответствия BaseConf официальной документации — все порты, карты памяти, прерывания, тайминги, WAIT/RESET и все документированные видеорежимы; (2) исправление и проверка только встроенной периферии, которая прямо описана в документации; (3) после закрытия этой ревизии — аудит официального контракта ZX-BUS и двух слотов; (4) виртуальная инфраструктура слотов и только затем подключаемые документированные платы, включая звуковые устройства. Самовольное расширение перечня периферии не допускается.
+- Встроенный AY/CHRV BaseConf, принятые B25–B27 звуковой тракт, B29/B31 virtual-FDD и B30 video не изменять при создании инфраструктуры слотов. Каждая плата получает отдельную compiled-проверку и отдельный runtime-тест.
+
+## B32 — полная статическая ревизия BaseConf r1364
+
+- Текущие production-файлы и общий release сверены с принятым B31: `MemoryPentEvo.cs`, `FddPentEvo.cs` и `UlaPentEvo.cs` совпадают побайтно. Локальный пользовательский `src/_binrelease/ZXMAK2.vmz` намеренно не заменялся каноническим профилем.
+- Нормативная база закреплена точным архивом `pentevo-fpga.r1364.tar.gz`, SHA-256 `7A509FBCEF3AF85380EC475AD622A0682E714AF54625851FCB9AA678DA0BBB82`. Аудит ведётся в два слоя: `baseconf/trunk` и официальный `base_trdemu/trunk`, необходимый принятому ERS/Rage/NedoOS virtual-FDD пути. Текущий GitHub HEAD с r1364 не смешивается.
+- Полный результат записан в `BASECONF_AUDIT_B32.md`: карта портов, memory/paging, INT/NMI, WAIT/reset/timing, WD1793 и все семь реально присутствующих в r1364 видеорежимов. Режимы `256c` и `16+16c` из общего описания не входят в BaseConf r1364 и добавляться не должны.
+- Подтверждён первый изолированный дефект: `IdePentEvo` декодирует `(addr & #1E)==#10`, из-за чего теряет официальные Nemo IDE aliases `x08` (кроме отдельного `#C8`) и принимает лишние нечётные aliases. Это назначено единственной целью B33.
+- Следующие подтверждённые неполные области: системный `#BF` (D1/D3/D4/D5), чтение/запись конфигурации `#BD` индексов `0D..11`, аппаратный NMI/брейкпоинт, раннее снятие INT по acknowledge и пауза INT во время WAIT, AVR/COM WAIT, Kempston joystick, tape/mux, ULAplus/4:4:4 palette. Они разделены на B34–B39 и не будут объединяться вслепую.
+- B30/B31 не откатываются: семь renderer routes присутствуют, принятые border/multicolor, Rage, NedoOS и Bad Apple являются обязательным regression floor.
+- На неизменённых B31 binaries повторно прошли compiled contracts: FDD trap 14, B30 video timing 12748 и BaseConf video controller 321 — PASS.
+- В B32 production-код не изменялся, новая runtime-сборка не выпускалась и runtime-приёмка не заявляется. После встроенного соответствия остаётся отдельный аудит двух ZX-BUS слотов; периферия добавляется только затем и только по документации.
+- Audit checkpoint: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.
+
+## ZXMAK2-v13-ZXEVO-BC-IDEPORTS-B33-20260919-084445 — точный Nemo IDE decode
+
+- Исправлен только `IdePentEvo.BusInit()`: прежний mask `(low & #1E)==#10` заменён точной формулой BaseConf r1364 `low[2:0]=000 && low[3]!=low[4]`, то есть семьями `x10` и `x08`, плюс отдельный high-byte port `#11`.
+- `#C8` по RTL входит в `x08`, но выбирает alternate-status/control block; его точный handler регистрируется раньше общей семьи и поглощает обращение через `handled`.
+- ATA register select `A7..A5`, 16-bit data sequencing и сам ATA core не менялись. FDD/Rage/NedoOS, memory, SD, video, audio, keyboard и ROM не затрагивались.
+- Release solution собрана без ошибок с двумя прежними ruleset warnings. Проверки: B33 IDE 786, B31 FDD 14, B30 timing 12748, B21 controller 321, B23 palette 1807, B27 audio 19 и DirectSound 16 — PASS.
+- Упакованный `ZXMAK2.Hardware.dll` побайтно совпадает с новым Release; профиль `ZXMAK2.vmz` канонический, сохранённых `.cmos/.nvram/.vmide/.log` в runtime нет.
+- Backup: `L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-IDEPORTS-B33-20260919-084445`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-IDEPORTS-B33-20260919-084445\release`.
+- Runtime-приёмка не заявляется. Основной тест — обычная загрузка BaseConf с IDE/HDD-образа и операция чтения/записи; затем короткий smoke NedoOS, Rage и B30 border/multicolor.
+
+## Зафиксированная UI-доработка носителей — writable по умолчанию
+
+- Пользователь просит, чтобы дисковые образы, открываемые через обычное `File -> Open`, по умолчанию подключались без защиты от записи. Причина практическая: сохранения игр и другие записи сейчас незаметно блокируются, особенно для нового пользователя эмулятора.
+- Причина найдена точно: `MainViewModel.CommandFileOpen_OnExecute()` явно задаёт `ReadOnlyChecked = true`; отдельный browse-диалог четырёх FDD в `CtlSettingsBetaDisk.btnBrowse_Click()` делает то же самое.
+- При реализации оба значения по умолчанию нужно заменить на writable (`false`), сохранив видимый флажок ручной защиты. Если файл или контейнер фактически недоступен для записи, загрузчик обязан оставить эффективную защиту и не повреждать данные.
+- Та же политика относится к будущему UI выбора HDD-образа: новый образ подключается writable по умолчанию, имеется ручной `Read only`, путь и состояние сохраняются автоматически во внутреннем `.vmide`.
+- Это пока записанное требование, а не изменение B33: production-код и runtime-пакет B33 не менялись.
+
+### Контрольный HDD-образ для IDE UI и B33 runtime
+
+- Пользователь предоставил пару `L:\Work_two\ZX\ZX_IMG\ATM_HDD.hdd` + `ATM_HDD.inf` для ATM/ZX-Evolution IDE-проверки.
+- `.hdd` является raw sector image размером `206438400` байт, строго `403200` секторов по 512 байт.
+- Сопутствующий текстовый `.inf` задаёт точную геометрию: `400` cylinders, `16` heads, `63` sectors, `403200` LBA; произведение CHS и длина файла совпадают.
+- Будущий выбор HDD должен сначала искать одноимённый `.inf` и импортировать его CHS/LBA. При отсутствии `.inf` можно вычислить точный LBA по длине файла и применить отдельно документированную совместимую CHS-геометрию. Разметку/разделы внутри `.hdd` не изменять.
+- Этот образ использовать для runtime-проверки B33: HDD boot, чтение и тестовая запись при выключенном по умолчанию `Read only`.
+
+## ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-20260919-093000 — UI HDD и writable media defaults
+
+- В Machine Settings для `IDE PentEvo` добавлен отдельный экран: `HDD connected`, путь, выбор `.hdd`, `Eject` и ручной `Read only`. Отключение образа не удаляет сам контроллер; применение выполняется штатным `Apply` с переподключением машины.
+- Ручное редактирование `.vmide` больше не требуется. Путь, CHS, LBA и read-only сохраняются в конфигурации машины; старый `.vmide` по-прежнему читается для совместимости, после чего поддерживается автоматически.
+- Exact LBA определяется только как длина raw-файла / 512. Невыровненный или пустой образ отклоняется. Одноимённый `.inf` автоматически импортирует только полную согласованную CHS/LBA; иначе выбирается детерминированная совместимая CHS при неизменном точном LBA. Содержимое, разделы и размер образа не меняются.
+- На пользовательской паре `ATM_HDD.hdd/.inf` автоматически подтверждены `206438400` байт, `403200` LBA и `400/16/63` CHS. Новый HDD writable по умолчанию; host read-only/невозможность безопасного write-open переводит его в эффективный read-only.
+- `File -> Open` теперь открывает флажок `Read only` снятым; browse для FDD A-D — `Write Protect` снятым. Явно сохранённая защита существующего образа сохраняется, ZIP остаётся принудительно защищённым.
+- B33 exact port decode не менялся. B34 системные порты и остальной аппаратный backlog не начинались. FDD/Rage/NedoOS, memory, video и audio production-paths не правились, кроме двух UI default флажков носителей.
+- Release solution PASS с двумя прежними ruleset warnings. Контракт обнаружения нового Machine Settings control — PASS. Проверки: новый IDE media 10, B33 ports 786, B31 FDD 14, B30 timing 12748, B21 controller 321, B23 palette 1807, Rage SCL 113, audio 19 и DirectSound 16 — PASS.
+- Checkpoints: `backup/ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-before-20260919-090000`, `...-core-20260919-091500`, `...-ui-20260919-093000`, финальный с runtime `...-20260919-093500`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-20260919-093000\release`. Подробности: `B33_R1_RESULT.md`.
+- Runtime-приёмка не заявляется. Обязательны пользовательские NEM boot/write/read-after-restart, Eject/no-HDD, writable FDD обоими путями и smoke NedoOS/Rage/B30 border-multicolor/audio.
+
+
+## Промежуточная стабильная точка B33-R1 — 2026-09-19 13:09:06
+
+- По просьбе пользователя текущее состояние зафиксировано перед следующим функциональным этапом. Исходный код не изменялся, новая сборка не выполнялась.
+- Подтверждено пользователем в runtime: ранее принятые NedoOS, Rage, border/multicolor B30 и Bad Apple продолжают работать; HDD-образ подключается, определяется, а его FAT-содержимое видно в ERS File Browser; NedoOS запускается вручную с файла на HDD.
+- Автоматическая загрузка NedoOS через `B.HDD boot` не считается принятой и отложена до завершения работы с носителями.
+- Открытый дефект следующего этапа B34: первая установка SD/HDD проходит нормально, но повторная замена носителя в том же процессе эмулятора может приводить к зависанию. Требуется атомарная замена с корректным закрытием старого образа, сбросом состояния контроллера и внутренним cold power-cycle; явный Eject перед выбором нового файла не должен быть обязателен.
+- Зафиксирован полный восстанавливаемый снимок рабочего дерева без `.git`, `backup`, `tmp`, `bin`, `obj` и `.vs`: `backup/ZXMAK2-v13-ZXEVO-BC-STABLE-B33-R1-20260919-130906/snapshot`.
+- Эта запись не расширяет runtime-приёмку: отмечено только то, что уже проверил пользователь.

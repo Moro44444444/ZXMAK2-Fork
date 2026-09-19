@@ -1,4 +1,4 @@
-﻿//#define WRITE_RAW
+//#define WRITE_RAW
 /*
  * Resampler algorithm is based on the source code 
  * of unreal speccy v0.37.6 by SMT
@@ -22,6 +22,8 @@ namespace ZXMAK2.Hardware
         private readonly Queue<SndOut> m_sndQueueNext = new Queue<SndOut>();
         
         private CpuUnit m_cpu;
+        private IUlaFrameTiming m_variableFrameTiming;
+        private IUlaDevice m_variableFrameUla;
         private int m_volume;
         private uint[] m_audioBuffer;   // render buffer (short|(short<<16)
         private bool m_isFrameOpen;
@@ -62,6 +64,8 @@ namespace ZXMAK2.Hardware
         {
             m_cpu = bmgr.CPU;
             var ula = bmgr.FindDevice<IUlaDevice>();
+            m_variableFrameTiming = ula as IUlaFrameTiming;
+            m_variableFrameUla = m_variableFrameTiming != null ? ula : null;
             m_frameTactCount = ula != null ? ula.FrameTactCount : 71680;
             bmgr.Events.SubscribeBeginFrame(BeginFrame);
             bmgr.Events.SubscribeEndFrame(EndFrame);
@@ -137,7 +141,29 @@ namespace ZXMAK2.Hardware
                 return;
             }
             m_isFrameOpen = true;
-            m_startStamp = m_cpu.Tact - (m_cpu.Tact % m_frameTactCount);
+            if (m_variableFrameTiming != null)
+            {
+                int nextLength = m_variableFrameUla.FrameTactCount;
+                if (nextLength != m_frameTactCount)
+                {
+                    // Host cadence is still 50 FPS. Physical FPS/audio/tape
+                    // calibration is a separate task; keep frame timestamps valid.
+                    var existingBuffer = m_audioBuffer;
+                    var overFrame = m_sndQueueNext.ToArray();
+                    ApplyTimings(nextLength * 50, SampleRate);
+                    // FrameSound retains the buffer identity acquired at connect.
+                    if (existingBuffer != null && existingBuffer.Length == m_audioBuffer.Length)
+                        m_audioBuffer = existingBuffer;
+                    foreach (var value in overFrame)
+                        m_sndQueueNext.Enqueue(value);
+                    m_frameTactCount = nextLength;
+                }
+                m_startStamp = m_cpu.Tact - m_variableFrameTiming.GetFrameTact(m_cpu.Tact);
+            }
+            else
+            {
+                m_startStamp = m_cpu.Tact - (m_cpu.Tact % m_frameTactCount);
+            }
             m_lastDacTact = -1;
             OnBeginFrame();
         }

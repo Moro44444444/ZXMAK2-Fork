@@ -98,6 +98,9 @@
             this.tbrButtonFullScreen = new System.Windows.Forms.ToolStripButton();
             this.tbrButtonQuickLoad = new System.Windows.Forms.ToolStripButton();
             this.tbrButtonSettings = new System.Windows.Forms.ToolStripButton();
+            this.toolStripSeparatorMachines = new System.Windows.Forms.ToolStripSeparator();
+            this.tbrDropDownMachines = new System.Windows.Forms.ToolStripDropDownButton();
+            this.tbrButtonSdImage = new System.Windows.Forms.ToolStripButton();
             this.sbrStrip = new System.Windows.Forms.StatusStrip();
             this.renderVideo = new ZXMAK2.Host.WinForms.Controls.RenderVideo();
             this.mnuStrip.SuspendLayout();
@@ -485,7 +488,10 @@
             this.toolStripSeparator1,
             this.tbrButtonFullScreen,
             this.tbrButtonQuickLoad,
-            this.tbrButtonSettings});
+            this.tbrButtonSettings,
+            this.toolStripSeparatorMachines,
+            this.tbrDropDownMachines,
+            this.tbrButtonSdImage});
             this.tbrStrip.Location = new System.Drawing.Point(0, 24);
             this.tbrStrip.Name = "tbrStrip";
             this.tbrStrip.Padding = new System.Windows.Forms.Padding(0);
@@ -577,6 +583,32 @@
             this.tbrButtonSettings.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrButtonSettings.Name = "tbrButtonSettings";
             this.tbrButtonSettings.Size = new System.Drawing.Size(36, 36);
+            //
+            // toolStripSeparatorMachines
+            //
+            this.toolStripSeparatorMachines.Name = "toolStripSeparatorMachines";
+            this.toolStripSeparatorMachines.Size = new System.Drawing.Size(6, 39);
+            //
+            // tbrDropDownMachines
+            //
+            this.tbrDropDownMachines.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            this.tbrDropDownMachines.Image = global::ZXMAK2.Host.WinForms.Properties.Resources.EmuMachines_32x32;
+            this.tbrDropDownMachines.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.tbrDropDownMachines.Name = "tbrDropDownMachines";
+            this.tbrDropDownMachines.Size = new System.Drawing.Size(45, 36);
+            this.tbrDropDownMachines.Text = "Machines";
+            this.tbrDropDownMachines.ToolTipText = "Switch machine";
+            //
+            // tbrButtonSdImage
+            //
+            this.tbrButtonSdImage.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
+            this.tbrButtonSdImage.Enabled = false;
+            this.tbrButtonSdImage.Image = global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_32x32;
+            this.tbrButtonSdImage.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.tbrButtonSdImage.Name = "tbrButtonSdImage";
+            this.tbrButtonSdImage.Size = new System.Drawing.Size(36, 36);
+            this.tbrButtonSdImage.Text = "SD Image...";
+            this.tbrButtonSdImage.ToolTipText = "Open SD Card image";
             // 
             // sbrStrip
             // 
@@ -687,5 +719,8 @@
         private System.Windows.Forms.ToolStripMenuItem menuViewVideoFilter;
         private System.Windows.Forms.ToolStripMenuItem menuViewVideoFilterNone;
         private System.Windows.Forms.ToolStripMenuItem menuViewVideoFilterNoFlick;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparatorMachines;
+        private System.Windows.Forms.ToolStripDropDownButton tbrDropDownMachines;
+        private System.Windows.Forms.ToolStripButton tbrButtonSdImage;
     }
 }

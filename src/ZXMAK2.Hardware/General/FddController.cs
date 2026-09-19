@@ -17,24 +17,26 @@ using ZXMAK2.Resources;
 
 namespace ZXMAK2.Hardware.General
 {
-    public class FddController : BusDeviceBase, IBetaDiskDevice
+    public class FddController : BusDeviceBase, IBetaDiskDevice, ITrDosSessionDevice
     {
         #region Fields
 
         private bool m_sandbox = false;
+        private volatile bool m_isTrDosSessionActive;
         private IconDescriptor m_iconRd = new IconDescriptor("FDDRD", ResourceImages.OsdFddRd);
         private IconDescriptor m_iconWr = new IconDescriptor("FDDWR", ResourceImages.OsdFddWr);
         protected CpuUnit m_cpu;
         protected IMemoryDevice m_memory;
-        protected Wd1793 m_wd = new Wd1793();
+        protected readonly Wd1793 m_wd;
 
         private IViewHolder m_viewHolder;
 
         #endregion
 
 
-        public FddController()
+        protected FddController(int clockMultiplier)
         {
+            m_wd = new Wd1793(4, clockMultiplier);
             Category = BusDeviceCategory.Disk;
             Name = "FDD WD1793";
             Description = "FDD controller WD1793\r\nBDI-ports compatible\r\nPorts active when DOSEN=1 or SYSEN=1";
@@ -45,6 +47,11 @@ namespace ZXMAK2.Hardware.General
                 LoadManagers[i] = new DiskLoadManager(m_wd.FDD[i]);
             }
             CreateViewHolder();
+        }
+
+        public FddController()
+            : this(1)
+        {
         }
 
 
@@ -63,6 +70,7 @@ namespace ZXMAK2.Hardware.General
             bmgr.RegisterIcon(m_iconWr);
             bmgr.Events.SubscribeBeginFrame(BusBeginFrame);
             bmgr.Events.SubscribeEndFrame(BusEndFrame);
+            bmgr.Events.SubscribeReset(ResetTrDosSession);
             
             OnSubscribeIo(bmgr);
 
@@ -176,6 +184,11 @@ namespace ZXMAK2.Hardware.General
 
         public bool LogIo { get; set; }
 
+        public bool IsTrDosSessionActive
+        {
+            get { return m_isTrDosSessionActive; }
+        }
+
         #endregion
 
 
@@ -233,6 +246,7 @@ namespace ZXMAK2.Hardware.General
             if (handled || !IsActive)
                 return;
             handled = true;
+            MarkTrDosSessionActive();
 
             var fdcReg = (addr & 0x60) >> 5;
             if (LogIo)
@@ -247,6 +261,7 @@ namespace ZXMAK2.Hardware.General
             if (handled || !IsActive)
                 return;
             handled = true;
+            MarkTrDosSessionActive();
 
             var fdcReg = (addr & 0x60) >> 5;
             value = m_wd.Read(m_cpu.Tact, (WD93REG)fdcReg);
@@ -261,6 +276,7 @@ namespace ZXMAK2.Hardware.General
             if (handled || !IsActive)
                 return;
             handled = true;
+            MarkTrDosSessionActive();
             
             if (LogIo)
             {
@@ -274,6 +290,7 @@ namespace ZXMAK2.Hardware.General
             if (handled || !IsActive)
                 return;
             handled = true;
+            MarkTrDosSessionActive();
 
             value = m_wd.Read(m_cpu.Tact, WD93REG.SYS);
             if (LogIo)
@@ -300,6 +317,22 @@ namespace ZXMAK2.Hardware.General
                 value,
                 m_cpu.regs.PC,
                 tact);
+        }
+
+        protected void MarkTrDosSessionActive()
+        {
+            // DOSEN is a paging signal and may disappear while TR-DOS code is
+            // executing in RAM. SYSEN/SHADOW belongs to machine service mode
+            // and must not make Quick Boot available there.
+            if (m_memory != null && m_memory.DOSEN && !m_memory.SYSEN)
+            {
+                m_isTrDosSessionActive = true;
+            }
+        }
+
+        private void ResetTrDosSession()
+        {
+            m_isTrDosSessionActive = false;
         }
 
         #endregion Private

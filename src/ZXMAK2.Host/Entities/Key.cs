@@ -1,4 +1,4 @@
-﻿
+
 
 namespace ZXMAK2.Host.Entities
 {
@@ -117,5 +117,8 @@ namespace ZXMAK2.Host.Entities
 
         NumPadComma,
         NumPadPeriod,
+
+        // Appended to retain all existing serialized/numeric key identities.
+        ScrollLock,
     }
 }

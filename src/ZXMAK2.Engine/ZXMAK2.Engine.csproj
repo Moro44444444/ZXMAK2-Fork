@@ -65,7 +65,9 @@
     <Compile Include="GraphMonitor.cs" />
     <Compile Include="InputAggregator.cs" />
     <Compile Include="Interfaces\ICommandManager.cs" />
+    <Compile Include="Interfaces\ICpuClock.cs" />
     <Compile Include="Interfaces\IEventManager.cs" />
+    <Compile Include="Interfaces\ITrDosSessionDevice.cs" />
     <Compile Include="Interfaces\IPsgDevice.cs" />
     <Compile Include="Interfaces\IBetaDiskDevice.cs" />
     <Compile Include="Interfaces\IBus.cs" />

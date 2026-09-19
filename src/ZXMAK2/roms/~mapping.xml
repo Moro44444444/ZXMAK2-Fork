@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mapping>
+  <RomSet name="ZX48">
+    <Page name="SOS" image="ZX048/48.rom" offset="0x0000" length="0x4000"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+  </RomSet>
+  <RomSet name="ZX128">
+    <Page name="128" image="ZX128/128-0.rom"/>
+    <Page name="SOS" image="ZX128/128-1.rom"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+  </RomSet>
+  <RomSet name="PLUS3">
+    <Page name="128" image="PLUS3/plus3-0.rom"/>
+    <Page name="SYS" image="PLUS3/plus3-1.rom"/>
+    <Page name="DOS" image="PLUS3/plus3-2.rom"/>
+    <Page name="SOS" image="PLUS3/plus3-3.rom"/>
+  </RomSet>
+  <RomSet name="ATM450">
+    <Page name="RAW" image="ATM/atm103rs.rom"/>
+  </RomSet>
+  <RomSet name="ATM710">
+    <Page name="RAW" image="ATM/bios_1_07_13.rom"/>
+  </RomSet>
+  <RomSet name="ATM710-xbios135">
+    <Page name="RAW" image="ATM/xbios135.rom"/>
+  </RomSet>
+  <RomSet name="ATM710-091">
+    <Page name="RAW" image="ATM/ATM091.bin"/>
+  </RomSet>
+  <RomSet name="ATM450-TEST">
+    <Page name="RAW" image="ATM/atm1test.rom"/>
+  </RomSet>
+  <RomSet name="ATM450-TEST2">
+    <Page name="RAW" image="ATM/Atmtest3.rom"/>
+  </RomSet>
+  <RomSet name="ATM710-TEST CHRV">
+    <Page name="RAW" image="ATM/testatm.rom"/>
+  </RomSet>
+  <RomSet name="Pentagon">
+    <Page name="RAW" image="PENTAGON/pentagon.rom"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+    <Page name="SYS" image="PENTAGON/gluck.rom"/>
+  </RomSet>
+  <RomSet name="PROFI">
+    <Page name="RAW" image="PROFI/PROF-M.ROM"/>
+  </RomSet>
+  <RomSet name="PROFI-V03">
+    <Page name="RAW" image="PROFI/PROFI_v03.ROM"/>
+  </RomSet>
+  <RomSet name="PROFI-M-V1.0">
+    <Page name="RAW" image="PROFI/profi_v10.rom"/>
+  </RomSet>
+  <RomSet name="PROFI-v450-HC">
+    <Page name="RAW" image="PROFI/profi_v450.ROM"/>
+  </RomSet>
+  <RomSet name="PROFI-HDDBOOT">
+    <Page name="RAW" image="PROFI/profi-hddboot.rom"/>
+  </RomSet>
+  <RomSet name="Quorum128">
+    <Page name="RAW" image="QUORUM/QU7V42.rom"/>
+  </RomSet>
+  <RomSet name="Quorum64">
+    <Page name="RAW" image="QUORUM/QU4I1993.ROM"/>
+  </RomSet>
+  <RomSet name="Scorpion">
+    <Page name="RAW" image="SCORPION/scorp295.rom"/>
+  </RomSet>
+  <RomSet name="Scorpion-ProfRom">
+    <Page name="RAW" image="SCORPION/scorp256.rom" offset="0"/>
+  </RomSet>
+  <RomSet name="Scorpion-TEST">
+    <Page name="RAW" image="SCORPION/TESTSC.512" offset="0"/>
+  </RomSet>
+  <RomSet name="LEC">
+    <Page name="SOS" image="LEC/LEC24.ROM"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+  </RomSet>
+  <RomSet name="Sprinter">
+    <Page name="RAW" image="SPRINTER/SP_304.BIN"/>
+  </RomSet>
+  <RomSet name="ZXBYTE">
+    <Page name="SOS" image="ZXBYTE/DD72-DD73.BIN"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+    <Page name="DD66" image="ZXBYTE/DD66_RT5.BIN"/>
+    <Page name="DD71" image="ZXBYTE/DD71_RT7.BIN"/>
+  </RomSet>
+  <RomSet name="Delta-C">
+    <Page name="SOS" image="DELTA/Delta-c.rom"/>
+    <Page name="DOS" image="TRDOS/trdos.rom"/>
+  </RomSet>
+  <RomSet name="PentEvo">
+    <Page name="RAW" image="EVO/zxevo.rom"/>
+  </RomSet>
+  <RomSet name="Santaka002">
+    <Page name="SOS" image="SANTAKA/santaka_48.rom"/>
+  </RomSet>
+</Mapping>

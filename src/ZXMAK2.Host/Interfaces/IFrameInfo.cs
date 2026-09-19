@@ -11,4 +11,9 @@ namespace ZXMAK2.Host.Interfaces
         bool IsRefresh { get; }
         int SampleRate { get; }
     }
+
+    public interface IFrameDiagnosticInfo
+    {
+        string DiagnosticText { get; }
+    }
 }

@@ -9,5 +9,6 @@ namespace ZXMAK2.Host.Presentation.Interfaces
     {
         void Run();
         void Attach(ISynchronizeInvoke synchronizeInvoke);
+        void ExecuteMediaChange(ISuccessCommand command, object commandParameter);
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ZXMAK2.Hardware.Atm;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Attributes;
@@ -8,11 +8,12 @@ using ZXMAK2.Engine.Cpu;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class MemoryPentEvo : MemoryBase
+    public class MemoryPentEvo : MemoryBase, ICpuRefreshClock
     {
         #region Fields
 
         private readonly int[] m_ru2 = new int[8]; // ATM 7.10 / ATM3(4Mb) memory map
+        private byte m_writeDisable; // bits 0..3: map 0; bits 4..7: map 1
 
         protected CpuUnit m_cpu;
         protected byte[][] m_romPages;
@@ -24,6 +25,14 @@ namespace ZXMAK2.Hardware.Evo
 
         private byte m_pXXBF;   // port EVO EVO
         private byte m_pEFF7;   // port EVO MOD
+
+        // PentEvo can redirect a TR-DOS FDC access to a small handler stored
+        // in RAM page #FE.  ERS uses this mechanism for mounted SCL/TRD images
+        // and for its RAM disk.
+        private const int FddIoRamPage = 0xFE;
+        private bool m_fddIoRamActive;
+        private bool m_fddIoWriteDisabled;
+        private int m_fddIoTraceM1Budget;
 
         private int m_romMask;
         private int m_ramMask;
@@ -70,14 +79,31 @@ namespace ZXMAK2.Hardware.Evo
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00FF & 0x00FF, BusWritePortXXFF_PAL);	// atm_writepal(val);
 
             bmgr.Events.SubscribeWrIo(0x00FF, 0xFF77 & 0x00FF, BusWritePortXX77_SYS);
-            bmgr.Events.SubscribeWrIo(0x37FF, 0x3FF7 & 0x37FF, BusWritePortXFF7_WND);	//ATM3 mask=0x3FFF
-            bmgr.Events.SubscribeWrIo(0x8002, 0x7FFD & 0x8002, BusWritePort7FFD_128);
-            bmgr.Events.SubscribeWrIo(0xFFFF, 0xEFF7 & 0xFFFF, BusWritePortEFF7_MOD);
+            // PentEvo has two memory-manager port families.  #x7F7 is
+            // decoded with A13..A0, while #xFF7 is decoded by its low
+            // 12 bits.  The latter intentionally includes #EFF7 while
+            // shadow/DOS ports are enabled, as on the real hardware.
+            bmgr.Events.SubscribeWrIo(0x3FFF, 0x37F7, BusWritePortXFF7_WND);
+            bmgr.Events.SubscribeWrIo(0x0FFF, 0x0FF7, BusWritePortXFF7_WND);
+            // BaseConf: low byte F7, A8=1, A11:A10=10; A15:A14 select window.
+            bmgr.Events.SubscribeWrIo(0x0DFF, 0x09F7, BusWritePortXBF7_WPROT);
+            // PentEvo decodes #7FFD by A15=0 and the low byte being #FD or #FC.
+            // A broader Spectrum-style mask also catches unrelated ports such as #13BD.
+            bmgr.Events.SubscribeWrIo(0x80FF, 0x00FD, BusWritePort7FFD_128);
+            bmgr.Events.SubscribeWrIo(0x80FF, 0x00FC, BusWritePort7FFD_128);
+            // BaseConf zports.v: low byte F7, A8=1, A12=0, outside DOS/Shadow.
+            // Shadow gating stays in the handler; pager subscriptions are separate.
+            bmgr.Events.SubscribeWrIo(0x11FF, 0x01F7, BusWritePortEFF7_MOD);
 
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00BF & 0x00FF, BusWritePortXXBF_EVO);
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00BF & 0x00FF, BusReadPortXXBF_EVO);
 
-            bmgr.Events.SubscribeRdIo(0xE0FF, 0x00BE & 0xE0FF, BusReadPortXXBE_CFG);
+            // ERS 0.59.x reads the configuration registers through #xxBD,
+            // while earlier firmware uses #xxBE.  Keep both read aliases
+            // so ROMs from either firmware family can restore their map.
+            bmgr.Events.SubscribeRdIo(0x00FF, 0x00BD, BusReadPortXXBD_BE_CFG);
+            bmgr.Events.SubscribeRdIo(0x00FF, 0x00BE, BusReadPortXXBD_BE_CFG);
+            bmgr.Events.SubscribeWrIo(0x00FF, 0x00BE, BusWritePortXXBE_FDD_EXIT);
         }
 
         protected virtual void WriteMemXXXX(ushort addr, byte value)
@@ -90,6 +116,31 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusReadM1(ushort addr, ref byte value)
         {
+            // While the FDD I/O handler is mapped at #0000, its instruction
+            // fetches must not change DOSEN or replace page #FE.
+            if (m_fddIoRamActive)
+            {
+                // BaseConf arms trdemu_wr_disable when the I/O cycle enters
+                // page #FE and releases it on the first following M1 cycle.
+                // This prevents the trailing memory write of INI/INIR from
+                // corrupting the handler before its first opcode is fetched.
+                if (m_fddIoWriteDisabled)
+                {
+                    m_fddIoWriteDisabled = false;
+                    UpdateMapping();
+                }
+                if (FddIoTrace && m_fddIoTraceM1Budget-- > 0)
+                {
+                    Logger.Debug(
+                        "EVO-FDD M1 page=FE addr=#{0:X4} op=#{1:X2} PC=#{2:X4} T={3}",
+                        addr,
+                        MapRead0000[addr],
+                        m_cpu.regs.PC,
+                        m_cpu.Tact);
+                }
+                return;
+            }
+
             //LogAgent.Info(
             //    "{0:D3}-{1:D6}: #{2:X4} = #{3:X2}",
             //    m_cpu.Tact / m_ula.FrameTactCount,
@@ -129,7 +180,9 @@ namespace ZXMAK2.Hardware.Evo
 
         protected override void UpdateMapping()
         {
-            m_lock = (CMR0 & 0x20) != 0;
+            // PentEvo uses bit 5 as an extended RAM page bit while EFF7.2 is clear.
+            // The classic Spectrum 128 paging lock applies only in ZX128 mode.
+            m_lock = ZX128 && (CMR0 & 0x20) != 0;
             if (PEN)
             {
                 int videoPage = (CMR0 & 0x08) == 0 ? 5 : 7;
@@ -188,7 +241,7 @@ namespace ZXMAK2.Hardware.Evo
                 var kpa0mask = 0x38;
                 if (!ZX128)
                 {
-                    var sega = ((CMR0 & 0xC0) >> 6) | ((CMR0 & 0x20) >> 3);	//PENT1024: D5,D7,D6,D2,D1,D0
+                    var sega = (CMR0 & 0xE0) >> 5; // BaseConf: D7,D6,D5,D2,D1,D0
                     kpa0 |= sega << 3;
                     //kpa0 = (byte)((CMR0 & 0xE0) >> 2 | (CMR0 & 0x7));
                     kpa0mask = 0xC0;
@@ -234,16 +287,76 @@ namespace ZXMAK2.Hardware.Evo
                 MapRead8000 = isRam2 ? RamPages[ramPage2] : RomPages[romPage2];
                 MapReadC000 = isRam3 ? RamPages[ramPage3] : RomPages[romPage3];
 
-                MapWrite0000 = isRam0 ? MapRead0000 : m_trashPage;
-                MapWrite4000 = isRam1 ? MapRead4000 : m_trashPage;
-                MapWrite8000 = isRam2 ? MapRead8000 : m_trashPage;
-                MapWriteC000 = isRam3 ? MapReadC000 : m_trashPage;
+                MapWrite0000 = isRam0 && (W0RAM0 || ((m_writeDisable >> index) & 1) == 0) ? MapRead0000 : m_trashPage;
+                MapWrite4000 = isRam1 && ((m_writeDisable >> index) & 2) == 0 ? MapRead4000 : m_trashPage;
+                MapWrite8000 = isRam2 && ((m_writeDisable >> index) & 4) == 0 ? MapRead8000 : m_trashPage;
+                MapWriteC000 = isRam3 && ((m_writeDisable >> index) & 8) == 0 ? MapReadC000 : m_trashPage;
 
                 Map48[0] = isRam0 ? -1 : romPage0;
                 Map48[1] = isRam1 ? ramPage1 : -1;
                 Map48[2] = isRam2 ? ramPage2 : -1;
                 Map48[3] = isRam3 ? ramPage3 : -1;
             }
+
+            if (m_fddIoRamActive)
+            {
+                MapRead0000 = RamPages[FddIoRamPage];
+                MapWrite0000 = m_fddIoWriteDisabled ? m_trashPage : MapRead0000;
+                Map48[0] = -1;
+            }
+        }
+
+        /// <summary>
+        /// Temporarily maps the PentEvo FDD I/O handler over the DOS ROM.
+        /// The CPU continues at the instruction following IN/OUT, now in the
+        /// handler page, exactly as on the FPGA and in UnrealSpeccy.
+        /// </summary>
+        public bool TryEnterFddIoRam()
+        {
+            // base_trdemu/zdos.v: trdemu_on requires
+            // dos && romnram && !atm_pen2.  In ATM palette mode a shadow
+            // #FF access must not replace window #0000 with RAM page #FE.
+            if (m_fddIoRamActive ||
+                !DOSEN ||
+                PEN2 ||
+                Array.IndexOf(RomPages, MapRead0000) < 0)
+            {
+                return false;
+            }
+
+            m_fddIoRamActive = true;
+            m_fddIoWriteDisabled = true;
+            m_fddIoTraceM1Budget = FddIoTrace ? 16 : 0;
+            UpdateMapping();
+            return true;
+        }
+
+        public bool FddIoRamActive
+        {
+            get { return m_fddIoRamActive; }
+        }
+
+        public bool IsDosRomMappedAt0000
+        {
+            get
+            {
+                return DOSEN && Array.IndexOf(RomPages, MapRead0000) >= 0;
+            }
+        }
+
+        public bool FddIoTrace { get; set; }
+
+        private void ExitFddIoRam()
+        {
+            if (!m_fddIoRamActive)
+            {
+                return;
+            }
+
+            m_fddIoRamActive = false;
+            m_fddIoWriteDisabled = false;
+            m_fddIoTraceM1Budget = 0;
+            UpdateMapping();
         }
 
         protected override void Init(int romPageCount, int ramPageCount)
@@ -263,7 +376,255 @@ namespace ZXMAK2.Hardware.Evo
 
         #endregion
 
+        // BaseConf dram/arbiter.v: cend decisions, eight-cycle blocks.
+        private sealed class EvoDramArbiter
+        {
+            private int blockRemaining, videoRemaining;
+            private bool stallBlock;
+            public bool CanUseCpu(bool go, int bandwidth)
+            {
+                return blockRemaining == 0 ? !go || bandwidth != 3 :
+                    !stallBlock && videoRemaining != blockRemaining;
+            }
+            // 0=VIDEO, 1=CPU, 2=FREE, exactly as in RTL.
+            public int Step(bool go, int bandwidth, bool cpuRequest)
+            {
+                int next = blockRemaining == 0 ?
+                    (!go ? (cpuRequest ? 1 : 2) : bandwidth == 3 ? 0 : cpuRequest ? 1 : 0) :
+                    stallBlock || videoRemaining == blockRemaining ? 0 :
+                    cpuRequest ? 1 : videoRemaining != 0 ? 0 : 2;
+                int nextVideo = videoRemaining;
+                if (go && blockRemaining == 0)
+                {
+                    int max = (1 << bandwidth) & 7;
+                    nextVideo = cpuRequest ? max : (max - 1) & 7;
+                }
+                else if (next == 0 && nextVideo != 0)
+                    nextVideo--;
+                if (blockRemaining == 0)
+                    stallBlock = go && bandwidth == 3;
+                blockRemaining = blockRemaining == 0 ? (go ? 7 : 0) : blockRemaining - 1;
+                videoRemaining = nextVideo;
+                return next;
+            }
+        }
+
+        private EvoDramArbiter m_dramArbiter;
+        private long m_dramNextCycle, m_dramLastTact = -1;
+        private int m_dramProfileMode, m_dramProfilePent;
+        private EvoRasterTiming m_dramRaster;
+        private long m_dramRasterOrigin;
+
+        internal void ActivateRaster(EvoRasterTiming timing, long masterOrigin)
+        {
+            if (timing == null || masterOrigin < 0 || (masterOrigin & 3) != 0)
+                throw new ArgumentException("Invalid BaseConf raster epoch.");
+            // Settle the old profile up to the boundary where possible. Keep
+            // in-flight block quota and the monotonically advancing DRAM cursor.
+            // Instruction-overrun edges are not an exact FPGA transition model.
+            if (masterOrigin / 4 < m_dramRasterOrigin)
+            {
+                m_dramArbiter = null;
+                m_dramLastTact = -1;
+                m_dramNextCycle = 0;
+                InvalidateMemoryBuffer();
+            }
+            else if (m_dramArbiter != null)
+                AdvanceDramIdle(masterOrigin);
+            m_dramRaster = timing;
+            m_dramRasterOrigin = masterOrigin / 4;
+        }
+
+        private void SetDramProfile()
+        {
+            m_dramProfileMode = m_pFF77 & 7;
+            // top.v: pent_vmode = {peff7[0],peff7[5]}.
+            m_dramProfilePent = ((m_pEFF7 & 1) << 1) | ((m_pEFF7 >> 5) & 1);
+        }
+        private void GetVideoFetch(long cycle, out bool go, out int bandwidth)
+        {
+            if (cycle < 0) throw new ArgumentOutOfRangeException("cycle");
+            var raster = m_dramRaster ?? EvoRasterTiming.Normal;
+            long position = (cycle - m_dramRasterOrigin) % raster.FrameCycles;
+            if (position < 0) position += raster.FrameCycles;
+            raster.GetVideoFetch(position, m_dramProfileMode,
+                m_dramProfilePent, out go, out bandwidth);
+        }
+        private void AdvanceDramIdle(long masterTact)
+        {
+            while (m_dramNextCycle * 4 + 3 < masterTact)
+            {
+                bool go; int bandwidth;
+                GetVideoFetch(m_dramNextCycle, out go, out bandwidth);
+                m_dramArbiter.Step(go, bandwidth, false);
+                m_dramNextCycle++;
+            }
+        }
+        private void PrepareDram(long masterTact)
+        {
+            if (masterTact < 0)
+                throw new InvalidOperationException("Negative BaseConf master timestamp.");
+            if (m_dramArbiter == null || masterTact < m_dramLastTact)
+            {
+                m_dramArbiter = new EvoDramArbiter();
+                // Replay more than one line to reconstruct idle block
+                // history on reset/snapshot or a backwards timestamp.
+                m_dramNextCycle = Math.Max(0L, masterTact / 4 - 512);
+                SetDramProfile();
+                InvalidateMemoryBuffer();
+            }
+            AdvanceDramIdle(masterTact);
+            SetDramProfile();
+            m_dramLastTact = masterTact;
+        }
+        private int ReserveDram(long masterTact, CpuMemoryAccess access)
+        {
+            bool fast = CpuClockMultiplier == 4;
+            long begin = masterTact + (fast ? 1 : 0), resumed = begin;
+            AdvanceDramIdle(begin);
+            bool denied = false;
+            for (;;)
+            {
+                bool go; int bandwidth;
+                GetVideoFetch(m_dramNextCycle, out go, out bandwidth);
+                bool available = m_dramArbiter.CanUseCpu(go, bandwidth);
+                long cycleBegin = m_dramNextCycle * 4;
+                m_dramArbiter.Step(go, bandwidth, true);
+                m_dramNextCycle++;
+                if (available)
+                {
+                    if (denied) resumed = cycleBegin;
+                    break;
+                }
+                denied = true;
+            }
+            int delay = checked((int)(resumed - begin));
+            if (fast && access != CpuMemoryAccess.Write)
+                delay += (access == CpuMemoryAccess.Opcode ? 6 : 5) - (int)(resumed & 3);
+            // Master units; no second scaling by BusManager.
+            return delay;
+        }
+
+        private bool m_dramBufferValid;
+        private ushort m_dramBufferAddress;
+        private ushort m_dramBufferWord;
+
+        public int GetPortWait(ushort address)
+        {
+            // zports.v external_port: exact low FD with A15=1 (AY), or
+            // low 1F/3F/5F/7F while dos || shadow_en_reg (VG93).
+            if (CpuClockMultiplier != 4)
+                return 0;
+            int low = address & 255;
+            bool external = (low == 0xFD && (address & 0x8000) != 0) ||
+                ((DOSEN || SHADOW) &&
+                (low == 0x1F || low == 0x3F || low == 0x5F || low == 0x7F));
+            // zclock.v io_wait_cnt 8..F: 1,1,1,1,1,0,1,0.
+            // Six stopped FPGA clock phases, aggregated in master units.
+            // RD/WR are equivalent; interrupt acknowledgment uses another
+            // callback and never reaches this ordinary-IO method.
+            // Exact placement of the separated stalls at Z80 pin edges is
+            // a later stage; this implements their total wait budget.
+            return external ? 6 : 0;
+        }
+
+        public void InvalidateMemoryBuffer()
+        {
+            m_dramBufferValid = false;
+        }
+
+        public int CompleteMemoryAccess(ushort address, CpuMemoryAccess access,
+            long masterTact, ref byte value)
+        {
+            PrepareDram(masterTact);
+            var window = address >> 14;
+            var read = window == 0 ? MapRead0000 : window == 1 ? MapRead4000 :
+                window == 2 ? MapRead8000 : MapReadC000;
+            // Use the final mapping, after the memory/M1 handlers ran.
+            // ROM does not use the DRAM arbiter, and invalidates the buffer.
+            if (Array.IndexOf(RomPages, read) >= 0)
+            {
+                InvalidateMemoryBuffer();
+                return 0;
+            }
+
+            if (access == CpuMemoryAccess.Write)
+            {
+                var write = window == 0 ? MapWrite0000 : window == 1 ? MapWrite4000 :
+                    window == 2 ? MapWrite8000 : MapWriteC000;
+                // RTL memwr is gated by wrdisable. A protected write hit
+                // retains the buffer. A miss still raises dram_beg with
+                // cpu_rnw=1: model its read refill in the free-DRAM baseline.
+                int writeDelay = 0;
+                if (ReferenceEquals(write, read))
+                {
+                    writeDelay = ReserveDram(masterTact, CpuMemoryAccess.Write);
+                    InvalidateMemoryBuffer();
+                }
+                else if (CpuClockMultiplier == 4 &&
+                    (!m_dramBufferValid || m_dramBufferAddress != (address & 0xFFFE)))
+                {
+                    writeDelay = ReserveDram(masterTact, CpuMemoryAccess.Write);
+                    var refill = address & 0x3FFE;
+                    m_dramBufferWord = (ushort)((read[refill] << 8) | read[refill + 1]);
+                    m_dramBufferAddress = (ushort)(address & 0xFFFE);
+                    m_dramBufferValid = true;
+                }
+                return writeDelay;
+            }
+
+            var wordAddress = (ushort)(address & 0xFFFE);
+            var fast = CpuClockMultiplier == 4;
+            if (fast && m_dramBufferValid && m_dramBufferAddress == wordAddress)
+            {
+                value = (byte)((address & 1) == 0 ?
+                    m_dramBufferWord >> 8 : m_dramBufferWord & 255);
+                return 0;
+            }
+
+            int readDelay = ReserveDram(masterTact, access);
+            var offset = address & 0x3FFE;
+            m_dramBufferWord = (ushort)((read[offset] << 8) | read[offset + 1]);
+            m_dramBufferAddress = wordAddress;
+            m_dramBufferValid = true;
+            value = (byte)((address & 1) == 0 ?
+                m_dramBufferWord >> 8 : m_dramBufferWord & 255);
+            return readDelay;
+        }
+
         #region Hardware Values
+
+        private int m_activeCpuClockMultiplier = 2;
+
+        public int CpuClockMultiplier
+        {
+            // zclock.v int_turbo: applied mode, separate from port request.
+            get { return m_activeCpuClockMultiplier; }
+        }
+
+        public int RequestedCpuClockMultiplier
+        {
+            get
+            {
+                if ((m_pFF77 & 0x08) != 0)
+                    return 4;
+                return (m_pEFF7 & 0x10) != 0 ? 1 : 2;
+            }
+        }
+
+        public void LatchClockAtRefresh()
+        {
+            // zclock.v: int_turbo <= turbo on sampled /RFSH assertion.
+            // Memory and IO waits must consult this applied mode too.
+            m_activeCpuClockMultiplier = RequestedCpuClockMultiplier;
+        }
+
+        public int MaxCpuClockMultiplier
+        {
+            // BaseConf FPGA master clock: 28 MHz = 8 * 3.5 MHz.
+            // CPU rate selection remains in CpuClockMultiplier.
+            get { return 8; }
+        }
 
         [HardwareValue("PEN", Description = "Disable memory manager")]
         public bool PEN
@@ -335,7 +696,7 @@ namespace ZXMAK2.Hardware.Evo
             set { m_pEFF7 = (byte)((m_pEFF7 & 0xFB) | (value ? 0x04 : 0)); }
         }
 
-        [HardwareValue("TURBO", Description = "Enable turbo mode")]
+        [HardwareValue("TURBOOFF", Description = "EFF7.D4: request 3.5 MHz; xx77.D3 has priority")]
         public bool TURBO
         {
             get { return (m_pEFF7 & 0x10) != 0; }
@@ -392,7 +753,12 @@ namespace ZXMAK2.Hardware.Evo
         {
             if (DOSEN || SHADOW)
             {
+                // Advance old profile to the IO timestamp, retaining
+                // current block quotas across this mode change.
+                if (m_cpu != null)
+                    PrepareDram(m_cpu.Tact);
                 m_pFF77 = value;
+                SetDramProfile();
                 m_aFF77 = addr;
                 if (CPM) DOSEN = true;
                 UpdateMapping();
@@ -421,6 +787,16 @@ namespace ZXMAK2.Hardware.Evo
             }
         }
 
+        protected virtual void BusWritePortXBF7_WPROT(ushort addr, byte value, ref bool handled)
+        {
+            if (!(DOSEN || SHADOW))
+                return;
+            var wnd = ((CMR0 & 0x10) >> 2) | ((addr >> 14) & 3);
+            var mask = 1 << wnd;
+            m_writeDisable = (byte)((m_writeDisable & ~mask) | ((value & 1) << wnd));
+            UpdateMapping();
+        }
+
         protected virtual void BusWritePort7FFD_128(ushort addr, byte value, ref bool handled)
         {
             if (m_lock)
@@ -443,11 +819,22 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusWritePortEFF7_MOD(ushort addr, byte value, ref bool handled)
         {
+            // The EFF7 latch is writable only outside DOS/Shadow.
+            // Other F7 handlers keep their own independent decoding.
+            if (DOSEN || SHADOW)
+            {
+                return;
+            }
+            // Advance old profile to the IO timestamp, retaining
+            // current block quotas across this mode change.
+            if (m_cpu != null)
+                PrepareDram(m_cpu.Tact);
             m_pEFF7 = value;
+            SetDramProfile();
             UpdateMapping();
         }
 
-        protected virtual void BusReadPortXXBE_CFG(ushort addr, ref byte value, ref bool handled)
+        protected virtual void BusReadPortXXBD_BE_CFG(ushort addr, ref byte value, ref bool handled)
         {
             switch ((addr >> 8) & 0x1F)
             {
@@ -459,7 +846,7 @@ namespace ZXMAK2.Hardware.Evo
                 case 0x05:
                 case 0x06:
                 case 0x07:
-                    value = (byte)(GetCfgPage((addr & 7) >> 8) ^ 0xFF);
+                    value = (byte)(GetCfgPage((addr >> 8) & 7) ^ 0xFF);
                     break;
                 case 0x08:
                     value = (byte)GetCfgIsRam();
@@ -480,7 +867,26 @@ namespace ZXMAK2.Hardware.Evo
                         ((m_aFF77 & 0x0100) >> 3) |
                         (DOSEN ? 0x10 : 0));
                     break;
+                case 0x12:
+                    value = m_writeDisable;
+                    break;
             }
+        }
+
+        protected virtual void BusWritePortXXBE_FDD_EXIT(
+            ushort addr,
+            byte value,
+            ref bool handled)
+        {
+            if (handled || !m_fddIoRamActive)
+            {
+                return;
+            }
+
+            // OUT (#BE),A is the documented return path from the page #FE
+            // virtual-drive handler.  The value itself is not significant.
+            handled = true;
+            ExitFddIoRam();
         }
 
         private int GetCfgIsDos()
@@ -517,36 +923,24 @@ namespace ZXMAK2.Hardware.Evo
 
         private int GetCfgPage(int index)
         {
-            var romMask = RomPages.Length - 1;
-            if (romMask > 0x1F)
-            {
-                romMask = 0x1F;
-            }
-            var ramMask = RamPages.Length - 1;
-            if (ramMask > 0xFF)
-            {
-                ramMask = 0xFF;
-            }
-
-            // high 2 bits of ram page stored 
-            // in the high byte of m_ru2[wnd]
+            // Ports #xxBD/#xxBE return the raw low byte of the PentEvo
+            // pFFF7 descriptor (the caller inverts it), not the currently
+            // mapped physical page.  m_ru2 stores the same descriptor in a
+            // compact layout: mode bits are in w[7:6], page bits 7:6 in w[9:8].
             var w = m_ru2[index] ^ 0x3FF;
-            var kpa0 = CMR0 & 7;
-            var kpa8 = DOSEN ? 1 : 0;
-            var isDos = (w & 0x80) == 0;
-            var isRam = (w & 0x40) == 0;
-            var romPage = (isDos ? kpa8 | (w & 0x3E) : w & 0x3F) & romMask;
-            var ramPage = ((isDos ? (w & 0x38) | kpa0 : (w & 0x3F)) | ((w >> 2) & 0xC0)) & ramMask;
-            if ((index & 3) == 0 && W0RAM0)
-            {
-                isRam = true;
-                ramPage = 0;
-            }
-            return isRam ? ramPage : romPage;
+            return (w & 0x3F) | ((w >> 2) & 0xC0);
         }
 
         protected virtual void BusReset()
         {
+            // Retain the existing emulator reset baseline (7 MHz).
+            m_activeCpuClockMultiplier = 2;
+            m_dramArbiter = null;
+            m_dramLastTact = -1;
+            InvalidateMemoryBuffer();
+            m_fddIoRamActive = false;
+            m_fddIoWriteDisabled = false;
+            m_writeDisable = 0;
             m_aFF77 = 0x4000;   // RESET: A14=1, A9=0, A8=0
             m_pFF77 = 3;        // RESET: D3=0, D2..D0=011
             m_pXXBF = 0;        // RESET=0

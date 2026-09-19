@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 using ZXMAK2.Dependency;
+using ZXMAK2.Engine;
 using ZXMAK2.Host.Interfaces;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Host.Presentation.Interfaces;
@@ -27,7 +28,10 @@ namespace ZXMAK2.Host.WinForms.Views
         #region Fields
 
         private readonly IResolver _resolver;
-        private readonly BindingService _binding; 
+        private readonly BindingService _binding;
+        private readonly ToolStripMenuItem _menuToolsQuickBoot = new ToolStripMenuItem();
+        private readonly Timer _quickBootStateTimer = new Timer();
+        private bool? _quickBootAvailable;
 
         private IHostService _host;
 
@@ -60,8 +64,14 @@ namespace ZXMAK2.Host.WinForms.Views
             SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint, true);
             InitializeComponent();
             Icon = ResourceImages.IconApp;
+            LoadMachineMenu();
 
             Bind();
+
+            _quickBootStateTimer.Interval = 100;
+            _quickBootStateTimer.Tick += QuickBootStateTimer_OnTick;
+            _quickBootStateTimer.Start();
+            menuTools.DropDownOpening += MenuTools_OnDropDownOpening;
         }
 
 
@@ -98,6 +108,7 @@ namespace ZXMAK2.Host.WinForms.Views
             BindCommand(tbrButtonColdReset, "CommandVmColdReset");
             BindCommand(tbrButtonFullScreen, "CommandViewFullScreen");
             BindCommand(tbrButtonQuickLoad, "CommandQuickLoad");
+            BindCommand(_menuToolsQuickBoot, "CommandQuickLoad");
             BindCommand(tbrButtonSettings, "CommandVmSettings", this);
 
             BindCommand(menuViewCustomizeShowToolBar, "CommandViewToolBar");
@@ -157,6 +168,7 @@ namespace ZXMAK2.Host.WinForms.Views
             _binding.Bind(this, "CommandTapePause", "CommandTapePause");
             _binding.Bind(this, "CommandQuickLoad", "CommandQuickLoad");
             _binding.Bind(this, "CommandOpenUri", "CommandOpenUri");
+            _binding.Bind(this, "CommandMachineSwitch", "CommandMachineSwitch");
         }
 
 
@@ -169,6 +181,7 @@ namespace ZXMAK2.Host.WinForms.Views
         public ICommand CommandTapePause { get; set; }
         public ICommand CommandQuickLoad { get; set; }
         public ICommand CommandOpenUri { get; set; }
+        public ICommand CommandMachineSwitch { get; set; }
 
         #endregion Commands
 
@@ -237,10 +250,19 @@ namespace ZXMAK2.Host.WinForms.Views
                 .ForEach(arg => arg.Dispose());
             _deviceItemAdapters.Clear();
             menuTools.DropDownItems.Clear();
+            tbrButtonSdImage.Enabled = false;
+            _quickBootAvailable = null;
         }
 
         public void Add(ICommand command)
         {
+            var isSdImageCommand = string.Compare(
+                command.Text,
+                "Open SD Card image...",
+                true) == 0;
+            var boundCommand = isSdImageCommand ?
+                CreateSdImageCommand(command) :
+                command;
             var subMenu = menuTools.DropDownItems.Add(command.Text) as ToolStripMenuItem;
             if (subMenu == null)
             {
@@ -248,9 +270,42 @@ namespace ZXMAK2.Host.WinForms.Views
             }
             var adapter = new ToolStripItemBindingAdapter(subMenu);
             adapter.CommandParameter = this;
-            adapter.Command = command;
+            adapter.Command = boundCommand;
             _deviceItemAdapters.Add(adapter);
+            if (isSdImageCommand)
+            {
+                var toolBarAdapter = new ToolStripItemBindingAdapter(tbrButtonSdImage);
+                toolBarAdapter.CommandParameter = this;
+                toolBarAdapter.Command = boundCommand;
+                _deviceItemAdapters.Add(toolBarAdapter);
+            }
             SortMenuTools();
+        }
+
+        private ICommand CreateSdImageCommand(ICommand command)
+        {
+            var successCommand = command as ISuccessCommand;
+            if (successCommand == null)
+            {
+                return command;
+            }
+            return new CommandDelegate(
+                arg => ExecuteSdImageCommand(successCommand, arg),
+                arg => successCommand.CanExecute(arg),
+                command.Text);
+        }
+
+        private void ExecuteSdImageCommand(
+            ISuccessCommand command,
+            object commandParameter)
+        {
+            var viewModel = DataContext as IMainViewModel;
+            if (viewModel != null)
+            {
+                viewModel.ExecuteMediaChange(command, commandParameter);
+                return;
+            }
+            command.Execute(commandParameter);
         }
 
         #endregion IHostUi
@@ -339,6 +394,10 @@ namespace ZXMAK2.Host.WinForms.Views
             base.OnFormClosed(e);
             try
             {
+                _quickBootStateTimer.Stop();
+                _quickBootStateTimer.Tick -= QuickBootStateTimer_OnTick;
+                _quickBootStateTimer.Dispose();
+                menuTools.DropDownOpening -= MenuTools_OnDropDownOpening;
                 OnViewClosed();
                 if (_host != null)
                 {
@@ -819,6 +878,89 @@ namespace ZXMAK2.Host.WinForms.Views
 
         #region Menu Handlers
 
+        private void LoadMachineMenu()
+        {
+            try
+            {
+                var machines = new MachinesConfig();
+                machines.Load();
+                var names = new List<string>(machines.GetNames());
+                names.Sort(StringComparer.CurrentCultureIgnoreCase);
+                foreach (var name in names)
+                {
+                    var item = new ToolStripMenuItem(name);
+                    item.Tag = name;
+                    item.Click += MachineMenuItem_OnClick;
+                    tbrDropDownMachines.DropDownItems.Add(item);
+                }
+                tbrDropDownMachines.Enabled = tbrDropDownMachines.DropDownItems.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                tbrDropDownMachines.Enabled = false;
+            }
+        }
+
+        private void MachineMenuItem_OnClick(object sender, EventArgs e)
+        {
+            var item = sender as ToolStripMenuItem;
+            var machineName = item == null ? null : item.Tag as string;
+            if (string.IsNullOrEmpty(machineName) || !CanExecute(CommandMachineSwitch, machineName))
+            {
+                return;
+            }
+            if (ConfirmMachineSwitch(machineName))
+            {
+                OnCommand(CommandMachineSwitch, machineName);
+            }
+        }
+
+        private bool ConfirmMachineSwitch(string machineName)
+        {
+            var dialog = new Form();
+            try
+            {
+                dialog.Text = "Switch Machine";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.ClientSize = new Size(340, 104);
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+                dialog.ShowInTaskbar = false;
+
+                var prompt = new Label();
+                prompt.AutoSize = true;
+                prompt.Location = new Point(16, 18);
+                prompt.Text = string.Format("Switch to \"{0}\"?", machineName);
+
+                var buttonSwitch = new Button();
+                buttonSwitch.DialogResult = DialogResult.OK;
+                buttonSwitch.Location = new Point(168, 62);
+                buttonSwitch.Size = new Size(75, 26);
+                buttonSwitch.Text = "Switch";
+                buttonSwitch.UseVisualStyleBackColor = true;
+
+                var buttonCancel = new Button();
+                buttonCancel.DialogResult = DialogResult.Cancel;
+                buttonCancel.Location = new Point(249, 62);
+                buttonCancel.Size = new Size(75, 26);
+                buttonCancel.Text = "Cancel";
+                buttonCancel.UseVisualStyleBackColor = true;
+
+                dialog.Controls.Add(prompt);
+                dialog.Controls.Add(buttonSwitch);
+                dialog.Controls.Add(buttonCancel);
+                dialog.AcceptButton = buttonSwitch;
+                dialog.CancelButton = buttonCancel;
+                return dialog.ShowDialog(this) == DialogResult.OK;
+            }
+            finally
+            {
+                dialog.Dispose();
+            }
+        }
+
         private void SortMenuTools()
         {
             var list = new List<ToolStripItem>();
@@ -839,7 +981,44 @@ namespace ZXMAK2.Host.WinForms.Views
             if (x.Text == y.Text) return 0;
             if (string.Compare(x.Text, "Debugger", true) == 0) return -1;
             if (string.Compare(y.Text, "Debugger", true) == 0) return 1;
-            return x.Text.CompareTo(y.Text);
+            return StringComparer.CurrentCultureIgnoreCase.Compare(x.Text, y.Text);
+        }
+
+        private void QuickBootStateTimer_OnTick(object sender, EventArgs e)
+        {
+            UpdateQuickBootAvailability();
+        }
+
+        private void MenuTools_OnDropDownOpening(object sender, EventArgs e)
+        {
+            UpdateQuickBootAvailability();
+        }
+
+        private void UpdateQuickBootAvailability()
+        {
+            var available = CommandQuickLoad != null &&
+                CommandQuickLoad.CanExecute(null);
+            if (_quickBootAvailable == available)
+            {
+                return;
+            }
+            _quickBootAvailable = available;
+            if (CommandQuickLoad != null)
+            {
+                CommandQuickLoad.Update();
+            }
+            if (available)
+            {
+                if (!menuTools.DropDownItems.Contains(_menuToolsQuickBoot))
+                {
+                    menuTools.DropDownItems.Add(_menuToolsQuickBoot);
+                    SortMenuTools();
+                }
+            }
+            else
+            {
+                menuTools.DropDownItems.Remove(_menuToolsQuickBoot);
+            }
         }
 
         #endregion Menu Handlers

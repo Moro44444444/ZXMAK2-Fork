@@ -7,13 +7,18 @@ using ZXMAK2.Engine.Interfaces;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class AYCHRV : AY8910
+    public class AYCHRV : AY8910, ISoundMixerConfiguration
     {
         public AYCHRV()
         {
             Name = "AY8910-CHRV";
             Description = "AY8910 with #FE value on IRB input (required for PentEvo)";
             IrbHandler += PsgDevice_OnIrbHandler;
+        }
+
+        public bool RejectDc
+        {
+            get { return true; }
         }
 
 

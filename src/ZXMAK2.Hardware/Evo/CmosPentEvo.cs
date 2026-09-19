@@ -1,14 +1,155 @@
-﻿using System;
+using System;
 using System.IO;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
+using ZXMAK2.Engine.Attributes;
+using ZXMAK2.Host.Entities;
+using ZXMAK2.Host.Interfaces;
 
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class CmosPentEvo : BusDeviceBase
+    public class CmosPentEvo : BusDeviceBase, IKeyboardDevice, IFrameDiagnosticProvider
     {
         #region Fields
+
+        private const int KeyboardBufferSize = 256;
+
+        // Only AVR video bits 0/4/5 are implemented here. Tape/LED flags and
+        // physical VGA signal generation are still separate tasks.
+        private const byte AvrVideoMask = 0x31;
+        private const int AvrModeNvramAddress = 0xFE;
+        private byte m_avrVideoConfiguration;
+        private bool m_scrollPrevious;
+        private int m_scrollPressCount;
+        private UlaPentEvo m_rasterUla;
+
+        [HardwareValue("AVRVIDEO", Description = "Supported AVR video bits 0/4/5 only; auxiliary flags/physical VGA pending")]
+        public byte AvrVideoConfiguration { get { return m_avrVideoConfiguration; } }
+
+        public string FrameDiagnosticText
+        {
+            get
+            {
+                int requested = (m_avrVideoConfiguration >> 4) & 3;
+                int active = requested;
+                if (m_rasterUla != null)
+                {
+                    requested = m_rasterUla.RequestedRasterMode;
+                    active = m_rasterUla.ActiveRasterMode;
+                }
+                return string.Format(
+                    "ZX-Evo B18: Scroll={0} AVR={1:X2} TV/VGA={2} raster req={3}:{4} active={5}:{6}{7}",
+                    m_scrollPressCount,
+                    m_avrVideoConfiguration,
+                    m_avrVideoConfiguration & 1,
+                    requested,
+                    GetRasterName(requested),
+                    active,
+                    GetRasterName(active),
+                    requested == active ? string.Empty : " pending");
+            }
+        }
+
+        private static string GetRasterName(int mode)
+        {
+            switch (mode)
+            {
+                case 0: return "normal";
+                case 1: return "60Hz";
+                case 2: return "48K";
+                case 3: return "128K";
+                default: return "unknown";
+            }
+        }
+
+        internal void SetAvrVideoConfiguration(byte value)
+        {
+            m_avrVideoConfiguration = (byte)(value & AvrVideoMask);
+            // Existing .cmos storage contains this previously inaccessible slot.
+            // Preserve unsupported persisted flags; don't pretend to emulate them.
+            eeprom[AvrModeNvramAddress] = (byte)((eeprom[AvrModeNvramAddress] & ~AvrVideoMask) | m_avrVideoConfiguration);
+            if (m_rasterUla != null)
+                m_rasterUla.RequestRaster((m_avrVideoConfiguration >> 4) & 3);
+        }
+
+        private void RestoreAvrVideoConfiguration()
+        {
+            SetAvrVideoConfiguration(eeprom[AvrModeNvramAddress]);
+        }
+
+        private void AdvanceAvrVideoConfiguration()
+        {
+            // AVR r1364 zx.c: increment only the noncontiguous video-mask bits.
+            byte next = unchecked((byte)((m_avrVideoConfiguration | (byte)~AvrVideoMask) + 1));
+            byte change = (byte)((next ^ m_avrVideoConfiguration) & AvrVideoMask);
+            SetAvrVideoConfiguration((byte)(m_avrVideoConfiguration ^ change));
+        }
+
+        private static readonly Key[] KeyboardKeys =
+        {
+            Key.Escape,
+            Key.D1, Key.D2, Key.D3, Key.D4, Key.D5,
+            Key.D6, Key.D7, Key.D8, Key.D9, Key.D0,
+            Key.Minus, Key.Equals, Key.BackSpace, Key.Tab,
+            Key.Q, Key.W, Key.E, Key.R, Key.T,
+            Key.Y, Key.U, Key.I, Key.O, Key.P,
+            Key.LeftBracket, Key.RightBracket, Key.Return,
+            Key.LeftControl,
+            Key.A, Key.S, Key.D, Key.F, Key.G,
+            Key.H, Key.J, Key.K, Key.L,
+            Key.SemiColon, Key.Apostrophe, Key.Grave,
+            Key.LeftShift, Key.BackSlash,
+            Key.Z, Key.X, Key.C, Key.V, Key.B, Key.N, Key.M,
+            Key.Comma, Key.Period, Key.Slash, Key.RightShift,
+            Key.NumPadStar, Key.LeftAlt, Key.Space, Key.CapsLock,
+            Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6,
+            Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12,
+            Key.NumPad7, Key.NumPad8, Key.NumPad9, Key.NumPadMinus,
+            Key.NumPad4, Key.NumPad5, Key.NumPad6, Key.NumPadPlus,
+            Key.NumPad1, Key.NumPad2, Key.NumPad3,
+            Key.NumPad0, Key.NumPadPeriod,
+            Key.NumPadEnter, Key.RightControl, Key.NumPadSlash,
+            Key.RightAlt,
+            Key.Home, Key.UpArrow, Key.PageUp, Key.LeftArrow,
+            Key.RightArrow, Key.End, Key.DownArrow, Key.PageDown,
+            Key.Insert, Key.Delete,
+            Key.LeftWindows, Key.RightWindows,
+            Key.ScrollLock
+        };
+
+        // Low byte is PS/2 Scan Code Set 2. Bit 8 means an E0 prefix.
+        private static readonly ushort[] KeyboardScanCodes =
+        {
+            0x076,
+            0x016, 0x01E, 0x026, 0x025, 0x02E,
+            0x036, 0x03D, 0x03E, 0x046, 0x045,
+            0x04E, 0x055, 0x066, 0x00D,
+            0x015, 0x01D, 0x024, 0x02D, 0x02C,
+            0x035, 0x03C, 0x043, 0x044, 0x04D,
+            0x054, 0x05B, 0x05A,
+            0x014,
+            0x01C, 0x01B, 0x023, 0x02B, 0x034,
+            0x033, 0x03B, 0x042, 0x04B,
+            0x04C, 0x052, 0x00E,
+            0x012, 0x05D,
+            0x01A, 0x022, 0x021, 0x02A, 0x032, 0x031, 0x03A,
+            0x041, 0x049, 0x04A, 0x059,
+            0x07C, 0x011, 0x029, 0x058,
+            0x005, 0x006, 0x004, 0x00C, 0x003, 0x00B,
+            0x083, 0x00A, 0x001, 0x009, 0x078, 0x007,
+            0x06C, 0x075, 0x07D, 0x07B,
+            0x06B, 0x073, 0x074, 0x079,
+            0x069, 0x072, 0x07A,
+            0x070, 0x071,
+            0x15A, 0x114, 0x14A,
+            0x111,
+            0x16C, 0x175, 0x17D, 0x16B,
+            0x174, 0x169, 0x172, 0x17A,
+            0x170, 0x171,
+            0x11F, 0x127,
+            0x07E
+        };
 
         private bool sandbox;
         private MemoryPentEvo mem;
@@ -20,6 +161,13 @@ namespace ZXMAK2.Hardware.Evo
         private byte[] BaseConfData;
         private byte[] BootVerData;
         private string m_fileName = null;
+
+        private readonly byte[] keyboardBuffer = new byte[KeyboardBufferSize];
+        private readonly bool[] keyboardPrevious = new bool[KeyboardKeys.Length];
+        private int keyboardPush;
+        private int keyboardPop;
+        private bool keyboardFull;
+        private IKeyboardState keyboardState;
 
         #endregion
 
@@ -53,12 +201,14 @@ namespace ZXMAK2.Hardware.Evo
         {
             sandbox = bmgr.IsSandbox;
             mem = bmgr.FindDevice<MemoryPentEvo>();
+            m_rasterUla = bmgr.FindDevice<UlaPentEvo>();
             m_fileName = bmgr.GetSatelliteFileName("cmos");
 
             bmgr.Events.SubscribeReset(Reset);
             bmgr.Events.SubscribeWrIo(0xFEFF, 0xDEF7, WrDEF7);
             bmgr.Events.SubscribeWrIo(0xFEFF, 0xBEF7, WrBEF7);
             bmgr.Events.SubscribeRdIo(0xFEFF, 0xBEF7, RdBEF7);
+            bmgr.Events.SubscribeEndFrame(ScanKeyboard);
         }
 
         public override void BusConnect()
@@ -79,6 +229,7 @@ namespace ZXMAK2.Hardware.Evo
                 SetData(BaseConfData, "BaseConf Emu", new DateTime(2011, 4, 3));
                 SetData(BootVerData, "Boot Emu", new DateTime(2012, 04, 5));
             }
+            RestoreAvrVideoConfiguration();
         }
 
         public override void BusDisconnect()
@@ -103,6 +254,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             mode = Mode.BaseConfVer; // посмотреть состояние по сбросу
             addr = 0;
+            ClearKeyboardBuffer();
+            SyncKeyboardState();
         }
 
 
@@ -199,7 +352,9 @@ namespace ZXMAK2.Hardware.Evo
                     case Mode.BootVer:
                         return BootVerData[addr & 0x0F];
                     case Mode.PS2Keyboard:
-                        return 0x00;
+                        return PopKeyboardByte();
+                    case Mode.ReadConfig:
+                        return (addr & 0x0F) == 0 ? m_avrVideoConfiguration : (byte)0xFF;
                     default:
                         return 0xFF;
                 }
@@ -209,26 +364,115 @@ namespace ZXMAK2.Hardware.Evo
         void WrCMOS(byte val)
         {
             if (addr < 0xF0)
+            {
+                if (addr == 0x0C && (val & 0x01) != 0)
+                    ClearKeyboardBuffer();
                 eeprom[addr] = val;
+            }
             else
             {
                 switch (val)
                 {
                     case 0:
                         mode = Mode.BaseConfVer;
+                        ClearKeyboardBuffer();
                         break;
                     case 1:
                         mode = Mode.BootVer;
+                        ClearKeyboardBuffer();
                         break;
                     case 2:
                         mode = Mode.PS2Keyboard;
+                        ClearKeyboardBuffer();
+                        SyncKeyboardState();
                         break;
 
-                    default: // посмотреть поведение по другим кодам
-                        mode = Mode.BaseConfVer;
+                    case 3:
+                        mode = Mode.ReadConfig;
+                        ClearKeyboardBuffer();
+                        break;
+
+                    default:
+                        // AVR r1364 retains the byte selector; unknown types read FF.
+                        mode = (Mode)val;
+                        ClearKeyboardBuffer();
                         break;
                 }
             }
+        }
+
+        private void ScanKeyboard()
+        {
+            if (keyboardState == null)
+            {
+                m_scrollPrevious = false;
+                return;
+            }
+
+            var scroll = keyboardState[Key.ScrollLock];
+            if (scroll && !m_scrollPrevious)
+            {
+                m_scrollPressCount++;
+                AdvanceAvrVideoConfiguration();
+            }
+            m_scrollPrevious = scroll;
+
+            var enabled = mode == Mode.PS2Keyboard;
+            for (var i = 0; i < KeyboardKeys.Length; i++)
+            {
+                var pressed = keyboardState[KeyboardKeys[i]];
+                if (enabled && pressed != keyboardPrevious[i])
+                    PushKeyboardScanCode(KeyboardScanCodes[i], pressed);
+                keyboardPrevious[i] = pressed;
+            }
+        }
+
+        private void SyncKeyboardState()
+        {
+            m_scrollPrevious = keyboardState != null && keyboardState[Key.ScrollLock];
+            for (var i = 0; i < KeyboardKeys.Length; i++)
+                keyboardPrevious[i] = keyboardState != null && keyboardState[KeyboardKeys[i]];
+        }
+
+        private void PushKeyboardScanCode(ushort scanCode, bool pressed)
+        {
+            if ((scanCode & 0x100) != 0)
+                PushKeyboardByte(0xE0);
+            if (!pressed)
+                PushKeyboardByte(0xF0);
+            PushKeyboardByte((byte)scanCode);
+        }
+
+        private void PushKeyboardByte(byte value)
+        {
+            if (keyboardFull)
+                return;
+
+            keyboardBuffer[keyboardPush++] = value;
+            if (keyboardPush == KeyboardBufferSize)
+                keyboardPush = 0;
+            if (keyboardPush == keyboardPop)
+                keyboardFull = true;
+        }
+
+        private byte PopKeyboardByte()
+        {
+            if (keyboardFull)
+                return 0xFF;
+            if (keyboardPush == keyboardPop)
+                return 0x00;
+
+            var value = keyboardBuffer[keyboardPop++];
+            if (keyboardPop == KeyboardBufferSize)
+                keyboardPop = 0;
+            return value;
+        }
+
+        private void ClearKeyboardBuffer()
+        {
+            keyboardPush = 0;
+            keyboardPop = 0;
+            keyboardFull = false;
         }
 
         byte BDC(int val)
@@ -243,6 +487,16 @@ namespace ZXMAK2.Hardware.Evo
             }
 
             return (byte)res;
+        }
+
+        #endregion
+
+        #region IKeyboardDevice
+
+        public IKeyboardState KeyboardState
+        {
+            get { return keyboardState; }
+            set { keyboardState = value; }
         }
 
         #endregion
@@ -262,11 +516,12 @@ namespace ZXMAK2.Hardware.Evo
 
         }
 
-        private enum Mode
+        private enum Mode : byte
         {
-            BaseConfVer,
-            BootVer,
-            PS2Keyboard
+            BaseConfVer = 0,
+            BootVer = 1,
+            PS2Keyboard = 2,
+            ReadConfig = 3
         }
     }
 }

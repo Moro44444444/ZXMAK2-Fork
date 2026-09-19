@@ -30,7 +30,7 @@ namespace ZXMAK2.Hardware.General
         private IMemoryDevice m_memory;
         private bool m_trapsAllowed = true;
         private bool m_autoPlay = true;
-        private readonly int m_frequency = 3500000;
+        private int m_frequency = 3500000;
 
         // sound related
         private ushort m_dacValue0 = 0;
@@ -152,6 +152,7 @@ namespace ZXMAK2.Hardware.General
         public override void BusInit(IBusManager bmgr)
         {
             base.BusInit(bmgr);
+            m_frequency = TactsPerSecond;
             m_cpu = bmgr.CPU;
             m_memory = bmgr.FindDevice<IMemoryDevice>();
 

@@ -165,13 +165,25 @@ namespace ZXMAK2.Host.WinForms.Mdx
         {
             try
             {
-                _soundBuffer.Play(0, DSBPLAY_FLAGS.LOOPING);
                 const int sampleSize = 4;
                 var rawBufferLength = _bufferSize * sampleSize;
                 var hBuffer = Marshal.AllocHGlobal(rawBufferLength);
                 NativeHelper.INITBLK((void*)hBuffer, 0, rawBufferLength);
                 try
                 {
+                    // A newly-created DirectSound buffer is not guaranteed to
+                    // contain PCM silence.  Clear every segment before starting
+                    // playback so host memory cannot be heard during start-up.
+                    for (var i = 0; i < _bufferCount; i++)
+                    {
+                        _soundBuffer.Write(
+                            i * rawBufferLength,
+                            (void*)hBuffer,
+                            rawBufferLength,
+                            DSBLOCK.None);
+                    }
+                    _soundBuffer.Play(0, DSBPLAY_FLAGS.LOOPING);
+
                     var lastWrittenBuffer = -1;
                     do
                     {
@@ -208,12 +220,21 @@ namespace ZXMAK2.Host.WinForms.Mdx
             uint[] source;
             if (!_playQueue.TryDequeue(out source))
             {
+                // Holding the last non-zero sample across an underrun creates a
+                // DC plateau followed by an audible click when emulation resumes.
+                // Ramp both channels to digital silence within this buffer.
                 var sample = _lastSample.HasValue ? _lastSample.Value : _zeroValue;
-                // TODO: native optimization?
+                var left = (short)(sample & 0xFFFF);
+                var right = (short)(sample >> 16);
                 for (var i = 0; i < sampleCount; i++)
                 {
-                    pBuffer[i] = sample;
+                    var remain = sampleCount - i - 1;
+                    var outLeft = (short)(left * remain / sampleCount);
+                    var outRight = (short)(right * remain / sampleCount);
+                    pBuffer[i] = (uint)(ushort)outLeft |
+                        ((uint)(ushort)outRight << 16);
                 }
+                _lastSample = _zeroValue;
                 return true;
             }
             try

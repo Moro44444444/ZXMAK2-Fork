@@ -65,7 +65,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 chkPresent.Checked = diskImage.Present;
                 txtPath.Text = diskImage.FileName;
                 txtPath.SelectionStart = txtPath.Text.Length;
-                chkProtect.Checked = diskImage.IsWP;
+                chkProtect.Checked = diskImage.Present || !string.IsNullOrEmpty(diskImage.FileName)
+                    ? diskImage.IsWP
+                    : false;
                 updateEnabled();
             }
             else
@@ -118,7 +120,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 loadDialog.DefaultExt = ""; //m_betaDisk.BetaDisk.FDD[drive].Serializer.GetDefaultExtension();
                 loadDialog.FileName = "";
                 loadDialog.ShowReadOnly = true;
-                loadDialog.ReadOnlyChecked = true;
+                loadDialog.ReadOnlyChecked = false;
                 loadDialog.CheckFileExists = true;
                 loadDialog.FileOk += new CancelEventHandler(loadDialog_FileOk);
                 if (loadDialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)

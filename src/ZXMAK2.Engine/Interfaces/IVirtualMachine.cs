@@ -16,6 +16,7 @@ namespace ZXMAK2.Engine.Interfaces
         void DoStop();
 
         void DoReset();
+        void DoPowerCycle();
         void DoNmi();
 
         void SaveConfig();

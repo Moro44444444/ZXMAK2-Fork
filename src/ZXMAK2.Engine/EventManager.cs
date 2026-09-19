@@ -31,6 +31,40 @@ namespace ZXMAK2.Engine
         private Action m_endFrame;
 
         public event Action ScanSig;
+        internal Action SyncCpuClock;
+        internal delegate void CompleteMemoryProc(ushort address,
+            CpuMemoryAccess access, ref byte value);
+        internal CompleteMemoryProc CompleteMemoryAccess;
+        internal Action InvalidateMemoryBuffer;
+        internal Action<ushort> ApplyPortTiming;
+
+        private void ApplyCpuPortTiming(ushort address)
+        {
+            var timing = ApplyPortTiming;
+            if (timing != null)
+                timing(address);
+        }
+
+        private void CompleteMemory(ushort address, CpuMemoryAccess access, ref byte value)
+        {
+            var complete = CompleteMemoryAccess;
+            if (complete != null)
+                complete(address, access, ref value);
+        }
+
+        private void InvalidateBuffer()
+        {
+            var invalidate = InvalidateMemoryBuffer;
+            if (invalidate != null)
+                invalidate();
+        }
+
+        private void SynchronizeCpuClock()
+        {
+            var sync = SyncCpuClock;
+            if (sync != null)
+                sync();
+        }
 
         public EventManager(CpuUnit cpu, RzxHandler rzx)
         {
@@ -199,12 +233,14 @@ namespace ZXMAK2.Engine
 
         private byte RDMEM_M1(ushort addr)
         {
+            SynchronizeCpuClock();
             var result = m_cpu.BUS;
             var handler = m_mapReadMemoryM1[addr];
             if (handler != null)
             {
                 handler(addr, ref result);
             }
+            CompleteMemory(addr, CpuMemoryAccess.Opcode, ref result);
             //Logger.Info(
             //    "{0:D3}-{1:D6}: #{2:X4} = #{3:X2}",
             //    m_cpu.Tact / m_ula.FrameTactCount,
@@ -216,26 +252,33 @@ namespace ZXMAK2.Engine
 
         private byte RDMEM(ushort addr)
         {
+            SynchronizeCpuClock();
             var result = m_cpu.BUS;
             var handler = m_mapReadMemory[addr];
             if (handler != null)
             {
                 handler(addr, ref result);
             }
+            CompleteMemory(addr, CpuMemoryAccess.Read, ref result);
             return result;
         }
 
         private void WRMEM(ushort addr, byte value)
         {
+            SynchronizeCpuClock();
             var handler = m_mapWriteMemory[addr];
             if (handler != null)
             {
                 handler(addr, value);
             }
+            CompleteMemory(addr, CpuMemoryAccess.Write, ref value);
         }
 
         private byte RDPORT(ushort addr)
         {
+            SynchronizeCpuClock();
+            InvalidateBuffer();
+            ApplyCpuPortTiming(addr);
             var result = m_cpu.BUS;
             var handler = m_mapReadPort[addr];
             if (handler != null)
@@ -260,6 +303,9 @@ namespace ZXMAK2.Engine
 
         private void WRPORT(ushort addr, byte value)
         {
+            SynchronizeCpuClock();
+            InvalidateBuffer();
+            ApplyCpuPortTiming(addr);
             var handler = m_mapWritePort[addr];
             if (handler != null)
             {
@@ -270,6 +316,7 @@ namespace ZXMAK2.Engine
 
         private void RDNOMREQ(ushort addr)
         {
+            SynchronizeCpuClock();
             var handler = m_mapReadNoMreq[addr];
             if (handler != null)
             {
@@ -279,6 +326,7 @@ namespace ZXMAK2.Engine
 
         private void WRNOMREQ(ushort addr)
         {
+            SynchronizeCpuClock();
             var handler = m_mapWriteNoMreq[addr];
             if (handler != null)
             {
@@ -288,6 +336,8 @@ namespace ZXMAK2.Engine
 
         private void RESET()
         {
+            SynchronizeCpuClock();
+            InvalidateBuffer();
             m_pendingNmi = 0;
             if (m_rzx != null)
             {
@@ -302,6 +352,8 @@ namespace ZXMAK2.Engine
 
         private void INTACK_M1()
         {
+            SynchronizeCpuClock();
+            InvalidateBuffer();
             var handler = m_intAck;
             if (handler != null)
             {
@@ -311,6 +363,8 @@ namespace ZXMAK2.Engine
 
         private void NMIACK_M1()
         {
+            SynchronizeCpuClock();
+            InvalidateBuffer();
             var handler = m_nmiAck;
             if (handler != null)
             {
@@ -320,6 +374,7 @@ namespace ZXMAK2.Engine
 
         private void SCANSIG()
         {
+            SynchronizeCpuClock();
             var handler = ScanSig;
             if (handler != null)
             {

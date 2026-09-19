@@ -60,6 +60,7 @@
     <Compile Include="SecureDigital\SdCommand.cs" />
     <Compile Include="SecureDigital\SdState.cs" />
     <Compile Include="SecureDigital\SdStatus.cs" />
+    <Compile Include="SecureDigital\VhdStream.cs" />
     <Compile Include="Sound\IPsgChip.cs" />
     <Compile Include="Sound\PsgChip.cs" />
     <Compile Include="Sound\PanType.cs" />

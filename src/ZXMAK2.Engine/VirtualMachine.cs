@@ -214,12 +214,14 @@ namespace ZXMAK2.Engine
             {
                 return;
             }
+            var diagnostic = Spectrum.BusManager.FindDevice<IFrameDiagnosticProvider>();
             var infoFrame = new FrameInfo(
                 Spectrum.BusManager.IconDescriptorArray,
                 DebugFrameStartTact,
                 m_instantUpdateTime,
                 Spectrum.BusManager.SoundFrame.SampleRate,
-                isRequested);
+                isRequested,
+                diagnostic == null ? string.Empty : diagnostic.FrameDiagnosticText);
             var ula = m_ula ?? Spectrum.BusManager.FindDevice<IUlaDevice>();
             var videoFrame = ula != null && ula.VideoData != null ? ula.VideoData : m_blankData;
             FrameSize = videoFrame.Size;
@@ -332,8 +334,11 @@ namespace ZXMAK2.Engine
         {
             try
             {
-                m_startedEvent.Set();
                 Spectrum.IsRunning = true;
+                // DoRun must not return before the VM is observably running.
+                // Otherwise an immediate reset/stop can race this thread and
+                // execute Spectrum.DebugReset concurrently with ExecuteFrame.
+                m_startedEvent.Set();
 
                 var bus = Spectrum.BusManager;
                 var host = m_host;
@@ -383,6 +388,36 @@ namespace ZXMAK2.Engine
                 DoStop();
                 m_bpTriggered = false;
                 Spectrum.DebugReset();
+                if (run && !m_bpTriggered)
+                {
+                    DoRun();
+                }
+            }
+            PushFrame();
+        }
+
+        public void DoPowerCycle()
+        {
+            lock (m_sync)
+            {
+                var run = IsRunning;
+                DoStop();
+                m_bpTriggered = false;
+
+                // A physical power cycle starts PentEvo with cleared RAM.
+                // ERS keeps its initialized SD-card descriptor in RAM, so a
+                // CPU-only reset is not sufficient after media replacement.
+                var memory = Spectrum.BusManager.FindDevice<IMemoryDevice>();
+                if (memory != null)
+                {
+                    foreach (var page in memory.RamPages)
+                    {
+                        Array.Clear(page, 0, page.Length);
+                    }
+                }
+
+                Spectrum.DebugReset();
+                Spectrum.CPU.Tact = 0;
                 if (run && !m_bpTriggered)
                 {
                     DoRun();

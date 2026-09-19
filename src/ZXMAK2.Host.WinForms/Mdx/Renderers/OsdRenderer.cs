@@ -74,6 +74,8 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
 
         public Size FrameSize { get; set; }
 
+        public string DiagnosticText { get; set; }
+
         public bool IsRunning
         {
             get { return _isRunning; }
@@ -185,6 +187,8 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
                 FrameSize.Height,
                 SampleRate / 1000D,
                 FrameStartTact);
+            if (!string.IsNullOrEmpty(DiagnosticText))
+                textValue += "\n" + DiagnosticText;
             var textRect = D3DXHelper.GetRect(_font.MeasureText(null, textValue, DT.DT_NOCLIP));
             textRect = new Rectangle(
                 textRect.Left,

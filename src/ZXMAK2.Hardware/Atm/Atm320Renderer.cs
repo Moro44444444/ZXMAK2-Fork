@@ -11,6 +11,8 @@ namespace ZXMAK2.Hardware.Atm
         public int c_ulaLineTime;
         public int c_ulaFirstPaperLine;
         public int c_ulaFirstPaperTact;
+        public bool c_ulaBorder4T;
+        public int c_ulaBorder4Tstage;
         public int c_frameTactCount;
 
         public int c_ulaBorderTop;
@@ -43,6 +45,7 @@ namespace ZXMAK2.Hardware.Atm
         protected byte[] m_memoryPage1;
         protected int m_borderIndex = 0;    // current border index
         protected uint m_borderColor = 0;   // current border color
+        protected uint m_syncedBorderColor = 0;
 
 
         #region IUlaRenderer
@@ -91,6 +94,9 @@ namespace ZXMAK2.Hardware.Atm
                 startTact = Params.c_frameTactCount;
             for (int tact = startTact; tact < endTact; tact++)
             {
+                if (!Params.c_ulaBorder4T ||
+                    (tact & 3) == Params.c_ulaBorder4Tstage)
+                    m_syncedBorderColor = m_borderColor;
                 switch (m_ulaAction[tact])
                 {
                     case UlaAction.None:
@@ -98,8 +104,8 @@ namespace ZXMAK2.Hardware.Atm
                     case UlaAction.Border:
                         {
                             var offset = m_videoOffset[tact];
-                            bufPtr[offset] = m_borderColor;
-                            bufPtr[offset + 1] = m_borderColor;
+                            bufPtr[offset] = m_syncedBorderColor;
+                            bufPtr[offset + 1] = m_syncedBorderColor;
                         }
                         break;
                     case UlaAction.Paper:
@@ -198,6 +204,8 @@ namespace ZXMAK2.Hardware.Atm
             timing.c_ulaLineTime = 224;
             timing.c_ulaFirstPaperLine = 56;
             timing.c_ulaFirstPaperTact = 32;
+            timing.c_ulaBorder4T = false;
+            timing.c_ulaBorder4Tstage = 0;
 
             timing.c_ulaBorderTop = 28;
             timing.c_ulaBorderBottom = 28;
@@ -225,8 +233,11 @@ namespace ZXMAK2.Hardware.Atm
             m_memoryPage = new bool[Params.c_frameTactCount];
             for (var tact = 0; tact < m_ulaAction.Length; tact++)
             {
-                var tvy = tact / Params.c_ulaLineTime;
-                var tvx = tact - (tvy * Params.c_ulaLineTime);
+                var tactScreen = tact + Params.c_ulaIntBegin;
+                if (tactScreen >= Params.c_frameTactCount)
+                    tactScreen -= Params.c_frameTactCount;
+                var tvy = tactScreen / Params.c_ulaLineTime;
+                var tvx = tactScreen - (tvy * Params.c_ulaLineTime);
                 var zy = tvy - (Params.c_ulaFirstPaperLine - Params.c_ulaBorderTop);
                 var zx = tvx - (Params.c_ulaFirstPaperTact - Params.c_ulaBorderLeftT);
                 var y = zy - Params.c_ulaBorderTop;

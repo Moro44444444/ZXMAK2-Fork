@@ -216,7 +216,18 @@ namespace ZXMAK2.Hardware.Atm
         public void SetPaletteAtm(byte value)
         {
             m_atm_pal[m_borderAttr] = value;
-            Renderer.UpdatePalette(m_borderAttr, m_atm_pal_map[value]);
+            var color = m_atm_pal_map[value];
+
+            // All BaseConf renderers share the palette array, but each renderer
+            // keeps its own decoded ink/paper tables.  A palette write is global
+            // in the FPGA, so refresh every route before a later mode switch.
+            SpectrumRenderer.UpdatePalette(m_borderAttr, color);
+            Atm320Renderer.UpdatePalette(m_borderAttr, color);
+            Atm640Renderer.UpdatePalette(m_borderAttr, color);
+            AtmTxtRenderer.UpdatePalette(m_borderAttr, color);
+            EvoTxtRenderer.UpdatePalette(m_borderAttr, color);
+            EvoHwmRenderer.UpdatePalette(m_borderAttr, color);
+            EvoA16Renderer.UpdatePalette(m_borderAttr, color);
         }
 
         public void SetPaletteAtm2(byte value)
@@ -286,29 +297,10 @@ namespace ZXMAK2.Hardware.Atm
         {
             Name = string.Format("{0} [turbo]", Name);
         }
-        
-        protected override void OnRendererInit()
+
+        protected override int FrameTactMultiplier
         {
-            base.OnRendererInit();
-
-            // FIXME: assign new value will not raise OnParamsChanged!
-            SpectrumRenderer.Params.c_frameTactCount *= 2;
-            Atm320Renderer.Params.c_frameTactCount *= 2;
-            Atm640Renderer.Params.c_frameTactCount *= 2;
-            AtmTxtRenderer.Params.c_frameTactCount *= 2;
-
-            EvoTxtRenderer.Params.c_frameTactCount *= 2;
-            EvoHwmRenderer.Params.c_frameTactCount *= 2;
-            EvoA16Renderer.Params.c_frameTactCount *= 2;
-
-            // kludge fix to raise OnParamsChanged
-            SpectrumRenderer.Params = SpectrumRenderer.Params;
-            Atm320Renderer.Params = Atm320Renderer.Params;
-            Atm640Renderer.Params = Atm640Renderer.Params;
-            AtmTxtRenderer.Params = AtmTxtRenderer.Params;
-            EvoTxtRenderer.Params = EvoTxtRenderer.Params;
-            EvoHwmRenderer.Params = EvoHwmRenderer.Params;
-            EvoA16Renderer.Params = EvoA16Renderer.Params;
+            get { return 2; }
         }
     }
 }

@@ -55,6 +55,7 @@
     <Compile Include="Atm\EvoHwmRenderer.cs" />
     <Compile Include="Atm\EvoTxtRenderer.cs" />
     <Compile Include="Atm\FddAtm450.cs" />
+    <Compile Include="Atm\FddAtm710.cs" />
     <Compile Include="Atm\IdeAtm.cs" />
     <Compile Include="Atm\MemoryAtm450.cs" />
     <Compile Include="Atm\MemoryAtm710.cs" />

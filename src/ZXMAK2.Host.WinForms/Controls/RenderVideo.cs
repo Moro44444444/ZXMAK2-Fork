@@ -178,6 +178,8 @@ namespace ZXMAK2.Host.WinForms.Controls
             }
             _osdLayer.FrameStartTact = info.StartTact;
             _osdLayer.SampleRate = info.SampleRate;
+            var diagnosticInfo = info as IFrameDiagnosticInfo;
+            _osdLayer.DiagnosticText = diagnosticInfo == null ? string.Empty : diagnosticInfo.DiagnosticText;
             if (!info.IsRefresh)
             {
                 _osdLayer.UpdateFrame(info.UpdateTime);

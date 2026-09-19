@@ -33,7 +33,8 @@ namespace ZXMAK2.Engine
                 .OfType<XmlNode>()
                 .Where(node => node.Name == "Bus")
                 .Select(node => GetAttrString(node, "name"))
-                .Where(v => !string.IsNullOrEmpty(v));
+                .Where(v => !string.IsNullOrEmpty(v))
+                .OrderBy(v => v, StringComparer.CurrentCultureIgnoreCase);
             return names;
         }
 

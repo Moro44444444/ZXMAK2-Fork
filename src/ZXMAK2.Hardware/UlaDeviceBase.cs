@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 
 using ZXMAK2.Engine.Interfaces;
@@ -100,7 +100,7 @@ namespace ZXMAK2.Hardware
             int page8000,
             int pageC000)
         {
-            UpdateState((int)(CPU.Tact % FrameTactCount));
+            UpdateState(GetCurrentFrameTact());
             m_videoPage = videoPage;
             m_page0000 = page0000;
             m_page4000 = page4000;
@@ -115,42 +115,42 @@ namespace ZXMAK2.Hardware
         protected virtual void WriteMem0000(ushort addr, byte value)
         {
             if (m_videoPage == m_page0000)
-                UpdateState((int)(CPU.Tact % FrameTactCount));
+                UpdateState(GetCurrentFrameTact());
         }
 
         protected virtual void WriteMem4000(ushort addr, byte value)
         {
             if (m_videoPage == m_page4000)
-                UpdateState((int)(CPU.Tact % FrameTactCount));
+                UpdateState(GetCurrentFrameTact());
         }
 
         protected virtual void WriteMem8000(ushort addr, byte value)
         {
             if (m_videoPage == m_page8000)
-                UpdateState((int)(CPU.Tact % FrameTactCount));
+                UpdateState(GetCurrentFrameTact());
         }
 
         protected virtual void WriteMemC000(ushort addr, byte value)
         {
             if (m_videoPage == m_pageC000)
-                UpdateState((int)(CPU.Tact % FrameTactCount));
+                UpdateState(GetCurrentFrameTact());
         }
 
 
         protected virtual void WritePortFE(ushort addr, byte value, ref bool handled)
         {
-            UpdateState((int)(CPU.Tact % FrameTactCount));
+            UpdateState(GetCurrentFrameTact());
             PortFE = value;
         }
 
         protected virtual void ReadPortFF(int frameTact, ref byte value)
         {
-            Renderer.ReadFreeBus(frameTact, ref value);
+            Renderer.ReadFreeBus(ToRendererTact(frameTact), ref value);
         }
 
         public virtual bool CheckInt(int frameTact)
         {
-            return frameTact < Renderer.IntLength;
+            return frameTact < Renderer.IntLength * FrameTactMultiplier;
         }
 
         #endregion
@@ -171,7 +171,17 @@ namespace ZXMAK2.Hardware
 
         public int FrameTactCount
         {
-            get { return Renderer.FrameLength; }
+            get { return Renderer.FrameLength * FrameTactMultiplier; }
+        }
+
+        /// <summary>
+        /// Number of fastest CPU master clocks represented by one renderer
+        /// tact.  Ordinary machines use one; turbo machines keep their video
+        /// timing unchanged while the CPU bus runs at the maximum clock.
+        /// </summary>
+        protected virtual int FrameTactMultiplier
+        {
+            get { return 1; }
         }
 
         public IFrameVideo VideoData 
@@ -202,16 +212,30 @@ namespace ZXMAK2.Hardware
         #endregion
         protected unsafe void UpdateState(int frameTact)
         {
-            if (frameTact < m_lastFrameTact)
-                frameTact = FrameTactCount;
+            var rendererTact = ToRendererTact(frameTact);
+            if (rendererTact < m_lastFrameTact)
+                rendererTact = Renderer.FrameLength;
             fixed (int* ptr = VideoData.Buffer)
             {
                 Renderer.Render(
                     (uint*)ptr,
                     m_lastFrameTact,
-                    frameTact);
+                    rendererTact);
             }
-            m_lastFrameTact = frameTact;
+            m_lastFrameTact = rendererTact;
+        }
+
+        // Override only for a ULA with its own absolute frame epoch.
+        protected virtual int GetCurrentFrameTact()
+        {
+            return (int)(CPU.Tact % FrameTactCount);
+        }
+
+        private int ToRendererTact(int frameTact)
+        {
+            if (frameTact >= FrameTactCount)
+                return Renderer.FrameLength;
+            return frameTact / FrameTactMultiplier;
         }
 
         protected virtual void BeginFrame()
@@ -228,14 +252,14 @@ namespace ZXMAK2.Hardware
         protected virtual void EndFrame()
         {
             UpdateState(FrameTactCount);
-            m_lastFrameTact = FrameTactCount;
+            m_lastFrameTact = Renderer.FrameLength;
             Renderer.Frame();
         }
 
 
         public void Flush()
         {
-            UpdateState((int)(CPU.Tact % FrameTactCount));
+            UpdateState(GetCurrentFrameTact());
         }
 
         public unsafe void ForceRedrawFrame()
@@ -246,7 +270,7 @@ namespace ZXMAK2.Hardware
                 Renderer.Render(
                     (uint*)ptr,
                     0,
-                    FrameTactCount);
+                    Renderer.FrameLength);
             }
         }
 

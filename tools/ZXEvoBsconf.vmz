@@ -1,0 +1,17 @@
+<VirtualMachine>
+  <Info name="ZX-Evo BSconf" />
+  <Bus name="ZX-Evo BSconf">
+    <Device type="ZXMAK2.Hardware.Evo.UlaPentEvo" />
+    <Device type="ZXMAK2.Hardware.Evo.FddPentEvo" />
+    <Device type="ZXMAK2.Hardware.Evo.IdePentEvo" />
+    <Device type="ZXMAK2.Hardware.Evo.ZsdPentEvo" />
+    <Device type="ZXMAK2.Hardware.Evo.AYCHRV" />
+    <Device type="ZXMAK2.Hardware.General.BeeperDevice" noDos="false" mask="0xFF" port="0xFE" bitEar="4" bitMic="-1" />
+    <Device type="ZXMAK2.Hardware.General.CovoxMono" noDos="false" mask="0xFF" port="0xFB" />
+    <Device type="ZXMAK2.Hardware.General.KeyboardDevice" noDos="false" mask="0xF7" port="0xFE" />
+    <Device type="ZXMAK2.Hardware.General.KempstonMouseDevice" noDos="false" />
+    <Device type="ZXMAK2.Hardware.Evo.CmosPentEvo" />
+    <Device type="ZXMAK2.Hardware.General.Debugger" />
+    <Device type="ZXMAK2.Hardware.Evo.MemoryPentEvo" />
+  </Bus>
+</VirtualMachine>

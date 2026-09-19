@@ -47,6 +47,8 @@ namespace ZXMAK2.Engine.Cpu.Processor
         public Action RESET;
         public Action NMIACK_M1;
         public Action INTACK_M1;
+        // Optional refresh-phase hook; null preserves standalone CPU behavior.
+        public Action REFRESH;
         public Func<ushort, byte> RDMEM_M1;
         public Func<ushort, byte> RDMEM;
         public Action<ushort, byte> WRMEM;
@@ -138,7 +140,12 @@ namespace ZXMAK2.Engine.Cpu.Processor
                     return;
                 cmd = RDMEM(regs.PC);
             }
-            Tact += 3;
+            Tact += 2;
+            // Ordinary/prefix M1 enters refresh at T3. DD/FD CB displacement
+            // and the final indexed opcode are ordinary memory reads.
+            if (!(XFX == CpuModeEx.Cb && FX != CpuModeIndex.None))
+                NotifyRefresh();
+            Tact += 1;
             regs.PC++;
             if (XFX == CpuModeEx.Cb)
             {
@@ -242,6 +249,13 @@ namespace ZXMAK2.Engine.Cpu.Processor
             }
         }
 
+        private void NotifyRefresh()
+        {
+            var refresh = REFRESH;
+            if (refresh != null)
+                refresh();
+        }
+
         private bool ProcessSignals()
         {
             if (RST)    // RESET
@@ -278,7 +292,9 @@ namespace ZXMAK2.Engine.Cpu.Processor
 
                 // M1
                 NMIACK_M1();
-                Tact += 4;
+                Tact += 2;
+                NotifyRefresh();
+                Tact += 2;
                 //Refresh();
                 regs.R = (byte)(((regs.R + 1) & 0x7F) | (regs.R & 0x80));
                 Tact += 1;
@@ -318,7 +334,10 @@ namespace ZXMAK2.Engine.Cpu.Processor
                 regs.SP--;
                 //if (HALTED) ??
                 //    Tact += 2;
-                Tact += 4 + 2;
+                // Two automatic interrupt wait states precede refresh.
+                Tact += 4;
+                NotifyRefresh();
+                Tact += 2;
                 //Refresh();
                 //RzxCounter--;	// fix because INTAK should not be calculated
                 regs.R = (byte)(((regs.R + 1) & 0x7F) | (regs.R & 0x80));

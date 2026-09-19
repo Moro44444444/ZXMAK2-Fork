@@ -1,3 +1,22 @@
 _bindebug
 */**/obj
 .vs
+
+# Local build products and IDE state
+**/bin/
+**/obj/
+**/_binrelease/
+*.user
+*.suo
+*.cache
+*.pdb
+
+# Local diagnostics and generated probes
+*.log
+*.bak
+tools/**/build/
+tools/**/*.exe
+
+# Local checkpoints and downloaded reference material
+backup/
+tmp/

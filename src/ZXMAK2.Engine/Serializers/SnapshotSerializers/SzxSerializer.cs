@@ -26,7 +26,20 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
 
         public override void Deserialize(Stream stream)
         {
-            loadFromStream(stream);
+            loadFromStream(stream, true);
+            UpdateState();
+        }
+
+        /// <summary>
+        /// Loads the Quick Boot software snapshot without resetting the
+        /// configured machine or restoring peripheral state.  RAM, CPU and
+        /// the software-visible Spectrum paging state are loaded so the
+        /// bundled TR-DOS shell can start, while machine-specific registers
+        /// (including ATM/PentEvo turbo state) remain untouched.
+        /// </summary>
+        public void DeserializeQuickBoot(Stream stream)
+        {
+            loadFromStream(stream, false);
             UpdateState();
         }
 
@@ -39,7 +52,7 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
 
         #region Load
 
-        private void loadFromStream(Stream stream)
+        private void loadFromStream(Stream stream, bool initializeMachine)
         {
             ZXST_Header header = new ZXST_Header();
             header.Deserialize(stream);
@@ -49,7 +62,10 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
 
             //int num = 0;
 
-            InitStd128K();
+            if (initializeMachine)
+            {
+                InitStd128K();
+            }
             bool eof = false;
             do
             {
@@ -70,18 +86,25 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
                     switch (strId)
                     {
                         case "Z80R":
-                            apply_Z80R(data);
+                            apply_Z80R(data, initializeMachine);
                             break;
                         case "SPCR":
                             apply_SPCR(data, header);
                             break;
                         case "AY\0\0":
-                            apply_AY(data);
+                            if (initializeMachine)
+                            {
+                                apply_AY(data);
+                            }
                             break;
                         case "RAMP":
                             apply_RAMP(data);
                             break;
                         case "B128":
+                            // applyB128 only restores the TR-DOS ROM paging
+                            // flag in this serializer. It does not replace the
+                            // mounted floppy images, so Quick Boot needs it as
+                            // well in order to reach the existing drives.
                             applyB128(data);
                             break;
                         //case "KEYB":
@@ -105,7 +128,7 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
         /// ZXSTZ80REGS
         /// </summary>
         #endregion
-        private void apply_Z80R(byte[] data)
+        private void apply_Z80R(byte[] data, bool restoreFrameTiming)
         {
             int offset = 0;
             _spec.CPU.regs.AF = BitConverter.ToUInt16(data, offset); offset += 2;
@@ -125,7 +148,11 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
             _spec.CPU.IFF1 = data[offset] != 0; offset += 1;
             _spec.CPU.IFF2 = data[offset] != 0; offset += 1;
             _spec.CPU.IM = data[offset]; offset += 1;
-            SetFrameTact(BitConverter.ToInt32(data, offset)); offset += 4;
+            int frameTact = BitConverter.ToInt32(data, offset); offset += 4;
+            if (restoreFrameTiming)
+            {
+                SetFrameTact(frameTact);
+            }
             byte holdIntReqCycles = data[offset]; offset += 1;	// interrupt active tact counter
             byte flags = data[offset]; offset += 1;
             _spec.CPU.regs.MW = BitConverter.ToUInt16(data, offset); offset += 1;	   // appears in v1.4!

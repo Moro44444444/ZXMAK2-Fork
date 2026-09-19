@@ -21,6 +21,7 @@ namespace ZXMAK2.Hardware.Evo
         private IconDescriptor m_iconHdd = new IconDescriptor("HDD", ResourceImages.OsdHddRd);
         private AtaPort m_ata = new AtaPort();
         private string m_ideFileName;
+        private bool m_hasConfiguredImage;
         private int m_ide_write;
         private int m_ide_hi_byte_w;
         private int m_ide_hi_byte_w1;
@@ -34,7 +35,7 @@ namespace ZXMAK2.Hardware.Evo
         {
             Category = BusDeviceCategory.Disk;
             Name = "IDE PentEvo";
-            Description = "PentEvo IDE controller\r\nPlease edit *.vmide file for configuration settings";
+            Description = "PentEvo IDE controller";
         }
 
 
@@ -53,11 +54,18 @@ namespace ZXMAK2.Hardware.Evo
 
             bmgr.Events.SubscribeReset(BusReset);
 
-            bmgr.Events.SubscribeRdIo(0x1E, 0x10, ReadIde);
-            bmgr.Events.SubscribeWrIo(0x1E, 0x10, WriteIde);
-
+            // BaseConf r1364: IS_NIDE_REGS = low[2:0]==0 and low[3]!=low[4].
+            // C8 is part of that set, but selects the ATA alternate-status block.
+            // Register it first so the generic x08 family leaves it handled.
             bmgr.Events.SubscribeRdIo(0xFF, 0xC8, ReadIdeAltStatus);
             bmgr.Events.SubscribeWrIo(0xFF, 0xC8, WriteIdeAltStatus);
+
+            bmgr.Events.SubscribeRdIo(0xFF, 0x11, ReadIde);
+            bmgr.Events.SubscribeWrIo(0xFF, 0x11, WriteIde);
+            bmgr.Events.SubscribeRdIo(0x1F, 0x10, ReadIde);
+            bmgr.Events.SubscribeWrIo(0x1F, 0x10, WriteIde);
+            bmgr.Events.SubscribeRdIo(0x1F, 0x08, ReadIde);
+            bmgr.Events.SubscribeWrIo(0x1F, 0x08, WriteIde);
         }
 
         public override void BusConnect()
@@ -75,33 +83,51 @@ namespace ZXMAK2.Hardware.Evo
             {
                 return;
             }
-            if (File.Exists(m_ideFileName))
+            if (!m_hasConfiguredImage && File.Exists(m_ideFileName))
             {
                 m_ata.Devices[0].DeviceInfo.Load(m_ideFileName);
             }
-            else
-            {
-                m_ata.Devices[0].DeviceInfo.Save(m_ideFileName);
-            }
+            // Keep the legacy sidecar as an automatically maintained internal
+            // descriptor.  The user never has to edit it by hand.
+            m_ata.Devices[0].DeviceInfo.Save(m_ideFileName);
         }
 
         public override void BusDisconnect()
         {
-            //if (!m_sandbox)
-            //{
-            //}
+            if (!m_sandbox)
+                m_ata.Close();
         }
 
         protected override void OnConfigLoad(XmlNode itemNode)
         {
             base.OnConfigLoad(itemNode);
             LogIo = Utils.GetXmlAttributeAsBool(itemNode, "logIo", false);
+            m_hasConfiguredImage = Utils.GetXmlAttributeAsBool(itemNode, "ideConfigured", false);
+            if (m_hasConfiguredImage)
+            {
+                var image = Utils.GetXmlAttributeAsString(itemNode, "ideImage", string.Empty);
+                var readOnly = Utils.GetXmlAttributeAsBool(itemNode, "ideReadOnly", false);
+                var cylinders = Utils.GetXmlAttributeAsUInt32(itemNode, "ideCylinders", 20);
+                var heads = Utils.GetXmlAttributeAsUInt32(itemNode, "ideHeads", 16);
+                var sectors = Utils.GetXmlAttributeAsUInt32(itemNode, "ideSectors", 63);
+                var lba = Utils.GetXmlAttributeAsUInt32(itemNode, "ideLba", 20160);
+                m_ata.Devices[0].DeviceInfo.Configure(
+                    image, readOnly, cylinders, heads, sectors, lba);
+            }
         }
 
         protected override void OnConfigSave(XmlNode itemNode)
         {
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttribute(itemNode, "logIo", LogIo);
+            var info = HardDisk;
+            Utils.SetXmlAttribute(itemNode, "ideConfigured", true);
+            Utils.SetXmlAttribute(itemNode, "ideImage", info.FileName ?? string.Empty);
+            Utils.SetXmlAttribute(itemNode, "ideReadOnly", info.ReadOnly);
+            Utils.SetXmlAttribute(itemNode, "ideCylinders", info.Cylinders);
+            Utils.SetXmlAttribute(itemNode, "ideHeads", info.Heads);
+            Utils.SetXmlAttribute(itemNode, "ideSectors", info.Sectors);
+            Utils.SetXmlAttribute(itemNode, "ideLba", info.Lba);
         }
 
         #endregion
@@ -113,6 +139,23 @@ namespace ZXMAK2.Hardware.Evo
         {
             get { return m_ata.LogIo; }
             set { m_ata.LogIo = value; }
+        }
+
+        public AtaDeviceInfo HardDisk
+        {
+            get { return m_ata.Devices[0].DeviceInfo; }
+        }
+
+        public void ConfigureHardDisk(string fileName, bool readOnly)
+        {
+            HardDisk.ConfigureImage(fileName, readOnly);
+            m_hasConfiguredImage = true;
+        }
+
+        public void DisconnectHardDisk()
+        {
+            HardDisk.Disconnect();
+            m_hasConfiguredImage = true;
         }
 
         #endregion

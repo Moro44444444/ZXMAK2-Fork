@@ -9,7 +9,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
     {
         #region Constants
 
-        private const int Z80FQ = 3500000; // todo: #define as (conf.frame*conf.intfq)
+        private const int BaseClock = 3500000;
         private const int FDD_RPS = 5;//15; // rotation speed
 
         private const byte CMD_SEEK_RATE = 0x03;
@@ -32,6 +32,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
 
         //private Track trkcache = null;
         private DiskImage[] fdd;
+        private readonly int m_tactsPerSecond;
 
         private long next;
         private long time;
@@ -91,18 +92,23 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
 
         #region Public
 
-        public Wd1793(int driveCount)
+        public Wd1793(int driveCount, int clockMultiplier)
         {
             if (driveCount < 1 || driveCount > 4)
             {
                 throw new ArgumentException("driveCount");
             }
+            if (clockMultiplier < 1 || clockMultiplier > 16)
+            {
+                throw new ArgumentException("clockMultiplier");
+            }
+            m_tactsPerSecond = BaseClock * clockMultiplier;
             drive = 0;
             fdd = new DiskImage[driveCount];
             for (int i = 0; i < fdd.Length; i++)
             {
                 DiskImage di = new DiskImage();
-                di.Init(Z80FQ / FDD_RPS);
+                di.Init(m_tactsPerSecond / FDD_RPS);
                 //di.Format();  // take ~1 second (long delay on show options)
                 fdd[i] = di;
             }
@@ -114,7 +120,12 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
         }
         
         public Wd1793()
-            : this(4)
+            : this(4, 1)
+        {
+        }
+
+        public Wd1793(int driveCount)
+            : this(driveCount, 1)
         {
         }
 
@@ -131,7 +142,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         int cond = value & 0xF;
                         next = tact;
                         idx_cnt = 0;
-                        idx_tmo = next + 15 * Z80FQ / FDD_RPS; // 15 disk turns
+                        idx_tmo = next + 15 * m_tactsPerSecond / FDD_RPS; // 15 disk turns
                         cmd = value;
 
                         if (cond == 0)
@@ -190,14 +201,14 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         {
                             state2 = WDSTATE.S_IDLE;
                             state = WDSTATE.S_WAIT;
-                            next = tact + Z80FQ / FDD_RPS;
+                            next = tact + m_tactsPerSecond / FDD_RPS;
                             rqs = BETA_STATUS.INTRQ;
                             break;
                         }
 
                         // continue disk spinning
                         if (fdd[drive].motor > 0 || wd93_nodelay)
-                            fdd[drive].motor = next + 2 * Z80FQ;
+                            fdd[drive].motor = next + 2 * m_tactsPerSecond;
 
                         state = WDSTATE.S_DELAY_BEFORE_CMD;
                         break;
@@ -239,8 +250,8 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         idx_cnt = 0;
                         idx_status = 0;
 #if NO_COMPILE // move head to trk00
-               steptime = 6 * (Z80FQ / 1000); // 6ms
-               next += 1*Z80FQ/1000; // 1ms before command
+               steptime = 6 * (m_tactsPerSecond / 1000); // 6ms
+               next += 1*m_tactsPerSecond/1000; // 1ms before command
                state = S_RESET;
                //seldrive->track = 0;
 #endif
@@ -365,7 +376,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                 }
 
                 // todo: test spinning
-                if (fdd[drive].IsREADY && fdd[drive].motor > 0 && ((time + tshift) % (Z80FQ / FDD_RPS) < (Z80FQ * 4 / 1000)))
+                if (fdd[drive].IsREADY && fdd[drive].motor > 0 && ((time + tshift) % (m_tactsPerSecond / FDD_RPS) < (m_tactsPerSecond * 4 / 1000)))
                 {
                     if (state == WDSTATE.S_IDLE)
                     {
@@ -407,7 +418,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                     case WDSTATE.S_DELAY_BEFORE_CMD:
                         if (!wd93_nodelay && (cmd & CMD_DELAY) != 0)
                         {
-                            next += (Z80FQ * 15 / 1000); // 15ms delay
+                            next += (m_tactsPerSecond * 15 / 1000); // 15ms delay
 
                             // this flag should indicate motor state, but we dont have it :( 
                             // so, simulate motor off->on delay when program specify CMD_DELAY
@@ -429,7 +440,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         if ((cmd & 0xC0) == 0x80 || (cmd & 0xF8) == 0xC0)
                         {
                             // read/write sectors or read am - find next AM
-                            end_waiting_am = next + 5 * Z80FQ / FDD_RPS; // max wait disk 5 turns
+                            end_waiting_am = next + 5 * m_tactsPerSecond / FDD_RPS; // max wait disk 5 turns
 
                             // Fix for old (~1992) Quorum disks, which contain CP/M that waits too little after C4 command
                             if (wd93_nodelay && (cmd & 0xF0) == 0xC0) // read address
@@ -466,7 +477,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                     case WDSTATE.S_FOUND_NEXT_ID:
                         if (!fdd[drive].IsREADY)
                         { // no disk - wait again
-                            end_waiting_am = next + 5 * Z80FQ / FDD_RPS;
+                            end_waiting_am = next + 5 * m_tactsPerSecond / FDD_RPS;
                             //         nextmk:
                             find_marker(toTact);
                             break;
@@ -733,7 +744,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         state2 = WDSTATE.S_WR_TRACK_DATA;
                         start_crc = 0;
                         getindex();
-                        end_waiting_am = next + 5 * Z80FQ / FDD_RPS;
+                        end_waiting_am = next + 5 * m_tactsPerSecond / FDD_RPS;
                         break;
 
                     case WDSTATE.S_WR_TRACK_DATA:
@@ -797,7 +808,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
 
                         if (fdd[drive].IsWP)
                             status |= WD_STATUS.WDS_WRITEP;
-                        fdd[drive].motor = next + 2 * Z80FQ;
+                        fdd[drive].motor = next + 2 * m_tactsPerSecond;
 
                         state2 = WDSTATE.S_SEEKSTART; // default is seek/restore
                         if ((cmd & 0xE0) != 0) // single step
@@ -808,7 +819,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                         }
                         if (!wd93_nodelay)
                         {
-                            //next += 1 * Z80FQ / 1000;
+                            //next += 1 * m_tactsPerSecond / 1000;
                             next += 32;
                         }
                         state = WDSTATE.S_WAIT;
@@ -833,7 +844,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
 
                         uint[] steps = new uint[4] { 6, 12, 20, 30 };   // TODO: static
                         if (!wd93_nodelay)
-                            next += steps[cmd & CMD_SEEK_RATE] * Z80FQ / 1000;
+                            next += steps[cmd & CMD_SEEK_RATE] * m_tactsPerSecond / 1000;
 
                         /* ?TODO? -- fdd noise
                          #ifndef MOD_9X
@@ -880,10 +891,10 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                             state2 = WDSTATE.S_IDLE;
                             state = WDSTATE.S_WAIT;
                             next += 128; //next = time + 1;  // do not use time - CHORDOUT issue
-                            idx_tmo = next + 15 * Z80FQ / FDD_RPS; // 15 disk turns
+                            idx_tmo = next + 15 * m_tactsPerSecond / FDD_RPS; // 15 disk turns
                             break;
                         }
-                        end_waiting_am = next + 6 * Z80FQ / FDD_RPS; // max wait disk 6 turns
+                        end_waiting_am = next + 6 * m_tactsPerSecond / FDD_RPS; // max wait disk 6 turns
                         load();
                         find_marker(toTact);
                         break;
@@ -901,7 +912,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                             fdd[drive].t = fdd[drive].CurrentTrack;
                         }
                         // if (seldrive.TRK00) track = 0;
-                        next += 6 * Z80FQ / 1000;
+                        next += 6 * m_tactsPerSecond / 1000;
                         break;
 
                     default:
@@ -938,7 +949,7 @@ namespace ZXMAK2.Hardware.Circuits.Fdd
                 if (foundid != -1)
                     wait *= fdd[drive].t.ts_byte;   // Задержка в тактах от текущего такта до такта чтения первого байта заголовка
                 else
-                    wait = 10 * Z80FQ / FDD_RPS;
+                    wait = 10 * m_tactsPerSecond / FDD_RPS;
 
                 if (wd93_nodelay && foundid != -1)
                 {

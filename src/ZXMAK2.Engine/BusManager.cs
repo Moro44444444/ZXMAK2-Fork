@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.IO;
 using System.Xml;
@@ -23,6 +23,13 @@ namespace ZXMAK2.Engine
         private bool m_sandBox = false;
         private String m_machineFile = null;
         private readonly CpuUnit m_cpu;
+        private ICpuClock m_cpuClock;
+        private int m_lastCpuClockMultiplier = 1;
+        private int m_lastMaxCpuClockMultiplier = 1;
+        private long m_cpuClockRemainder;
+        private bool m_cpuClockBusActive;
+        private long m_cpuClockBusLastTact;
+        private bool m_cpuMemoryReadSeen;
         private IUlaDevice m_ula;
         private IDebuggable m_debuggable;
         private List<BusDeviceBase> m_deviceList = new List<BusDeviceBase>();
@@ -67,6 +74,11 @@ namespace ZXMAK2.Engine
             m_cpu = new CpuUnit();
             m_rzx = new RzxHandler(m_cpu);
             m_eventManager = new EventManager(m_cpu, m_rzx);
+            m_eventManager.SyncCpuClock = SynchronizeCpuClock;
+            m_eventManager.CompleteMemoryAccess = CompleteCpuMemoryAccess;
+            m_eventManager.InvalidateMemoryBuffer = InvalidateCpuMemoryBuffer;
+            m_eventManager.ApplyPortTiming = ApplyCpuPortTiming;
+            m_cpu.REFRESH = RefreshCpuClock;
             SampleRate = 44100;
             m_eventManager.ScanSig += EventManager_ScanSig;
         }
@@ -271,6 +283,20 @@ namespace ZXMAK2.Engine
                     success = false; 
                 }
             }
+            var cpuClockDevices = m_deviceList.OfType<ICpuClock>().ToArray();
+            if (cpuClockDevices.Length > 1)
+            {
+                Logger.Error("More than one CPU clock controller is configured");
+                success = false;
+                m_cpuClock = null;
+            }
+            else
+            {
+                m_cpuClock = cpuClockDevices.FirstOrDefault();
+            }
+            m_lastCpuClockMultiplier = 1;
+            m_lastMaxCpuClockMultiplier = 1;
+            m_cpuClockRemainder = 0;
             m_frameTactCount = m_ula.FrameTactCount;
             foreach (var device in m_deviceList)
             {
@@ -294,7 +320,10 @@ namespace ZXMAK2.Engine
             }
             m_soundFrame = new FrameSound(
                 SampleRate,
-                soundRenderers.Select(sr => sr.AudioBuffer));
+                soundRenderers.Select(sr => sr.AudioBuffer),
+                m_deviceList
+                    .OfType<ISoundMixerConfiguration>()
+                    .Any(configuration => configuration.RejectDc));
             OnBusConnected();
             return success;
         }
@@ -304,6 +333,8 @@ namespace ZXMAK2.Engine
             if (!m_connected)
                 return;
             m_connected = false;
+            m_cpuClock = null;
+            m_cpuClockRemainder = 0;
             OnEndFrame();
             OnBusDisconnect();
             m_soundFrame = null;
@@ -380,7 +411,9 @@ namespace ZXMAK2.Engine
         private int m_frameTactCount;
         public int GetFrameTact()
         {
-            return (int)(m_cpu.Tact % m_frameTactCount);
+            var timing = m_ula as IUlaFrameTiming;
+            return timing != null ? timing.GetFrameTact(m_cpu.Tact) :
+                (int)(m_cpu.Tact % m_frameTactCount);
         }
 
         private bool m_frameOpened = false;
@@ -394,6 +427,9 @@ namespace ZXMAK2.Engine
             }
             m_frameOpened = true;
 
+            var timing = m_ula as IUlaFrameTiming;
+            if (timing != null)
+                timing.BeginFrameTiming(m_cpu.Tact);
             m_eventManager.BeginFrame();
         }
 
@@ -424,10 +460,14 @@ namespace ZXMAK2.Engine
         public void ExecCycle()
         {
             int frameTact = GetFrameTact();
-            if (frameTact < m_lastFrameTact)
+            var timing = m_ula as IUlaFrameTiming;
+            if (timing != null ? timing.IsFrameComplete(m_cpu.Tact) :
+                frameTact < m_lastFrameTact)
             {
                 OnEndFrame();
                 OnBeginFrame();
+                if (timing != null)
+                    frameTact = GetFrameTact();
             }
             m_lastFrameTact = frameTact;
 
@@ -435,7 +475,137 @@ namespace ZXMAK2.Engine
                 m_rzx.CheckInt(frameTact) :
                 m_ula.CheckInt(frameTact);
             m_eventManager.PreCycle();
-            m_cpu.ExecCycle();
+
+            var clockMultiplier = 1;
+            var maxClockMultiplier = 1;
+            if (m_cpuClock != null)
+            {
+                clockMultiplier = m_cpuClock.CpuClockMultiplier;
+                maxClockMultiplier = m_cpuClock.MaxCpuClockMultiplier;
+                if (clockMultiplier < 1 ||
+                    maxClockMultiplier < clockMultiplier ||
+                    maxClockMultiplier > 16)
+                {
+                    Logger.Error(
+                        "Invalid CPU clock ratio: current={0}, maximum={1}",
+                        clockMultiplier,
+                        maxClockMultiplier);
+                    clockMultiplier = 1;
+                    maxClockMultiplier = 1;
+                }
+            }
+            if (clockMultiplier != m_lastCpuClockMultiplier ||
+                maxClockMultiplier != m_lastMaxCpuClockMultiplier)
+            {
+                m_cpuClockRemainder = 0;
+                m_lastCpuClockMultiplier = clockMultiplier;
+                m_lastMaxCpuClockMultiplier = maxClockMultiplier;
+            }
+
+            var startTact = m_cpu.Tact;
+            var synchronizeBus = m_cpuClock is ICpuClockBusSync;
+            m_cpuClockBusActive = synchronizeBus && clockMultiplier < maxClockMultiplier;
+            m_cpuClockBusLastTact = startTact;
+            m_cpuMemoryReadSeen = false;
+            try
+            {
+                m_cpu.ExecCycle();
+                // Providers without the optional interface retain their
+                // existing instruction-end scaling and callback timestamps.
+                if (!synchronizeBus && clockMultiplier < maxClockMultiplier)
+                {
+                    var elapsed = m_cpu.Tact - startTact;
+                    m_cpuClockRemainder +=
+                        elapsed * (maxClockMultiplier - clockMultiplier);
+                    m_cpu.Tact += m_cpuClockRemainder / clockMultiplier;
+                    m_cpuClockRemainder %= clockMultiplier;
+                }
+            }
+            finally
+            {
+                try { SynchronizeCpuClock(); }
+                finally { m_cpuClockBusActive = false; }
+            }
+        }
+
+        private void RefreshCpuClock()
+        {
+            var clock = m_cpuClock as ICpuRefreshClock;
+            if (!m_cpuClockBusActive || clock == null)
+                return;
+            // Settle all elapsed raw CPU tacts at the old applied rate.
+            SynchronizeCpuClock();
+            clock.LatchClockAtRefresh();
+            int current = clock.CpuClockMultiplier;
+            int maximum = clock.MaxCpuClockMultiplier;
+            if (current < 1 || maximum < current || maximum > 16)
+                throw new InvalidOperationException("Invalid refresh CPU clock ratio.");
+            if (current != m_lastCpuClockMultiplier ||
+                maximum != m_lastMaxCpuClockMultiplier)
+            {
+                // Evo ratios 1/2/4 divide master ratio 8 exactly, so no
+                // fractional remainder can be lost at a mode transition.
+                m_cpuClockRemainder = 0;
+                m_lastCpuClockMultiplier = current;
+                m_lastMaxCpuClockMultiplier = maximum;
+            }
+            m_cpuClockBusLastTact = m_cpu.Tact;
+        }
+
+        private void CompleteCpuMemoryAccess(ushort address,
+            CpuMemoryAccess access, ref byte value)
+        {
+            var timing = m_cpuClock as ICpuMemoryTiming;
+            if (!m_cpuClockBusActive || timing == null)
+                return;
+            // The legacy core routes prefix continuation fetches through
+            // RDMEM. Only the first read in a segment is an opcode; indexed
+            // CB displacement/opcode reads are ordinary reads.
+            if (!m_cpuMemoryReadSeen && access == CpuMemoryAccess.Read &&
+                !(m_cpu.XFX == CpuModeEx.Cb && m_cpu.FX != CpuModeIndex.None))
+                access = CpuMemoryAccess.Opcode;
+            if (access != CpuMemoryAccess.Write)
+                m_cpuMemoryReadSeen = true;
+            var delay = timing.CompleteMemoryAccess(address, access, m_cpu.Tact, ref value);
+            if (delay < 0)
+                throw new InvalidOperationException("Negative CPU memory delay.");
+            m_cpu.Tact += delay;
+            // Delay already uses master units. Exclude it from the next
+            // raw-CPU-delta scaling, including final synchronization.
+            m_cpuClockBusLastTact = m_cpu.Tact;
+        }
+
+        private void ApplyCpuPortTiming(ushort address)
+        {
+            var timing = m_cpuClock as ICpuPortTiming;
+            if (!m_cpuClockBusActive || timing == null)
+                return;
+            int delay = timing.GetPortWait(address);
+            if (delay < 0)
+                throw new InvalidOperationException("Negative CPU port delay.");
+            m_cpu.Tact += delay;
+            m_cpuClockBusLastTact = m_cpu.Tact; // already master units
+        }
+
+        private void InvalidateCpuMemoryBuffer()
+        {
+            var timing = m_cpuClock as ICpuMemoryTiming;
+            if (m_cpuClockBusActive && timing != null)
+                timing.InvalidateMemoryBuffer();
+        }
+
+        private void SynchronizeCpuClock()
+        {
+            if (!m_cpuClockBusActive)
+                return;
+            var elapsed = m_cpu.Tact - m_cpuClockBusLastTact;
+            if (elapsed < 0)
+                throw new InvalidOperationException("CPU clock moved backwards during an active bus cycle.");
+            m_cpuClockRemainder += elapsed *
+                (m_lastMaxCpuClockMultiplier - m_lastCpuClockMultiplier);
+            m_cpu.Tact += m_cpuClockRemainder / m_lastCpuClockMultiplier;
+            m_cpuClockRemainder %= m_lastCpuClockMultiplier;
+            m_cpuClockBusLastTact = m_cpu.Tact;
         }
 
         private void EventManager_ScanSig()
@@ -454,7 +624,7 @@ namespace ZXMAK2.Engine
 
         public int FrameTactCount 
         { 
-            get { return m_frameTactCount; } 
+            get { return m_ula is IUlaFrameTiming ? m_ula.FrameTactCount : m_frameTactCount; }
         }
 
         public void LoadConfigXml(XmlNode busNode)

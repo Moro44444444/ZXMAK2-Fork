@@ -5,6 +5,7 @@ using System.ComponentModel;
 using ZXMAK2.Dependency;
 using ZXMAK2.Engine;
 using ZXMAK2.Engine.Interfaces;
+using ZXMAK2.Serializers;
 using ZXMAK2.Host.Interfaces;
 using ZXMAK2.Host.Entities;
 using ZXMAK2.Host.Presentation.Interfaces;
@@ -78,6 +79,45 @@ namespace ZXMAK2.Host.Presentation
         {
             m_synchronizeInvoke = synchronizeInvoke;
         }
+
+        public void ExecuteMediaChange(ISuccessCommand command, object commandParameter)
+        {
+            if (command == null)
+            {
+                throw new ArgumentNullException("command");
+            }
+
+            var succeeded = false;
+            EventHandler successHandler = (sender, args) => succeeded = true;
+            var wasRunning = m_vm != null && m_vm.IsRunning;
+
+            command.ExecutedSuccessfully += successHandler;
+            try
+            {
+                if (wasRunning)
+                {
+                    m_vm.DoStop();
+                }
+
+                command.Execute(commandParameter);
+            }
+            finally
+            {
+                command.ExecutedSuccessfully -= successHandler;
+                if (wasRunning && m_vm != null && !m_vm.IsRunning)
+                {
+                    m_vm.DoRun();
+                }
+            }
+
+            if (succeeded && m_vm != null)
+            {
+                // Use the same running-VM reset path as the toolbar command.
+                // VirtualMachine.DoReset performs its own stop/reset/restart
+                // transaction and keeps PentEvo reset timing consistent.
+                m_vm.DoReset();
+            }
+        }
         
         #region Commands
 
@@ -107,6 +147,7 @@ namespace ZXMAK2.Host.Presentation
         public ICommand CommandTapePause { get; private set; }
         public ICommand CommandQuickLoad { get; private set; }
         public ICommand CommandOpenUri { get; private set; }
+        public ICommand CommandMachineSwitch { get; private set; }
 
         #endregion Commands
 
@@ -379,6 +420,7 @@ namespace ZXMAK2.Host.Presentation
             CommandTapePause = new CommandDelegate(CommandTapePause_OnExecute, CommandTapePause_CanExecute);
             CommandQuickLoad = new CommandDelegate(CommandQuickLoad_OnExecute, CommandQuickLoad_OnCanExecute);
             CommandOpenUri = new CommandDelegate(CommandOpenUri_OnExecute, CommandOpenUri_OnCanExecute);
+            CommandMachineSwitch = new CommandDelegate(CommandMachineSwitch_OnExecute, CommandMachineSwitch_OnCanExecute);
 
             CommandFileOpen.Text = "Open...";
             CommandFileSave.Text = "Save As...";
@@ -402,6 +444,7 @@ namespace ZXMAK2.Host.Presentation
             CommandTapePause.Text = "Pause Tape";
             CommandQuickLoad.Text = "Quick Boot";
             CommandOpenUri.Text = "Open Url";
+            CommandMachineSwitch.Text = "Switch Machine";
         }
 
         private void UpdateAllCommands()
@@ -432,6 +475,7 @@ namespace ZXMAK2.Host.Presentation
             CommandTapePause.Update();
             CommandQuickLoad.Update();
             CommandOpenUri.Update();
+            CommandMachineSwitch.Update();
         }
 
         private ICommand CreateViewHolderCommand<T>()
@@ -464,14 +508,23 @@ namespace ZXMAK2.Host.Presentation
                 loadDialog.Filter = m_vm.Spectrum.BusManager.LoadManager.GetOpenExtFilter();
                 loadDialog.FileName = "";
                 loadDialog.ShowReadOnly = true;
-                loadDialog.ReadOnlyChecked = true;
+                loadDialog.ReadOnlyChecked = false;
                 loadDialog.CheckFileExists = true;
                 loadDialog.FileOk += LoadDialog_FileOk;
-                if (loadDialog.ShowDialog(m_view) != DlgResult.OK)
+                try
                 {
-                    return;
+                    if (loadDialog.ShowDialog(m_view) != DlgResult.OK)
+                    {
+                        return;
+                    }
+                    OpenFile(loadDialog.FileName, loadDialog.ReadOnlyChecked);
                 }
-                OpenFile(loadDialog.FileName, loadDialog.ReadOnlyChecked);
+                finally
+                {
+                    // This reusable dialog survives Dispose. Do not leave the
+                    // normal-file validator attached to SD image selection.
+                    loadDialog.FileOk -= LoadDialog_FileOk;
+                }
             }
         }
 
@@ -801,6 +854,52 @@ namespace ZXMAK2.Host.Presentation
             }
         }
 
+        private bool CommandMachineSwitch_OnCanExecute(Object objArg)
+        {
+            return m_vm != null && objArg is string && !string.IsNullOrEmpty((string)objArg);
+        }
+
+        private void CommandMachineSwitch_OnExecute(Object objArg)
+        {
+            if (!CommandMachineSwitch_OnCanExecute(objArg))
+            {
+                return;
+            }
+            var machineName = (string)objArg;
+            var machines = new MachinesConfig();
+            machines.Load();
+            var busNode = machines.GetConfig(machineName);
+            if (busNode == null)
+            {
+                m_userMessage.Error("Machine configuration not found: {0}", machineName);
+                return;
+            }
+
+            var running = m_vm.IsRunning;
+            m_vm.DoStop();
+            try
+            {
+                m_vm.Bus.LoadConfigXml(busNode);
+                m_vm.DoReset();
+                m_vm.SaveConfig();
+                Title = string.Empty;
+                m_vm.RequestFrame();
+                CommandTapePause.Update();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                m_userMessage.Error(ex);
+            }
+            finally
+            {
+                if (running)
+                {
+                    m_vm.DoRun();
+                }
+            }
+        }
+
         private bool CommandHelpViewHelp_OnCanExecute(object arg)
         {
             if (!CheckViewAvailable<IUserHelp>())
@@ -855,8 +954,14 @@ namespace ZXMAK2.Host.Presentation
         private bool CommandQuickLoad_OnCanExecute()
         {
             var fileName = Path.Combine(Utils.GetAppFolder(), "boot.zip");
-            return m_vm != null &&
-                File.Exists(fileName);
+            if (m_vm == null || !File.Exists(fileName))
+            {
+                return false;
+            }
+            var betaDisk = m_vm.Spectrum.BusManager.FindDevice<IBetaDiskDevice>();
+            var trDosSession = m_vm.Spectrum.BusManager.FindDevice<ITrDosSessionDevice>();
+            return betaDisk != null && trDosSession != null &&
+                trDosSession.IsTrDosSessionActive;
         }
 
         private void CommandQuickLoad_OnExecute()
@@ -875,11 +980,8 @@ namespace ZXMAK2.Host.Presentation
             m_vm.DoStop();
             try
             {
-                if (m_vm.Spectrum.BusManager.LoadManager.CheckCanOpenFileName(fileName))
-                {
-                    m_vm.Spectrum.BusManager.LoadManager.OpenFileName(fileName, true);
-                }
-                else
+                var loadManager = m_vm.Spectrum.BusManager.LoadManager as LoadManager;
+                if (loadManager == null || !loadManager.TryOpenQuickBootFileName(fileName))
                 {
                     m_userMessage.Error("Cannot open quick snapshot boot.zip!");
                 }
@@ -888,6 +990,7 @@ namespace ZXMAK2.Host.Presentation
             {
                 if (running)
                     m_vm.DoRun();
+                CommandQuickLoad.Update();
             }
         }
 

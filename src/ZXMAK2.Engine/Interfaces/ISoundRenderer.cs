@@ -13,4 +13,12 @@ namespace ZXMAK2.Engine.Interfaces
         uint[] AudioBuffer { get; }
 		int Volume { get; set; }
     }
+
+    /// <summary>
+    /// Optional machine-level policy for the final PCM mixer.
+    /// </summary>
+    public interface ISoundMixerConfiguration
+    {
+        bool RejectDc { get; }
+    }
 }

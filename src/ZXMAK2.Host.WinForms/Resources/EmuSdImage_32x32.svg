@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#69c9f2"/>
+      <stop offset=".55" stop-color="#258bc4"/>
+      <stop offset="1" stop-color="#125d91"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd45b"/>
+      <stop offset="1" stop-color="#e48a00"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.5 2.5h13l5 5v21H7.5z" fill="url(#card)" stroke="#31596f" stroke-linejoin="round"/>
+  <path d="M20.5 2.5v5h5" fill="#bfe8f8" stroke="#31596f" stroke-linejoin="round"/>
+  <rect x="9.5" y="3.5" width="2" height="6" rx=".5" fill="#e7bd39"/>
+  <rect x="12.5" y="3.5" width="2" height="6" rx=".5" fill="#e7bd39"/>
+  <rect x="15.5" y="3.5" width="2" height="6" rx=".5" fill="#e7bd39"/>
+  <path d="M10 23h8v-3l7 5-7 5v-3h-8z" fill="url(#arrow)" stroke="#b56b00" stroke-linejoin="round"/>
+  <text x="10" y="18" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#ffffff">SD</text>
+  <path d="M9 11h15" stroke="#ffffff" stroke-opacity=".45"/>
+</svg>
