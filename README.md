@@ -54,11 +54,11 @@ You may also be interested about this emulator history:
 
 ## What's new
 
-### Current development build — B35
+### Current development build — B36
 
-- Completed the official BaseConf `#BF/#BD/#BE` configuration-register contract, including six-bit `#BF` readback, controlled ROM writes and palette/font/border/breakpoint register access.
-- Preserved the accepted B34 SD/HDD replacement path and exact virtual-FDD `#13BD` ownership. INT/NMI/breakpoint activation remains the next separate stage.
-- Automated checks pass, and the user confirmed border/multicolor, media replacement and IDE file access without regressions.
+- Implemented the official BaseConf frame-INT acknowledge and INT counter pause contract.
+- Added frame-aligned and breakpoint-triggered NMI, the `#0066` NOP transition, RAM page `#FF`, and delayed `#BE` exit while preserving virtual-FDD page `#FE`.
+- Full automated regression passes; B36 runtime acceptance still requires the user's test.
 
 ### ZX-Evo BaseConf Alpha 0.2 — B34
 
@@ -73,11 +73,11 @@ Known Alpha limitations: automatic OS boot from HDD is still being investigated;
 
 ## Что нового
 
-### Текущая тестовая сборка — B35
+### Текущая тестовая сборка — B36
 
-- Завершён официальный контракт конфигурационных регистров BaseConf `#BF/#BD/#BE`: шестибитное чтение `#BF`, управляемая запись ROM и регистры палитры, шрифта, бордюра и breakpoint.
-- Сохранены принятая смена SD/HDD из B34 и точное владение virtual FDD портом `#13BD`. Активация INT/NMI/breakpoint остаётся отдельным следующим этапом.
-- Автоматические проверки проходят; пользователь подтвердил border/multicolor, смену носителей и доступ к файлам IDE без регрессий.
+- Реализованы документированные подтверждение кадрового INT и пауза его счётчика внешним WAIT.
+- Добавлены кадровый и breakpoint-NMI, NOP на `#0066`, RAM-страница `#FF` и задержанный выход через `#BE` с сохранением virtual-FDD страницы `#FE`.
+- Полная автоматическая регрессия проходит; runtime-приёмка B36 ожидает пользовательского теста.
 
 ### ZX Evo BaseConf Alpha 0.2 — B34
 

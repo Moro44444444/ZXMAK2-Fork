@@ -132,6 +132,16 @@ Each item is a separate checkpoint with compiled/static probes plus user runtime
 7. **B39 — final timing/video certification.** Contention, floating bus, raster transitions, all seven renderer golden vectors, and focused WD1793 command/status traces.
 8. **After built-in conformance:** audit the two official ZX-BUS slots and only then expose documented pluggable peripheral cards.
 
+### Execution status on 2026-09-19
+
+The technical order above remains canonical. Build numbers moved by one after a separate B34 media-lifecycle checkpoint was inserted without changing the hardware sequence:
+
+- Nemo IDE decode: completed in B33/B33-R1;
+- safe repeated SD/HDD replacement: inserted and accepted as B34;
+- configuration ports `#BF/#BD/#BE`: completed and runtime-smoked in B35;
+- INT/NMI/breakpoint state machines: implemented in B36; runtime acceptance pending;
+- next hardware stage: WAIT transactions and remaining built-in ports (build B37).
+
 ## B32 conclusion
 
 B31 is a valid continuation point and must not be rolled back. The first minimal, high-confidence correction is the isolated Nemo IDE address decoder. Runtime acceptance of any future build remains the user's decision.

@@ -9,9 +9,12 @@ namespace ZXMAK2.Hardware.Evo
 {
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming
     {
+        private const int FrameInterruptMasterClocks = 256;
         private int m_requestedRaster;
         private int m_activeRaster;
         private long m_rasterOrigin;
+        private bool m_frameInterruptAcknowledged;
+        private int m_frameInterruptWaitClocks;
         private readonly BaseConfVideoModeController m_videoController =
             new BaseConfVideoModeController();
         private bool m_videoMappingValid;
@@ -34,6 +37,18 @@ namespace ZXMAK2.Hardware.Evo
         [HardwareValue("VIDEOPEND", Description = "B21 video mode waits for software frame boundary")]
         public bool VideoModePending { get { return m_videoController.IsPending; } }
         internal EvoRasterTiming ActiveRaster { get { return EvoRasterTiming.ForMode(m_activeRaster); } }
+
+        [HardwareValue("INTACK", Description = "BaseConf frame INT released by interrupt acknowledge")]
+        public bool FrameInterruptAcknowledged { get { return m_frameInterruptAcknowledged; } }
+
+        [HardwareValue("INTWAIT", Description = "Master clocks added while the external WAIT line holds frame INT")]
+        public int FrameInterruptWaitClocks { get { return m_frameInterruptWaitClocks; } }
+
+        public override void BusInit(IBusManager bmgr)
+        {
+            base.BusInit(bmgr);
+            bmgr.Events.SubscribeIntAck(BusIntAcknowledge);
+        }
 
         internal void RequestRaster(int mode)
         {
@@ -85,6 +100,43 @@ namespace ZXMAK2.Hardware.Evo
             var memory = Memory as MemoryPentEvo;
             if (memory != null)
                 memory.ActivateRaster(ActiveRaster, m_rasterOrigin);
+
+            // zint.v starts a fresh active-low INT pulse at int_start.
+            // Acknowledge and WAIT extension belong to this frame only.
+            m_frameInterruptAcknowledged = false;
+            m_frameInterruptWaitClocks = 0;
+        }
+
+        public override bool CheckInt(int frameTact)
+        {
+            return !m_frameInterruptAcknowledged &&
+                frameTact < FrameInterruptMasterClocks + m_frameInterruptWaitClocks;
+        }
+
+        /// <summary>
+        /// Records time for which the physical external WAIT line is active.
+        /// In BaseConf zint.v this pauses the 256-clock INT counter.  DRAM and
+        /// ordinary turbo stalls do not call this method; the AVR/COM WAIT
+        /// transactions added by the following stage will do so.
+        /// </summary>
+        public void PauseFrameInterruptForWait(int masterClocks)
+        {
+            if (masterClocks < 0)
+                throw new ArgumentOutOfRangeException("masterClocks");
+            if (masterClocks == 0 || CPU == null)
+                return;
+            var frameTact = GetFrameTact(CPU.Tact);
+            if (CheckInt(frameTact))
+                m_frameInterruptWaitClocks = checked(
+                    m_frameInterruptWaitClocks + masterClocks);
+        }
+
+        private void BusIntAcknowledge()
+        {
+            // EventManager invokes this at the CPU interrupt-acknowledge M1.
+            // This is the software event corresponding to !IORQ && !M1 at
+            // zneg in zint.v and releases INT before its nominal timeout.
+            m_frameInterruptAcknowledged = true;
         }
 
         protected override int GetCurrentFrameTact()

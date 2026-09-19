@@ -27,6 +27,19 @@ namespace ZXMAK2.Hardware.Evo
         private byte m_pEFF7;   // port EVO MOD
         private ushort m_breakpointAddress;
 
+        // BaseConf znmi.v / zbreak.v state.  A software/manual request is
+        // deferred to int_start; a breakpoint request starts immediately.
+        // The first opcode at #0066 is forced to NOP, then RAM page #FF is
+        // mapped into window 0 until the second M1 after OUT (#BE),A.
+        private bool m_nmiPending;
+        private bool m_externalNmiPending;
+        private bool m_nmiSignal;
+        private bool m_nmiEntryActive;
+        private bool m_inNmi;
+        private int m_nmiClearM1Remaining;
+        private bool m_nmiSwitchAfterM1;
+        private bool m_nmiClearAfterM1;
+
         // PentEvo can redirect a TR-DOS FDC access to a small handler stored
         // in RAM page #FE.  ERS uses this mechanism for mounted SCL/TRD images
         // and for its RAM disk.
@@ -73,6 +86,15 @@ namespace ZXMAK2.Hardware.Evo
             // Subscribe before MemoryBase.BusInit 
             // to handle memory switches before read
             base.BusInit(bmgr);
+
+            // This handler must run after MemoryBase has supplied the opcode:
+            // at #0066 it overrides that byte with NOP and only then changes
+            // the mapping for the following opcode at #0067.
+            bmgr.Events.SubscribeRdMemM1(0x0000, 0x0000, BusReadM1AfterMemory);
+            bmgr.Events.SubscribeBeginFrame(BusBeginFrame);
+            bmgr.Events.SubscribePreCycle(BusPreCycle);
+            bmgr.Events.SubscribeNmiRq(BusNmiRequest);
+            bmgr.Events.SubscribeNmiAck(BusNmiAcknowledge);
         }
 
         protected virtual void OnSubscribeIo(IBusManager bmgr)
@@ -118,6 +140,15 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusReadM1(ushort addr, ref byte value)
         {
+            // zbreak.v compares every opcode-fetch address, independently of
+            // the currently selected ROM/RAM page.  The NMI is sampled by the
+            // CPU at the following instruction boundary.
+            if (BreakpointEnabled && addr == m_breakpointAddress &&
+                !m_inNmi && !m_nmiEntryActive)
+            {
+                StartNmi();
+            }
+
             // While the FDD I/O handler is mapped at #0000, its instruction
             // fetches must not change DOSEN or replace page #FE.
             if (m_fddIoRamActive)
@@ -160,6 +191,81 @@ namespace ZXMAK2.Hardware.Evo
             {
                 DOSEN = true;
             }
+        }
+
+        private void BusReadM1AfterMemory(ushort addr, ref byte value)
+        {
+            // znmi.v drive_00: the first handler opcode is always NOP.  The
+            // page switch happens after this M1, so #0067 and later bytes are
+            // fetched from RAM #FF exactly as documented.
+            if (m_nmiEntryActive && addr == 0x0066)
+            {
+                value = 0x00;
+                m_nmiSwitchAfterM1 = true;
+                return;
+            }
+
+            // OUT (#BE),A keeps page #FF through two subsequent M1 fetches.
+            // Change the mapping only after the second opcode byte has been
+            // read, matching the refresh-edge counter in znmi.v.
+            if (m_inNmi && m_nmiClearM1Remaining > 0)
+            {
+                m_nmiClearM1Remaining--;
+                if (m_nmiClearM1Remaining == 0)
+                {
+                    m_nmiClearAfterM1 = true;
+                }
+            }
+        }
+
+        private void BusBeginFrame()
+        {
+            // The BaseConf frame epoch is int_start.  Requests from BF.D3 and
+            // the board/manual NMI source are consumed at this boundary.
+            if (m_nmiPending)
+            {
+                m_nmiPending = false;
+                StartNmi();
+            }
+        }
+
+        private void BusPreCycle()
+        {
+            if (m_nmiSignal)
+                m_cpu.NMI = true;
+        }
+
+        private void BusNmiRequest(BusCancelArgs e)
+        {
+            // Route the emulator's NMI command through the same deferred
+            // BaseConf path as the AVR request.  Once int_start has armed the
+            // hardware signal, let EventManager deliver the request too.
+            if (m_nmiSignal)
+            {
+                m_externalNmiPending = false;
+                return;
+            }
+            e.Cancel = true;
+            if (m_inNmi || m_nmiEntryActive)
+                return;
+            if (!m_externalNmiPending)
+            {
+                m_externalNmiPending = true;
+                m_nmiPending = true;
+            }
+        }
+
+        private void BusNmiAcknowledge()
+        {
+            m_nmiSignal = false;
+        }
+
+        private void StartNmi()
+        {
+            if (m_inNmi || m_nmiEntryActive)
+                return;
+            m_nmiEntryActive = true;
+            m_nmiSignal = true;
         }
 
         #endregion
@@ -306,6 +412,16 @@ namespace ZXMAK2.Hardware.Evo
             {
                 MapRead0000 = RamPages[FddIoRamPage];
                 MapWrite0000 = m_fddIoWriteDisabled ? m_trashPage : MapRead0000;
+                Map48[0] = -1;
+            }
+
+            // base_trdemu atm_pager.v gives in_nmi priority over in_trdemu:
+            // page #FF temporarily replaces page #FE.  pager_off (PEN) keeps
+            // its documented all-ROM mapping and therefore stays dominant.
+            if (m_inNmi && !PEN)
+            {
+                MapRead0000 = RamPages[0xFF];
+                MapWrite0000 = MapRead0000;
                 Map48[0] = -1;
             }
         }
@@ -549,7 +665,7 @@ namespace ZXMAK2.Hardware.Evo
             if (Array.IndexOf(RomPages, read) >= 0)
             {
                 InvalidateMemoryBuffer();
-                return 0;
+                return CompleteNmiM1(address, access, 0, ref value);
             }
 
             if (access == CpuMemoryAccess.Write)
@@ -574,7 +690,7 @@ namespace ZXMAK2.Hardware.Evo
                     m_dramBufferAddress = (ushort)(address & 0xFFFE);
                     m_dramBufferValid = true;
                 }
-                return writeDelay;
+                return CompleteNmiM1(address, access, writeDelay, ref value);
             }
 
             var wordAddress = (ushort)(address & 0xFFFE);
@@ -583,7 +699,7 @@ namespace ZXMAK2.Hardware.Evo
             {
                 value = (byte)((address & 1) == 0 ?
                     m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-                return 0;
+                return CompleteNmiM1(address, access, 0, ref value);
             }
 
             int readDelay = ReserveDram(masterTact, access);
@@ -593,7 +709,39 @@ namespace ZXMAK2.Hardware.Evo
             m_dramBufferValid = true;
             value = (byte)((address & 1) == 0 ?
                 m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-            return readDelay;
+            return CompleteNmiM1(address, access, readDelay, ref value);
+        }
+
+        private int CompleteNmiM1(ushort address, CpuMemoryAccess access,
+            int delay, ref byte value)
+        {
+            if (access != CpuMemoryAccess.Opcode)
+                return delay;
+
+            if (m_nmiSwitchAfterM1 && address == 0x0066)
+            {
+                // Complete the current read against its old mapping, then
+                // override the bus with NOP and expose page #FF for #0067.
+                value = 0x00;
+                m_nmiSwitchAfterM1 = false;
+                m_nmiEntryActive = false;
+                m_inNmi = true;
+                m_nmiClearM1Remaining = 0;
+                InvalidateMemoryBuffer();
+                UpdateMapping();
+            }
+
+            if (m_nmiClearAfterM1)
+            {
+                // The second post-#BE opcode has already been read from #FF.
+                // Restore the underlying page before the remainder of that
+                // instruction, exactly at the following refresh boundary.
+                m_nmiClearAfterM1 = false;
+                m_inNmi = false;
+                InvalidateMemoryBuffer();
+                UpdateMapping();
+            }
+            return delay;
         }
 
         #region Hardware Values
@@ -686,14 +834,14 @@ namespace ZXMAK2.Hardware.Evo
             set { m_pXXBF = (byte)((m_pXXBF & ~2) | (value ? 2 : 0)); UpdateMapping(); }
         }
 
-        [HardwareValue("NMIREQ", Description = "Latched BF.D3 NMI request; state machine pending B36")]
+        [HardwareValue("NMIREQ", Description = "Latched BF.D3 frame-aligned NMI request source")]
         public bool NMIREQ
         {
             get { return (m_pXXBF & 8) != 0; }
             set { m_pXXBF = (byte)((m_pXXBF & ~8) | (value ? 8 : 0)); }
         }
 
-        [HardwareValue("BRKENA", Description = "Latched BF.D4 breakpoint enable; state machine pending B36")]
+        [HardwareValue("BRKENA", Description = "Latched BF.D4 immediate breakpoint-NMI enable")]
         public bool BreakpointEnabled
         {
             get { return (m_pXXBF & 0x10) != 0; }
@@ -713,6 +861,22 @@ namespace ZXMAK2.Hardware.Evo
             get { return m_breakpointAddress; }
             set { m_breakpointAddress = value; }
         }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("NMIPEND", Description = "Frame-aligned BaseConf NMI request pending")]
+        public bool NmiPending { get { return m_nmiPending; } }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("NMIENTRY", Description = "NMI acknowledged; waiting for the #0066 M1 transition")]
+        public bool NmiEntryActive { get { return m_nmiEntryActive; } }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("INNMI", Description = "RAM page #FF is selected in window #0000")]
+        public bool InNmi { get { return m_inNmi; } }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("NMICLR", Description = "M1 fetches remaining before delayed #BE exit")]
+        public int NmiClearM1Remaining { get { return m_nmiClearM1Remaining; } }
 
         [HardwareValue("CMOSEN", Description = "Enable CMOS ports shadow independent")]
         public bool CMOSEN
@@ -847,7 +1011,12 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusWritePortXXBF_EVO(ushort addr, byte value, ref bool handled)
         {
+            // znmi.v detects the falling edge of set_nmi.  Merely setting D3
+            // arms the latch; clearing it requests NMI at the next int_start.
+            var requestNmi = (m_pXXBF & 0x08) != 0 && (value & 0x08) == 0;
             m_pXXBF = value;
+            if (requestNmi)
+                m_nmiPending = true;
             UpdateMapping();
         }
 
@@ -982,10 +1151,14 @@ namespace ZXMAK2.Hardware.Evo
             }
 
             // OUT (#BE),A is the documented return path from the page #FE
-            // virtual-drive handler and the common clear strobe for the later
-            // NMI state machine.  The value itself is not significant.
+            // virtual-drive handler and the common NMI clear strobe.  NMI
+            // keeps page #FF for two more M1 cycles; when NMI is active the
+            // underlying page-#FE state is deliberately retained.
             handled = true;
-            ExitFddIoRam();
+            if (m_inNmi)
+                m_nmiClearM1Remaining = 2;
+            else
+                ExitFddIoRam();
         }
 
         private int GetCfgIsDos()
@@ -1045,6 +1218,14 @@ namespace ZXMAK2.Hardware.Evo
             m_pXXBF = 0;        // RESET=0
             m_pEFF7 = 0;        // RESET=0
             m_breakpointAddress = 0;
+            m_nmiPending = false;
+            m_externalNmiPending = false;
+            m_nmiSignal = false;
+            m_nmiEntryActive = false;
+            m_inNmi = false;
+            m_nmiClearM1Remaining = 0;
+            m_nmiSwitchAfterM1 = false;
+            m_nmiClearAfterM1 = false;
             DOSEN = CPM;
 
             CMR0 = 0;

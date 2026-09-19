@@ -971,3 +971,11 @@ CSD/OCR и поэтому считали такую карту отсутств�
 ### B35 runtime — accepted
 
 - The user confirmed preserved border/multicolor effects, working media replacement, IDE disk detection and IDE file access. B35 is accepted in this tested scope; INT/NMI/breakpoint remains the separate B36 stage.
+
+## 2026-09-19 — B36: BaseConf INT/NMI/breakpoint state machines
+
+- Frame INT now follows the r1364 `zint.v` contract: 256 master clocks, early release on Z80 interrupt acknowledge, and a dedicated pause hook for the external AVR/COM WAIT sources. Ordinary DRAM/turbo stalls do not extend INT; AVR/COM WAIT generation remains the next stage.
+- Implemented falling-edge BF.D3 deferred NMI at the next `int_start`, immediate M1-address breakpoint NMI, forced NOP at `#0066`, and the following transition to RAM page `#FF`.
+- Page `#FF` now overrides virtual-FDD page `#FE` during NMI. `#BE` retains the underlying FDD state and removes `#FF` only after two following M1 fetches; the accepted normal FDD-exit path is unchanged.
+- Release build PASS. Compiled checks: B36 INT/NMI 41, B35 config 539, B34 media 33, IDE 10/786, FDD/Rage 14/113, video 12748/321/1807/655922, audio 19/16.
+- Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-20260919-181135\release`; verified 92-file ZIP SHA-256 `B87C7FDC415E5F77DB35EFCA5D9143B9EEA3326A78E9600EB1323DC4EE332656`. Runtime acceptance remains pending the user's regression and manual-NMI test.
