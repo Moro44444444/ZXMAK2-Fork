@@ -936,3 +936,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Every completed build must update the concise `What's New`/release notes and this changelog.
 - Planned backlog items must not be presented as implemented; runtime acceptance is mentioned only after the user's explicit test.
 - Public release notes remain bilingual (English/Russian) where applicable.
+
+## 2026-09-19 — SDHC/Rage diagnostic backlog
+
+- Recorded a reproducible media-dependent Rage case: the demo hangs after starting from the 4-GB `cf4gbAAA.ima` at both normal and maximum emulator speed, while it completes from the 500-MB raw `sd_nedo.vhd`.
+- The extracted SCL files are byte-identical: 41839 bytes, zero differing bytes, SHA-256 `D530FF773125F4C4E8AEC786FBB8B8021BD67589C039A990B530EAC88D45306F`. The source demo file is therefore excluded as the direct cause.
+- The next diagnostic must compare the resulting RAM-disk contents first, then machine state if the RAM disks match. The main boundary under review is SDSC byte addressing versus SDHC sector addressing above 2 GiB. No production code, media image, build, or runtime acceptance changed.

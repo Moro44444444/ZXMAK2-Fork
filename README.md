@@ -58,7 +58,6 @@ You may also be interested about this emulator history:
 
 - Reworked ZX-Evolution BaseConf emulation against the official r1364 documentation: memory paging, hardware ports, timing, interrupts, palette and all seven documented video modes.
 - Fixed border/multicolor phase, mid-frame video switching and several audio timing/DC issues.
-- Fixed the PentEvo virtual FDD path used by ERS: Rage now starts with one short Enter, while NedoOS and Bad Apple compatibility is preserved.
 - Corrected Nemo IDE port decoding and added convenient HDD image selection, persistence and ejection in Machine Settings. HDD access, FAT browsing and file launching have been runtime-tested.
 - Disk images opened through the normal UI are writable by default; write protection remains available as an explicit option.
 - Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.1 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
@@ -71,7 +70,6 @@ Known Alpha limitation: replacing an SD or HDD image for a second time in the sa
 
 - Эмуляция ZX-Evolution BaseConf сверена с официальной документацией r1364: память, порты, тайминги, прерывания, палитра и семь документированных видеорежимов.
 - Исправлены фаза border/multicolor, переключение видеорежимов и проблемы синхронизации звука.
-- Исправлен виртуальный FDD PentEvo: Rage запускается одним коротким Enter; сохранена совместимость с NedoOS и Bad Apple.
 - Исправлено декодирование Nemo IDE; добавлены выбор и сохранение HDD-образа в Machine Settings. Подключение HDD, чтение FAT и запуск файлов проверены.
 - Диски, открытые через обычный интерфейс, по умолчанию доступны для записи; защиту можно включить вручную.
 - [Скачать portable ZIP Alpha 0.1](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
