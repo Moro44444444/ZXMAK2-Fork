@@ -946,4 +946,5 @@ CSD/OCR и поэтому считали такую карту отсутств�
 ## 2026-09-19 — public portable-release hygiene rule
 
 - Public GitHub portable ZIPs must exclude user-generated `.cmos` and `.vmide` files, media images, logs, temporary files and absolute local paths. A `.vmz` may be included only as a clean, reproducible machine profile without mounted media.
+- Only the publish-copy may be minimized after a successful full build: remove `.pdb`, optional third-party XML documentation and internal build/result reports, but retain executable/config/DLL/ROM/PAK/profile/license dependencies. Preserve the full local diagnostic output unchanged and validate the minimized ZIP after clean extraction.
 - The package must be checked after clean extraction before publishing. Windows Open-dialog folder history is external per-user state and is not a release artifact.
