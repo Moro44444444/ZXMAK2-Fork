@@ -912,3 +912,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Release build PASS. Compiled checks: B34 media swap 33, IDE media 10, IDE ports 786, FDD 14, video timing 12748, palette 1807, TRD 655922, Rage SCL 113, audio 19, DirectSound 16.
 - Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-20260919-140643\release`; portable ZIP SHA-256 `FB96133BCDB4451B5DA2912DD7D1A2BF62F4D5738AF15CF7CD726A5BC9E3F245`.
 - Runtime acceptance remains pending the user's same-process SD A→B→A and HDD A→B→A tests. Automatic NedoOS HDD boot remains out of scope.
+
+## 2026-09-19 — project journal and SD UI backlog
+
+- `PROJECT_JOURNAL.md` is now explicitly the canonical long-lived record of requirements, attempts, results, backups, and limitations; `FORK_CHANGELOG.md` remains the concise history. Runtime acceptance is recorded only after an explicit user test.
+- Added to backlog: `New Card…` and `Eject Card` on the SD toolbar control, plus persistence of the mounted SD image across ZXMAK2 restarts with an explicit empty state after Eject.
+- Production code and the B34 runtime were not changed; no build or runtime acceptance was performed.
