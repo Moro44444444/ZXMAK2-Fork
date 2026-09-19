@@ -930,3 +930,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Recorded `F12` as an additional Warm Reset shortcut and `Alt+Ctrl+End` as the replacement for the unusable `Alt+Ctrl+Insert` shortcut on keyboards without Insert.
 - Recorded `Ctrl+F12` as a host-level CMOS reset command with confirmation, `.cmos` backup, documented defaults, persistence, and a follow-up machine reset.
 - Debugger-local F12 behavior (Stack/Breakpoints) must remain unchanged; no production code or runtime acceptance changed.
+
+## 2026-09-19 — release notes policy
+
+- Every completed build must update the concise `What's New`/release notes and this changelog.
+- Planned backlog items must not be presented as implemented; runtime acceptance is mentioned only after the user's explicit test.
+- Public release notes remain bilingual (English/Russian) where applicable.
