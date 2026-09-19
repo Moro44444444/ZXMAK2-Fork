@@ -1040,3 +1040,14 @@ ROM или прикладного теста, отдельно помечены 
 - Открытый дефект следующего этапа B34: первая установка SD/HDD проходит нормально, но повторная замена носителя в том же процессе эмулятора может приводить к зависанию. Требуется атомарная замена с корректным закрытием старого образа, сбросом состояния контроллера и внутренним cold power-cycle; явный Eject перед выбором нового файла не должен быть обязателен.
 - Зафиксирован полный восстанавливаемый снимок рабочего дерева без `.git`, `backup`, `tmp`, `bin`, `obj` и `.vs`: `backup/ZXMAK2-v13-ZXEVO-BC-STABLE-B33-R1-20260919-130906/snapshot`.
 - Эта запись не расширяет runtime-приёмку: отмечено только то, что уже проверил пользователь.
+
+## GitHub prerelease — ZX-Evo BaseConf Alpha 0.1
+
+- Из стабильного commit `14c249397122ba3978a5de3625ed3e7d12750de2` собрана чистая Release-версия в отдельном detached worktree. Теги исходной точки: `zxevo-b33-r1-stable` и `v0.1-alpha`.
+- Visual Studio 2022 MSBuild 17.14.51 завершил полную последовательную сборку с нулём ошибок. Остались только два прежних предупреждения об отсутствующих `AllRules.ruleset` и `MinimumRecommendedRules.ruleset`.
+- Portable-папка содержит 75 файлов. В неё установлен точный принятый профиль B33-R1 `ZXMAK2.vmz` — 924 байта, SHA-256 `43832C2F34A2F2B7AE0F12E4E216D4482A500536D47B8D4536EF230E8F923C5D`. Пользовательские `.cmos/.nvram/.vmide`, журналы и образы носителей исключены.
+- ZIP полностью распакован во временную папку и сверен побайтово: 75/75 файлов, расхождений нет. Размер ZIP `4724772` байта; SHA-256 `D9A95F7D5A2143E84068C790F8C8273D9B5D02B0FC51ABF6D703FEA85E929DC0`.
+- На распакованном пакете прошли проверки: IDE media 10, Nemo IDE ports 786, PentEvo FDD trap 14, video timing 12748, audio path 19 и DirectSound buffer 16.
+- GitHub prerelease: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha`. Прямая загрузка: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip`.
+- Локальные копии: `K:\Download\ZXMAK2-ZXEvo-BaseConf-Alpha-0.1` и `K:\Download\ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip`.
+- В README релиза честно отмечены открытые ограничения: повторная замена SD/HDD в одном процессе может зависнуть до B34; автоматический `B.HDD boot` NedoOS не принят. Создание prerelease не заявляет новую пользовательскую runtime-приёмку.
