@@ -64,3 +64,16 @@ You may also be interested about this emulator history:
 - Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.1 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
 
 Known Alpha limitation: replacing an SD or HDD image for a second time in the same emulator process may still require restarting the emulator. Automatic OS boot from HDD will be handled separately.
+
+## Что нового
+
+### ZX Evo BaseConf Alpha 0.1 — B33-R1
+
+- Эмуляция ZX-Evolution BaseConf сверена с официальной документацией r1364: память, порты, тайминги, прерывания, палитра и семь документированных видеорежимов.
+- Исправлены фаза border/multicolor, переключение видеорежимов и проблемы синхронизации звука.
+- Исправлен виртуальный FDD PentEvo: Rage запускается одним коротким Enter; сохранена совместимость с NedoOS и Bad Apple.
+- Исправлено декодирование Nemo IDE; добавлены выбор и сохранение HDD-образа в Machine Settings. Подключение HDD, чтение FAT и запуск файлов проверены.
+- Диски, открытые через обычный интерфейс, по умолчанию доступны для записи; защиту можно включить вручную.
+- [Скачать portable ZIP Alpha 0.1](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
+
+Известное ограничение Alpha: повторная замена SD-карты или HDD-образа в одном процессе эмулятора может потребовать перезапуска. Автоматическая загрузка ОС с HDD будет настроена отдельно.
