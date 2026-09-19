@@ -927,6 +927,6 @@ CSD/OCR и поэтому считали такую карту отсутств�
 
 ## 2026-09-19 — Warm Reset and CMOS reset hotkey backlog
 
-- Recorded `F12` as an additional Warm Reset shortcut while retaining `Alt+Ctrl+Insert` for compatibility.
+- Recorded `F12` as an additional Warm Reset shortcut and `Alt+Ctrl+End` as the replacement for the unusable `Alt+Ctrl+Insert` shortcut on keyboards without Insert.
 - Recorded `Ctrl+F12` as a host-level CMOS reset command with confirmation, `.cmos` backup, documented defaults, persistence, and a follow-up machine reset.
 - Debugger-local F12 behavior (Stack/Breakpoints) must remain unchanged; no production code or runtime acceptance changed.
