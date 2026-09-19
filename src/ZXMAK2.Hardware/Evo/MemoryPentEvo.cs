@@ -25,6 +25,7 @@ namespace ZXMAK2.Hardware.Evo
 
         private byte m_pXXBF;   // port EVO EVO
         private byte m_pEFF7;   // port EVO MOD
+        private ushort m_breakpointAddress;
 
         // PentEvo can redirect a TR-DOS FDC access to a small handler stored
         // in RAM page #FE.  ERS uses this mechanism for mounted SCL/TRD images
@@ -103,6 +104,7 @@ namespace ZXMAK2.Hardware.Evo
             // so ROMs from either firmware family can restore their map.
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00BD, BusReadPortXXBD_BE_CFG);
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00BE, BusReadPortXXBD_BE_CFG);
+            bmgr.Events.SubscribeWrIo(0x00FF, 0x00BD, BusWritePortXXBD_CFG);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00BE, BusWritePortXXBE_FDD_EXIT);
         }
 
@@ -207,10 +209,10 @@ namespace ZXMAK2.Hardware.Evo
                 MapRead8000 = RomPages[romPage];
                 MapReadC000 = RomPages[romPage];
 
-                MapWrite0000 = m_trashPage;
-                MapWrite4000 = m_trashPage;
-                MapWrite8000 = m_trashPage;
-                MapWriteC000 = m_trashPage;
+                MapWrite0000 = ROMRW ? MapRead0000 : m_trashPage;
+                MapWrite4000 = ROMRW ? MapRead4000 : m_trashPage;
+                MapWrite8000 = ROMRW ? MapRead8000 : m_trashPage;
+                MapWriteC000 = ROMRW ? MapReadC000 : m_trashPage;
 
                 Map48[0] = -1;
                 Map48[1] = -1;
@@ -287,10 +289,12 @@ namespace ZXMAK2.Hardware.Evo
                 MapRead8000 = isRam2 ? RamPages[ramPage2] : RomPages[romPage2];
                 MapReadC000 = isRam3 ? RamPages[ramPage3] : RomPages[romPage3];
 
-                MapWrite0000 = isRam0 && (W0RAM0 || ((m_writeDisable >> index) & 1) == 0) ? MapRead0000 : m_trashPage;
-                MapWrite4000 = isRam1 && ((m_writeDisable >> index) & 2) == 0 ? MapRead4000 : m_trashPage;
-                MapWrite8000 = isRam2 && ((m_writeDisable >> index) & 4) == 0 ? MapRead8000 : m_trashPage;
-                MapWriteC000 = isRam3 && ((m_writeDisable >> index) & 8) == 0 ? MapReadC000 : m_trashPage;
+                MapWrite0000 = ((isRam0 && W0RAM0) ||
+                    ((isRam0 || ROMRW) && ((m_writeDisable >> index) & 1) == 0)) ?
+                    MapRead0000 : m_trashPage;
+                MapWrite4000 = (isRam1 || ROMRW) && ((m_writeDisable >> index) & 2) == 0 ? MapRead4000 : m_trashPage;
+                MapWrite8000 = (isRam2 || ROMRW) && ((m_writeDisable >> index) & 4) == 0 ? MapRead8000 : m_trashPage;
+                MapWriteC000 = (isRam3 || ROMRW) && ((m_writeDisable >> index) & 8) == 0 ? MapReadC000 : m_trashPage;
 
                 Map48[0] = isRam0 ? -1 : romPage0;
                 Map48[1] = isRam1 ? ramPage1 : -1;
@@ -675,6 +679,41 @@ namespace ZXMAK2.Hardware.Evo
             set { m_pXXBF = (byte)((m_pXXBF & ~4) | (value ? 4 : 0)); }
         }
 
+        [HardwareValue("ROMRW", Description = "Allow writes to mapped ROM pages through BF.D1")]
+        public bool ROMRW
+        {
+            get { return (m_pXXBF & 2) != 0; }
+            set { m_pXXBF = (byte)((m_pXXBF & ~2) | (value ? 2 : 0)); UpdateMapping(); }
+        }
+
+        [HardwareValue("NMIREQ", Description = "Latched BF.D3 NMI request; state machine pending B36")]
+        public bool NMIREQ
+        {
+            get { return (m_pXXBF & 8) != 0; }
+            set { m_pXXBF = (byte)((m_pXXBF & ~8) | (value ? 8 : 0)); }
+        }
+
+        [HardwareValue("BRKENA", Description = "Latched BF.D4 breakpoint enable; state machine pending B36")]
+        public bool BreakpointEnabled
+        {
+            get { return (m_pXXBF & 0x10) != 0; }
+            set { m_pXXBF = (byte)((m_pXXBF & ~0x10) | (value ? 0x10 : 0)); }
+        }
+
+        [HardwareValue("PAL444", Description = "Latched BF.D5 palette mode; renderer activation pending B38")]
+        public bool Palette444Enabled
+        {
+            get { return (m_pXXBF & 0x20) != 0; }
+            set { m_pXXBF = (byte)((m_pXXBF & ~0x20) | (value ? 0x20 : 0)); }
+        }
+
+        [HardwareValue("BRKADDR", Description = "BaseConf breakpoint address latch")]
+        public ushort BreakpointAddress
+        {
+            get { return m_breakpointAddress; }
+            set { m_breakpointAddress = value; }
+        }
+
         [HardwareValue("CMOSEN", Description = "Enable CMOS ports shadow independent")]
         public bool CMOSEN
         {
@@ -814,7 +853,15 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusReadPortXXBF_EVO(ushort addr, ref byte value, ref bool handled)
         {
-            value = (byte)((value & 0xF0) | (m_pXXBF & 0x0F));
+            if (handled)
+            {
+                return;
+            }
+            handled = true;
+            // base_trdemu zports.v: D7:D6 read as zero; D5:D0 are the
+            // complete configuration latch.  NMI/breakpoint/4:4:4 effects
+            // are activated by their dedicated later stages.
+            value = (byte)(m_pXXBF & 0x3F);
         }
 
         protected virtual void BusWritePortEFF7_MOD(ushort addr, byte value, ref bool handled)
@@ -836,7 +883,19 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusReadPortXXBD_BE_CFG(ushort addr, ref byte value, ref bool handled)
         {
-            switch ((addr >> 8) & 0x1F)
+            if (handled)
+            {
+                return;
+            }
+            var index = (addr >> 8) & 0x1F;
+            // #13BD belongs to the base_trdemu FDD-mask device.  Leave it
+            // available to FddPentEvo regardless of subscription order.
+            if (index == 0x13 && (addr & 0xFF) == 0xBD)
+            {
+                return;
+            }
+            handled = true;
+            switch (index)
             {
                 case 0x00:
                 case 0x01:
@@ -867,8 +926,47 @@ namespace ZXMAK2.Hardware.Evo
                         ((m_aFF77 & 0x0100) >> 3) |
                         (DOSEN ? 0x10 : 0));
                     break;
+                case 0x0D:
+                    value = m_ulaAtm != null ? m_ulaAtm.ReadConfigPalette() : (byte)0xFF;
+                    break;
+                case 0x0E:
+                    value = m_ulaAtm != null ? m_ulaAtm.ReadConfigFont() : (byte)0xFF;
+                    break;
+                case 0x0F:
+                    // RTL leaves the high nibble undefined.
+                    value = (byte)((value & 0xF0) |
+                        (m_ulaAtm != null ? m_ulaAtm.ReadConfigBorder() : 0));
+                    break;
+                case 0x10:
+                    value = (byte)m_breakpointAddress;
+                    break;
+                case 0x11:
+                    value = (byte)(m_breakpointAddress >> 8);
+                    break;
                 case 0x12:
                     value = m_writeDisable;
+                    break;
+            }
+        }
+
+        protected virtual void BusWritePortXXBD_CFG(
+            ushort addr,
+            byte value,
+            ref bool handled)
+        {
+            if (handled)
+            {
+                return;
+            }
+            switch ((addr >> 8) & 0x1F)
+            {
+                case 0x10:
+                    m_breakpointAddress = (ushort)((m_breakpointAddress & 0xFF00) | value);
+                    handled = true;
+                    break;
+                case 0x11:
+                    m_breakpointAddress = (ushort)((m_breakpointAddress & 0x00FF) | (value << 8));
+                    handled = true;
                     break;
             }
         }
@@ -878,13 +976,14 @@ namespace ZXMAK2.Hardware.Evo
             byte value,
             ref bool handled)
         {
-            if (handled || !m_fddIoRamActive)
+            if (handled)
             {
                 return;
             }
 
             // OUT (#BE),A is the documented return path from the page #FE
-            // virtual-drive handler.  The value itself is not significant.
+            // virtual-drive handler and the common clear strobe for the later
+            // NMI state machine.  The value itself is not significant.
             handled = true;
             ExitFddIoRam();
         }
@@ -945,6 +1044,7 @@ namespace ZXMAK2.Hardware.Evo
             m_pFF77 = 3;        // RESET: D3=0, D2..D0=011
             m_pXXBF = 0;        // RESET=0
             m_pEFF7 = 0;        // RESET=0
+            m_breakpointAddress = 0;
             DOSEN = CPM;
 
             CMR0 = 0;

@@ -54,6 +54,12 @@ You may also be interested about this emulator history:
 
 ## What's new
 
+### Current development build — B35
+
+- Completed the official BaseConf `#BF/#BD/#BE` configuration-register contract, including six-bit `#BF` readback, controlled ROM writes and palette/font/border/breakpoint register access.
+- Preserved the accepted B34 SD/HDD replacement path and exact virtual-FDD `#13BD` ownership. INT/NMI/breakpoint activation remains the next separate stage.
+- Automated Release and regression checks pass; runtime acceptance awaits user testing.
+
 ### ZX-Evo BaseConf Alpha 0.2 — B34
 
 - Reworked ZX-Evolution BaseConf emulation against the official r1364 documentation: memory paging, hardware ports, timing, interrupts, palette and all seven documented video modes.
@@ -66,6 +72,12 @@ You may also be interested about this emulator history:
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
 ## Что нового
+
+### Текущая тестовая сборка — B35
+
+- Завершён официальный контракт конфигурационных регистров BaseConf `#BF/#BD/#BE`: шестибитное чтение `#BF`, управляемая запись ROM и регистры палитры, шрифта, бордюра и breakpoint.
+- Сохранены принятая смена SD/HDD из B34 и точное владение virtual FDD портом `#13BD`. Активация INT/NMI/breakpoint остаётся отдельным следующим этапом.
+- Release-сборка и автоматические регрессии проходят; runtime-приёмка ожидает пользовательского теста.
 
 ### ZX Evo BaseConf Alpha 0.2 — B34
 

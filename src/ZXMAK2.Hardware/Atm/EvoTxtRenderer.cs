@@ -166,6 +166,34 @@ namespace ZXMAK2.Hardware.Atm
             m_ulaSgen[addr & 0x7FF] = value;
         }
 
+        public byte ReadFontOutput(int frameTact)
+        {
+            if (m_ulaAction == null || m_memoryPage == null || FrameLength <= 0)
+            {
+                return 0xFF;
+            }
+            var tact = frameTact % FrameLength;
+            if (tact < 0)
+            {
+                tact += FrameLength;
+            }
+            for (var offset = 0; offset < FrameLength; offset++)
+            {
+                var sample = tact - offset;
+                if (sample < 0)
+                {
+                    sample += FrameLength;
+                }
+                if (m_ulaAction[sample] != UlaAction.Paper)
+                {
+                    continue;
+                }
+                var symbol = m_memoryPage[m_ulaAddrTXT640BW[sample]];
+                return m_ulaSgen[(symbol << 3) + m_ulaAddrTXT640CG[sample]];
+            }
+            return 0xFF;
+        }
+
         #endregion
 
 

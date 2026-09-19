@@ -243,6 +243,34 @@ namespace ZXMAK2.Hardware.Atm
             EvoTxtRenderer.WriteSgen(addr, value);
         }
 
+        public byte ReadConfigPalette()
+        {
+            // zports.v BD_COLORRD exposes grbG11RB.  The existing ATM
+            // palette latch stores the corresponding --grbGRB value.
+            var color = m_atm_pal[m_borderAttr & 0x0F];
+            return (byte)(((color & 0x38) << 2) |
+                ((color & 0x04) << 2) | 0x0C | (color & 0x03));
+        }
+
+        public byte ReadConfigFont()
+        {
+            var tact = GetCurrentFrameTact() / FrameTactMultiplier;
+            if (Renderer == AtmTxtRenderer)
+            {
+                return AtmTxtRenderer.ReadFontOutput(tact);
+            }
+            if (Renderer == EvoTxtRenderer)
+            {
+                return EvoTxtRenderer.ReadFontOutput(tact);
+            }
+            return 0xFF;
+        }
+
+        public byte ReadConfigBorder()
+        {
+            return (byte)(m_borderAttr & 0x0F);
+        }
+
         private void InitStaticTables()
         {
             // atm palette mapping (port out to palette index)

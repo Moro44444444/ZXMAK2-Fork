@@ -1145,3 +1145,23 @@ ROM или прикладного теста, отдельно помечены 
 - Архив `ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip` содержит 45 файлов, размер `3386668` байта, SHA-256 `21A1E905FBF5DF5E4B980BBA3DCE9E8E7E27D777723C187E36146031AC26F6DD`.
 - Public-копия построена из B34 отдельно от полного runtime. Исключены `.cmos`, `.vmide`, образы носителей, логи, PDB, внутренние reports и абсолютные локальные пути; `log4net.config` исправлен на относительный путь. До запуска список ZIP точно совпал со списком publish-copy. Чистая распаковка успешно запустила `ZXMAK2.exe`; созданный после запуска `.vmide` — штатное пользовательское состояние и в ZIP не входит.
 - README обновлён на двуязычные ссылки Alpha 0.2 и отражает B34 повторную замену носителей. Публикация не расширяет runtime-приёмку: это отдельный проверенный пользователем факт для B34, а не новая проверка Alpha 0.2.
+
+## Пользовательская runtime-приёмка B34 — принято — 2026-09-19
+
+- Пользователь проверил повторную смену SD и HDD в разных направлениях, включая переход карта→HDD и HDD→карта. Носители после cold power-cycle определяются и читаются; зависание при второй замене не воспроизводится.
+- ERS File Browser корректно предлагает Master HDD или SD Card, когда подключены оба носителя. Клавиша `D` и выбор обоих источников работают.
+- Приёмка относится к исправлению lifecycle смены носителей B34. Она не означает приёмку автоматической загрузки NedoOS через `B.HDD boot`, будущего SD Eject/persistence или CD/ATAPI.
+
+## ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210 — конфигурационные порты `#BF/#BD/#BE`
+
+- Этап взят строго из утверждённого `BASECONF_AUDIT_B32.md`; из-за уже занятого номера B34 он выпущен как B35. Следующий INT/NMI/breakpoint этап сюда не смешивался.
+- `#BF` теперь возвращает весь официальный шестибитный latch: D0 shadow, D1 ROM write, D2 font write, D3 set NMI, D4 breakpoint enable, D5 palette 4:4:4; D7:D6 равны нулю. D3/D4/D5 в B35 только сохраняются: NMI/breakpoint state machine и 4:4:4 renderer будут отдельными этапами.
+- D1 подключён к карте записи ROM согласно `romwe_n`: запись разрешается только для реально отображённой ROM и блокируется существующим `wrdisable` соответствующего окна.
+- В `#BD` завершены индексы `0D` palette readback, `0E` font output, `0F` border, `10/11` breakpoint low/high и сохранён `12` write-disable. `10/11` получили запись адреса breakpoint; само срабатывание breakpoint не включено.
+- `#13BD` намеренно оставлен точному `FddPentEvo`, поэтому принятые B29/B31 Rage/NedoOS virtual-FDD path не перехватываются. `#BE` остаётся выходом из page `#FE` handler и декодируется также в неактивном состоянии как будущий общий clear; совместимый read alias `#xxBE` сохранён для старых ERS.
+- Font readback реализован как сохранённый последний разрешённый выход font RAM активного ATM/BaseConf text renderer; состояние и фаза renderer при чтении не изменяются.
+- Перед правкой создан полный checkpoint `backup/ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-before-20260919-170627`. Первая Release-сборка прошла без ошибок; два прежних missing-ruleset warning сохранены.
+- Новый compiled `ConfigPortProbe-B35` прошёл 539 проверок. Регрессии: B34 media 33, IDE media 10, IDE ports 786, FDD 14, Rage SCL 113, B30 timing 12748, video controller 321, palette 1807, TRD 655922, audio 19, DirectSound 16 — PASS.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210\release`; after-checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-after-20260919-172210`. Подробности: `B35_RESULT.md`.
+- Portable ZIP содержит 89 файлов и побайтово проверен 89/89; SHA-256 `2D9D45D7570FD9C30E77E7E6181C15A9B5C06847056CADB3A29E699A3D07E2D8`. Профиль канонический 924 байта, пользовательских `.cmos/.nvram/.vmide/.log` нет.
+- Runtime-приёмка B35 не заявляется. Пользователю нужен smoke NedoOS, Rage одним коротким Enter, принятый B30 border/multicolor, Bad Apple, звук и повторная смена SD/HDD.

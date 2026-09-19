@@ -955,3 +955,15 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - The attached portable archive is `ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip`: 45 files, `3386668` bytes, SHA-256 `21A1E905FBF5DF5E4B980BBA3DCE9E8E7E27D777723C187E36146031AC26F6DD`.
 - It was built as a minimized copy of B34: no `.cmos`, `.vmide`, media, logs, PDBs, internal reports or absolute local paths; `log4net.config` is relative. The exact archive list matched the publish copy before launch; clean extraction started `ZXMAK2.exe` successfully and only then generated the expected per-user `.vmide`.
 - Public release: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.2-alpha`. README download links now target Alpha 0.2. Publishing the artifact does not add a new runtime-acceptance claim.
+
+### B34 runtime — accepted
+
+- The user confirmed repeated SD/HDD replacement, cross-switching between both media types and ERS File Browser selection of Master HDD or SD Card. The second-change hang is closed in the tested scope; automatic HDD OS boot remains separate.
+
+## 2026-09-19 — B35: BaseConf configuration ports `#BF/#BD/#BE`
+
+- Completed the official six-bit `#BF` latch/readback. BF.D1 now enables writes to mapped ROM under the existing per-window write-disable mask; D3/D4/D5 are latched without prematurely activating NMI, breakpoint or 4:4:4 rendering.
+- Completed `#BD` palette, font, border, breakpoint-address and write-disable readback; added writes for breakpoint low/high bytes. Preserved legacy `#xxBE` reads and exact `#13BD` ownership by `FddPentEvo`.
+- `#BE` remains the page-`#FE` virtual-FDD return/clear strobe and is decoded consistently while inactive. B34 media lifecycle, IDE, SD, audio and video logic were not redesigned.
+- Release build PASS. Compiled checks: B35 config ports 539, B34 media 33, IDE 10/786, FDD/Rage 14/113, video 12748/321/1807/655922, audio 19/16.
+- Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210\release`; verified 89-file ZIP SHA-256 `2D9D45D7570FD9C30E77E7E6181C15A9B5C06847056CADB3A29E699A3D07E2D8`. Runtime acceptance remains pending the user's regression smoke test.
