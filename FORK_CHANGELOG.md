@@ -903,3 +903,12 @@ CSD/OCR и поэтому считали такую карту отсутств�
 
 - Пользователь подтвердил работу HDD-контроллера: подключение образа, чтение носителя, просмотр FAT-содержимого и запуск файла с HDD работают.
 - Автоматическая загрузка конкретной ОС через `B.HDD boot` будет настраиваться позднее и не блокирует приёмку контроллера. Повторная смена SD/HDD остаётся отдельным дефектом B34.
+
+## 2026-09-19 — B34: safe repeated SD/HDD replacement
+
+- SD replacement now remains inside one stopped-VM transaction: close/open, cold power-cycle, then a single resume. Cancel and failure preserve the prior running state.
+- PentEvo HDD insert, replacement, eject, read-only change or geometry change is detected during Machine Settings Apply. The existing bus reconnect automatically closes the old image and opens the new one; a cold power-cycle completes before resume, so manual Eject is not required before selecting another image.
+- PentEvo/Nemo IDE hardware reset now clears all five byte/word adapter latches and hard-resets the ATA master/slave state. B33 port decode and the ATA data path are unchanged.
+- Release build PASS. Compiled checks: B34 media swap 33, IDE media 10, IDE ports 786, FDD 14, video timing 12748, palette 1807, TRD 655922, Rage SCL 113, audio 19, DirectSound 16.
+- Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-20260919-140643\release`; portable ZIP SHA-256 `FB96133BCDB4451B5DA2912DD7D1A2BF62F4D5738AF15CF7CD726A5BC9E3F245`.
+- Runtime acceptance remains pending the user's same-process SD A→B→A and HDD A→B→A tests. Automatic NedoOS HDD boot remains out of scope.

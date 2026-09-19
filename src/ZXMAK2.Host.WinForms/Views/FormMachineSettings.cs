@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.IO;
 using System.Xml;
 using System.Drawing;
 using System.Windows.Forms;
@@ -14,6 +15,7 @@ using ZXMAK2.Host.Presentation.Interfaces;
 using ZXMAK2.Host.Entities;
 using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
 using ZXMAK2.Host.WinForms.Tools;
+using ZXMAK2.Hardware.Evo;
 
 
 namespace ZXMAK2.Host.WinForms.Views
@@ -617,6 +619,10 @@ namespace ZXMAK2.Host.WinForms.Views
                     return;
                 }
 
+                var ideMediaChanged = IsIdeMediaChanged(
+                    m_vm.Bus.FindDevice<IdePentEvo>(),
+                    m_workBus.FindDevice<IdePentEvo>());
+
                 if (!m_workBus.Connect())
                 {
                     Locator.Resolve<IUserMessage>()
@@ -643,7 +649,14 @@ namespace ZXMAK2.Host.WinForms.Views
                 ula = bmgr.FindDevice<IUlaDevice>();
                 ula.PortFE = (byte)portFE;
                 var memory = bmgr.FindDevice<IMemoryDevice>();
-                if (memory != oldMemory)
+                if (ideMediaChanged)
+                {
+                    // LoadConfigXml disconnects the old ATA image before it
+                    // opens the replacement. Complete that transaction with
+                    // a cold machine start while the VM is still stopped.
+                    m_vm.DoPowerCycle();
+                }
+                else if (memory != oldMemory)
                     m_vm.DoReset();
 
                 m_vm.SaveConfig();
@@ -658,6 +671,40 @@ namespace ZXMAK2.Host.WinForms.Views
                 m_workBus.Disconnect();
                 Locator.Resolve<IUserMessage>()
                     .Error("Apply failed!\n\n{0}", ex.Message);
+            }
+        }
+
+        private static bool IsIdeMediaChanged(
+            IdePentEvo currentDevice,
+            IdePentEvo pendingDevice)
+        {
+            if (currentDevice == null || pendingDevice == null)
+                return currentDevice != pendingDevice;
+
+            var current = currentDevice.HardDisk;
+            var pending = pendingDevice.HardDisk;
+            return !string.Equals(
+                       NormalizeMediaPath(current.FileName),
+                       NormalizeMediaPath(pending.FileName),
+                       StringComparison.OrdinalIgnoreCase) ||
+                   current.ReadOnly != pending.ReadOnly ||
+                   current.Cylinders != pending.Cylinders ||
+                   current.Heads != pending.Heads ||
+                   current.Sectors != pending.Sectors ||
+                   current.Lba != pending.Lba;
+        }
+
+        private static string NormalizeMediaPath(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return string.Empty;
+            try
+            {
+                return Path.GetFullPath(fileName.Trim());
+            }
+            catch
+            {
+                return fileName.Trim();
             }
         }
 

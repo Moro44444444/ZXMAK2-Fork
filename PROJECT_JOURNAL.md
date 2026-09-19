@@ -1057,3 +1057,14 @@ ROM или прикладного теста, отдельно помечены 
 - Пользователь подтвердил работу HDD-контроллера в проверенном объёме: образ подключается, контроллер читает носитель, FAT-содержимое доступно в ERS File Browser, запуск файла с HDD работает.
 - Настройка автоматической загрузки конкретной ОС через `B.HDD boot` вынесена на будущее и не является критерием приёмки самого HDD-контроллера.
 - Открытым дефектом медиапути остаётся только повторная замена SD/HDD в одном процессе эмулятора; это отдельная задача B34.
+
+## ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-20260919-140643 — безопасная повторная замена SD/HDD
+
+- Причина повторной SD-замены локализована в `MainViewModel.ExecuteMediaChange`: после успешного close/open поток VM возобновлялся до reset, а затем выполнялся только warm reset. Теперь VM остаётся остановленной до завершения `DoPowerCycle`; после отмены или ошибки прежнее running/paused состояние сохраняется.
+- HDD Machine Settings ранее штатно закрывал и заново открывал ATA image через `BusManager.LoadConfigXml`, но продолжал выполнение без cold-cycle, а пять 8/16-bit защёлок Nemo IDE могли пережить замену. Теперь активный и pending HDD сравниваются по пути, read-only и CHS/LBA; insert, A→B, Eject и смена режима завершаются cold power-cycle до единственного resume.
+- `IdePentEvo.BusReset` теперь обнуляет `m_ide_write`, обе write-phase защёлки, read-phase и retained high byte, затем вызывает hard reset ATA master/slave. Декодирование официальных портов B33, ATA data path и геометрия B33-R1 не менялись.
+- `ZsdPentEvo` не изменялся: в нём уже были stop-safe close-old/open-new, reset SPI state и rollback к прежнему образу при ошибке. B34 исправляет окружающий lifecycle VM.
+- Полная Release solution собрана: 0 ошибок, два прежних missing-ruleset warnings. Новый `MediaSwapProbe-B34` — 33 PASS. Регрессии: IDE media 10, IDE ports 786, FDD 14, B30 timing 12748, palette 1807, TRD 655922, Rage SCL 113, audio 19, DirectSound 16 — PASS.
+- Неизменность подтверждена для PentEvo memory/ULA/SD implementation, AY и Engine BusManager. Checkpoints: до правки `backup/ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-before-20260919-135901`; после правки с source snapshot и runtime `backup/ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-after-20260919-140643`.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-MEDIASWAP-B34-20260919-140643\release`; ZIP рядом, SHA-256 `FB96133BCDB4451B5DA2912DD7D1A2BF62F4D5738AF15CF7CD726A5BC9E3F245`. Распаковка сверена 86/86, state/media-файлов нет, профиль канонический 924 байта.
+- Runtime-приёмка не заявляется. Пользователь должен проверить SD A→B→A и HDD A→B→A без ручного Eject в одном процессе, отдельный Eject→insert и smoke NedoOS/Rage/B30/Bad Apple/audio. Автоматический `B.HDD boot` NedoOS по-прежнему отложен.

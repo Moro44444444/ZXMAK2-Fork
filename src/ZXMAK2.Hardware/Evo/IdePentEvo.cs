@@ -175,6 +175,15 @@ namespace ZXMAK2.Hardware.Evo
 
         protected virtual void BusReset()
         {
+            // A hardware reset also resets the 8/16-bit Nemo IDE adapter
+            // latches. Keeping a half-word phase across an image replacement
+            // corrupts the first ATA command issued to the new disk.
+            m_ide_write = 0;
+            m_ide_hi_byte_w = 0;
+            m_ide_hi_byte_w1 = 0;
+            m_ide_hi_byte_r = 0;
+            m_ide_read = 0;
+            m_ata.Reset();
         }
 
         protected virtual void WriteIde(ushort addr, byte value, ref bool handled)

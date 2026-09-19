@@ -100,6 +100,15 @@ namespace ZXMAK2.Host.Presentation
                 }
 
                 command.Execute(commandParameter);
+
+                if (succeeded && m_vm != null)
+                {
+                    // Keep the VM stopped until the replacement is complete.
+                    // A PentEvo cold start clears firmware media state kept in
+                    // RAM; resuming before this point leaves the second image
+                    // attached to the first image's initialized state.
+                    m_vm.DoPowerCycle();
+                }
             }
             finally
             {
@@ -108,14 +117,6 @@ namespace ZXMAK2.Host.Presentation
                 {
                     m_vm.DoRun();
                 }
-            }
-
-            if (succeeded && m_vm != null)
-            {
-                // Use the same running-VM reset path as the toolbar command.
-                // VirtualMachine.DoReset performs its own stop/reset/restart
-                // transaction and keeps PentEvo reset timing consistent.
-                m_vm.DoReset();
             }
         }
         
