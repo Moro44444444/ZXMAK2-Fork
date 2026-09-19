@@ -978,4 +978,9 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Implemented falling-edge BF.D3 deferred NMI at the next `int_start`, immediate M1-address breakpoint NMI, forced NOP at `#0066`, and the following transition to RAM page `#FF`.
 - Page `#FF` now overrides virtual-FDD page `#FE` during NMI. `#BE` retains the underlying FDD state and removes `#FF` only after two following M1 fetches; the accepted normal FDD-exit path is unchanged.
 - Release build PASS. Compiled checks: B36 INT/NMI 41, B35 config 539, B34 media 33, IDE 10/786, FDD/Rage 14/113, video 12748/321/1807/655922, audio 19/16.
-- Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-20260919-181135\release`; verified 92-file ZIP SHA-256 `B87C7FDC415E5F77DB35EFCA5D9143B9EEA3326A78E9600EB1323DC4EE332656`. Runtime acceptance remains pending the user's regression and manual-NMI test.
+- Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-20260919-181135\release`; verified 92-file ZIP SHA-256 `B87C7FDC415E5F77DB35EFCA5D9143B9EEA3326A78E9600EB1323DC4EE332656`.
+
+### B36 runtime regression — accepted
+
+- The user reported that all previously working visible scenarios continue to work and found no regression. This accepts B36 as regression-safe in the observed scope.
+- The INT/NMI/breakpoint transitions were not directly exercised by a visible application-level test; their contract remains covered by the 41-check compiled probe.

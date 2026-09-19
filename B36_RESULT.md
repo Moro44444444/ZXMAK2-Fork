@@ -34,4 +34,4 @@ B36 is the isolated INT/NMI/breakpoint stage from the canonical B32 audit, renum
 
 ## Runtime acceptance
 
-Pending the user's test. Automated probes do not claim that NedoOS, Rage, border/multicolor, Bad Apple, sound, IDE/SD/FDD replacement or manual NMI are runtime-accepted in B36.
+The user completed a general B36 regression smoke test and reported that the previously working scenarios still behave as before, with no visible regressions. B36 is accepted as regression-safe in this observed scope. The new INT/NMI/breakpoint transitions were not exercised by a dedicated visible application test and remain verified by the 41-check compiled probe rather than claimed as direct runtime observation.

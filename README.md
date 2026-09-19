@@ -58,7 +58,7 @@ You may also be interested about this emulator history:
 
 - Implemented the official BaseConf frame-INT acknowledge and INT counter pause contract.
 - Added frame-aligned and breakpoint-triggered NMI, the `#0066` NOP transition, RAM page `#FF`, and delayed `#BE` exit while preserving virtual-FDD page `#FE`.
-- Full automated regression passes; B36 runtime acceptance still requires the user's test.
+- Full automated regression passes, and the user found no visible regression in the established runtime scenarios. Direct INT/NMI behavior remains probe-verified rather than application-tested.
 
 ### ZX-Evo BaseConf Alpha 0.2 — B34
 
@@ -77,7 +77,7 @@ Known Alpha limitations: automatic OS boot from HDD is still being investigated;
 
 - Реализованы документированные подтверждение кадрового INT и пауза его счётчика внешним WAIT.
 - Добавлены кадровый и breakpoint-NMI, NOP на `#0066`, RAM-страница `#FF` и задержанный выход через `#BE` с сохранением virtual-FDD страницы `#FE`.
-- Полная автоматическая регрессия проходит; runtime-приёмка B36 ожидает пользовательского теста.
+- Полная автоматическая регрессия проходит; пользователь не обнаружил видимых регрессий в прежних сценариях. Сам INT/NMI подтверждён probe, но не отдельным прикладным тестом.
 
 ### ZX Evo BaseConf Alpha 0.2 — B34
 

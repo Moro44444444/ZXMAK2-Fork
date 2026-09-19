@@ -18,6 +18,8 @@ Bad Apple, sound, SD/HDD replacement, IDE file access and the manual NMI command
 Проверьте NedoOS, Rage одним коротким Enter, border/multicolor B30,
 Bad Apple, звук, смену SD/HDD, файлы IDE и ручную команду NMI.
 
-This is a test build. Runtime acceptance is pending.
-Это тестовая сборка; runtime-приёмка ожидает пользовательской проверки.
+The established runtime scenarios passed the user's regression smoke test.
+Direct INT/NMI behavior remains probe-verified rather than application-tested.
 
+Прежние runtime-сценарии прошли пользовательский регрессионный smoke-тест.
+Сам INT/NMI подтверждён probe, но не отдельным прикладным тестом.

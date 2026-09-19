@@ -1180,5 +1180,9 @@ ROM или прикладного теста, отдельно помечены 
 - Before-checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-before-20260919-175343/snapshot`. Visual Studio 2022 MSBuild 17.14.51: 23 Release-проекта, 0 ошибок, два прежних missing-ruleset warning.
 - Новый `InterruptNmiProbe-B36` прошёл 41 проверку. Регрессии: B35 config 539, B34 media 33, IDE 10/786, FDD/Rage 14/113, видео 12748/321/1807/655922, звук 19/16 — PASS.
 - Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-20260919-181135\release`; after-checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-INTNMI-B36-after-20260919-181135`. ZIP проверен после чистой распаковки: 92/92 файла, SHA-256 `B87C7FDC415E5F77DB35EFCA5D9143B9EEA3326A78E9600EB1323DC4EE332656`. Подробности: `B36_RESULT.md`.
-- Runtime-приёмка B36 не заявляется. Пользователю нужен smoke NedoOS, Rage одним коротким Enter, B30 border/multicolor, Bad Apple, звук, повторная смена SD/HDD, IDE-файлы и ручная команда NMI.
+
+### Пользовательская runtime-приёмка B36 — регрессия принята
+
+- Пользователь провёл общий визуальный smoke-тест и сообщил, что всё ранее работавшее продолжает работать как прежде; видимых регрессий не обнаружено.
+- Это подтверждает сохранность принятого поведения B01–B35. Специального прикладного теста новых INT/NMI/breakpoint-переходов не было: они подтверждены compiled-probe на 41 проверку, но не объявляются отдельно наблюдавшимися в runtime.
 - Следующий отдельный пункт утверждённого B32-плана выпускается как B37: WAIT-транзакции AVR/gluclock и COM, DOS settling stall и оставшиеся встроенные порты. B36 с ним не смешивается.

@@ -139,7 +139,7 @@ The technical order above remains canonical. Build numbers moved by one after a 
 - Nemo IDE decode: completed in B33/B33-R1;
 - safe repeated SD/HDD replacement: inserted and accepted as B34;
 - configuration ports `#BF/#BD/#BE`: completed and runtime-smoked in B35;
-- INT/NMI/breakpoint state machines: implemented in B36; runtime acceptance pending;
+- INT/NMI/breakpoint state machines: implemented in B36; general regression smoke accepted, dedicated visible INT/NMI test not performed;
 - next hardware stage: WAIT transactions and remaining built-in ports (build B37).
 
 ## B32 conclusion
