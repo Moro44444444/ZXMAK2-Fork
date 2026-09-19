@@ -158,6 +158,91 @@ The technical order above remains canonical. Build numbers moved by one after a 
 - INT/NMI/breakpoint state machines: implemented in B36; general regression smoke accepted, dedicated visible INT/NMI test not performed;
 - next hardware stage: WAIT transactions and remaining built-in ports (build B37).
 
+## Fixed implementation contract for B37–B39
+
+The order and boundaries below are mandatory. Each build gets its own before
+checkpoint, focused compiled probe, full B01–B36 regression run, runtime
+package and journal entry. A successful build or probe does not constitute user
+runtime acceptance.
+
+### B37 — WAIT transactions and remaining built-in ports
+
+Scope:
+
+1. Implement the official AVR/gluclock transactions for the documented
+   `#DFF7/#DEF7` address and `#BFF7/#BEF7` data families. A transaction must
+   assert WAIT until the AVR-side reply at the same bus-cycle boundary used by
+   the r1364 RTL.
+2. Implement the documented COM/RS232 AVR family `#F8EF..#FFEF`, including its
+   read/write selection, returned data and WAIT-until-reply lifecycle.
+3. Add the short DOS-map settling stall at the documented transition edge;
+   do not replace it with an instruction-level `CPU.Tact` correction.
+4. Resolve overlap and release order of the existing memory/video/external-I/O
+   WAIT sources at Z80 pin edges. Only the official external WAIT source may
+   pause the B36 frame-INT counter.
+5. Complete any remaining built-in port aliases that are inseparable from
+   these transactions, based only on r1364 decode equations.
+
+Required checks:
+
+- exhaustive port-alias/read-write probe for gluclock and COM;
+- WAIT assert/release and overlapping-source edge vectors;
+- DOS-entry stall and B36 INT pause/acknowledge vectors;
+- full established memory, FDD/Rage/NedoOS, IDE/media, video and audio
+  regression suite;
+- user runtime smoke before B37 can be called accepted.
+
+Explicitly excluded from B37: Kempston joystick, tape/beeper mux, ULAplus,
+4:4:4 palette, contention/floating bus, ZX-BUS and CD/ATAPI.
+
+### B38 — built-in input and audio completion
+
+Scope:
+
+1. Add the BaseConf Kempston joystick with the official bit width and decode;
+   preserve VG93 ownership of the overlapping low-byte family in Shadow/DOS.
+2. Complete tape-in on the documented keyboard reads `xxFE/xxF6`.
+3. Complete tape-out and the hardware-controlled beeper/tape source mux without
+   changing the accepted AY, Covox, DirectSound and RejectDC paths.
+4. Verify reset/default state and machine-profile wiring for these built-in
+   devices. Do not introduce a ZX-BUS card as a substitute.
+
+Required checks:
+
+- exhaustive normal-versus-Shadow port arbitration probe;
+- keyboard+tape and joystick bit vectors, reset and mux-transition vectors;
+- audio baseline/DirectSound regression and silence/DC measurements;
+- runtime checks for joystick, tape where a suitable image exists, normal
+  music/sound, Rage/NedoOS and the accepted B30 border/multicolor scene.
+
+Explicitly excluded from B38: ULAplus, 4:4:4 palette, final contention/video
+certification, ZX-BUS and CD/ATAPI.
+
+### B39 — ULAplus and official 4:4:4 palette
+
+Scope:
+
+1. Implement BaseConf ULAplus on low byte `#3B`, with register/data selection,
+   read/write behavior and address/control gating taken from r1364.
+2. Activate the already latched `#BF.D5` official `base_trdemu` 4:4:4 palette
+   extension, including the documented address-derived low color bits.
+3. Implement both features as overlays in `UlaPentEvo`; do not attach a second
+   generic ULA and do not alter unrelated machine profiles.
+4. Preserve palette state/readback, border behavior and deterministic
+   mid-frame changes across all seven existing BaseConf renderer routes.
+
+Required checks:
+
+- register, palette RAM, reset and readback vectors;
+- golden color vectors for ULAplus and 4:4:4 in all affected renderers;
+- mid-frame palette/mode transition vectors;
+- complete B30 border/multicolor and B23 palette regression plus the full
+  B01–B38 suite;
+- separate user visual runtime acceptance. Probe output alone is insufficient.
+
+Explicitly excluded from B39: final contention/floating-bus certification,
+unconfirmed VG93 changes, ZX-BUS and CD/ATAPI. Those remain B40 or later.
+
 ## B32 conclusion
 
 B36 is the current continuation point and must not be rolled back. The next
