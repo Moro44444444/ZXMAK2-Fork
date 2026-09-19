@@ -948,3 +948,10 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Public GitHub portable ZIPs must exclude user-generated `.cmos` and `.vmide` files, media images, logs, temporary files and absolute local paths. A `.vmz` may be included only as a clean, reproducible machine profile without mounted media.
 - Only the publish-copy may be minimized after a successful full build: remove `.pdb`, optional third-party XML documentation and internal build/result reports, but retain executable/config/DLL/ROM/PAK/profile/license dependencies. Preserve the full local diagnostic output unchanged and validate the minimized ZIP after clean extraction.
 - The package must be checked after clean extraction before publishing. Windows Open-dialog folder history is external per-user state and is not a release artifact.
+
+## 2026-09-19 — GitHub prerelease Alpha 0.2
+
+- Tag `v0.2-alpha` points to commit `250191d05b092425836dfcf8eef7d4fb388b257a` and is published as the public pre-release `ZX-Evo BaseConf Alpha 0.2`.
+- The attached portable archive is `ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip`: 45 files, `3386668` bytes, SHA-256 `21A1E905FBF5DF5E4B980BBA3DCE9E8E7E27D777723C187E36146031AC26F6DD`.
+- It was built as a minimized copy of B34: no `.cmos`, `.vmide`, media, logs, PDBs, internal reports or absolute local paths; `log4net.config` is relative. The exact archive list matched the publish copy before launch; clean extraction started `ZXMAK2.exe` successfully and only then generated the expected per-user `.vmide`.
+- Public release: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.2-alpha`. README download links now target Alpha 0.2. Publishing the artifact does not add a new runtime-acceptance claim.
