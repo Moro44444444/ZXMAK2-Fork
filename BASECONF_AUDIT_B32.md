@@ -40,12 +40,12 @@ Accepted B31 runtime observations remain the regression floor:
 | SD | normal `xx77/xx57`, shadow split of `xx57` by `A15` | implemented, including buffered reads | previously tested; exact SPI edge timing not certified |
 | VG93 | `#1F/#3F/#5F/#7F/#FF` in shadow; `base_trdemu` drive mask | implemented; B29/B31 virtual-FDD path accepted | preserve as regression floor |
 | `#13BD` | low four bits select drives handled by virtual FDD | implemented | accepted by Rage/NedoOS tests |
-| Nemo IDE | even families `x10` and `x08`, high data byte only at `#11`, alternate status `#C8` | mask `(addr & #1E)==#10` misses the `x08` family except `#C8` and accepts invalid odd aliases | **confirmed decode defect** |
+| Nemo IDE | even families `x10` and `x08`, high data byte only at `#11`, alternate status `#C8` | exact decoder implemented in B33; media UI completed in B33-R1 | implemented; HDD/FAT runtime accepted |
 | Gluclock/CMOS | `#DFF7/#DEF7` address, `#BFF7/#BEF7` data; transaction holds WAIT until AVR reply | functional address/data subset exists | port function partial; WAIT handshake absent |
 | COM/AVR | `#F8EF..#FFEF`, WAIT until AVR reply | no device/handler | missing |
-| `#BF` system | D0 shadow, D1 ROM write, D2 font write, D3 NMI request, D4 breakpoint enable; `base_trdemu` adds D5 4:4:4 palette | only D0 and D2 have behavior; readback is truncated to low nibble | partial |
-| `#BD` config | indices `00..13`: pages, flags, latches, palette/font/border, breakpoint, write-disable, FDD mask | `00..0C`, `12`, and FDD `13` exist | `0D..11` missing; breakpoint writes missing |
-| `#BE` | in `base_trdemu`: write clears NMI/virtual-FDD state; no config read | write exits virtual-FDD state; compatibility config read also accepted | NMI behavior partial; extra read alias is non-normative |
+| `#BF` system | D0 shadow, D1 ROM write, D2 font write, D3 NMI request, D4 breakpoint enable; `base_trdemu` adds D5 4:4:4 palette | full latch/readback and D1/D3/D4 behavior implemented in B35/B36; D5 is latched | partial only until D5 renderer work |
+| `#BD` config | indices `00..13`: pages, flags, latches, palette/font/border, breakpoint, write-disable, FDD mask | complete through B35/B36, including breakpoint address and existing FDD `13` | implemented; compiled probes pass |
+| `#BE` | in `base_trdemu`: write clears NMI/virtual-FDD state; no config read | B36 implements delayed NMI clear and preserves accepted virtual-FDD behavior; compatibility read alias retained | implemented with documented compatibility alias |
 | ULAplus | low byte `#3B`, register/data selected by `A14` | absent from PentEvo machine | missing documented built-in function |
 | Kempston mouse | `#FADF/#FBDF/#FFDF` | implemented | conforms structurally |
 | Kempston joystick | eight bits in `base_trdemu` | no joystick device in machine profile | missing |
@@ -57,13 +57,15 @@ The emulator-only `#2F/#4F/#6F/#8F` handlers are the host/ERS communication mech
 
 The main ATM/BaseConf paging equations, two maps, `#7FFD`, `#EFF7`, four 16 KiB windows, up to 4 MiB RAM, 512 KiB ROM limit, refresh-latched CPU clock selection, page-`#FE` virtual-FDD entry, and B31 write-protection lifecycle are implemented and have compiled probes.
 
-Open differences:
+Status after B36:
 
-1. `#BF.D1` ROM-write enable is not implemented.
-2. The official NMI path temporarily executes `#0066` from ROM, injects a zero byte there, then maps RAM page `#FF` into `0000-3FFF`; this state machine is absent.
-3. Breakpoint address registers and M1-match immediate NMI are absent.
-4. `#BE` clear in RTL is delayed across refresh edges; the current virtual-FDD exit is a narrower software approximation.
-5. DOS-entry switching includes a short hardware stall while the ROM mapping settles; exact edge placement is not certified.
+1. `#BF.D1` ROM-write enable was implemented in B35.
+2. B36 implements the official `#0066` injected NOP, RAM page `#FF`,
+   breakpoint address/M1 match and delayed `#BE` exit as one state machine.
+3. Page `#FE` virtual FDD priority and restoration remain covered by regression
+   probes and the accepted Rage/NedoOS path.
+4. The remaining memory-map timing item is the short DOS-entry settling stall;
+   its exact edge placement belongs to B37.
 
 ## Interrupts, reset, WAIT, and timing
 
@@ -71,11 +73,17 @@ Open differences:
 
 The official frame INT starts at `int_start`, lasts up to 256 master clocks (32 base CPU tacts), pauses its counter while WAIT is active, and is released early on CPU interrupt acknowledge (`!IORQ && !M1` at the negative CPU edge).
 
-Current ULA uses the correct nominal 32-base-tact window and documented raster origin, but does not model early acknowledge release or WAIT-paused pulse length. Status: **partial**.
+Since B36 the ULA models the nominal 256-master-clock window, early interrupt
+acknowledge release and a pause input for the official external WAIT source.
+The state machine is compiled-probe verified. Actual AVR/COM WAIT producers are
+still absent until B37, so their runtime coupling is not yet accepted.
 
 ### NMI and breakpoint
 
-The official deferred frame-aligned NMI request, immediate breakpoint NMI, `#0066` transition, RAM page `#FF`, and delayed `#BE` exit are not represented as one hardware state machine. Status: **missing**.
+B36 implements deferred frame-aligned NMI, immediate breakpoint NMI, the
+`#0066` transition, RAM page `#FF` and delayed `#BE` exit as one hardware state
+machine. It passed its compiled probe; no dedicated application-visible
+runtime test has been performed.
 
 ### CPU/DRAM/IO timing
 
@@ -116,20 +124,28 @@ B30/B31 user testing accepts border/multicolor output. Remaining video work is c
 - exact mid-frame mode/raster transitions;
 - ULAplus;
 - `base_trdemu` 4:4:4 palette extension (`#BF.D5` and address-derived low color bits);
-- INT acknowledge and contention coupling;
+- contention coupling around the already implemented B36 INT acknowledge;
 - floating-bus behavior.
 
 ## Ordered correction plan after B32
 
 Each item is a separate checkpoint with compiled/static probes plus user runtime testing. A later item must not be folded into an earlier one.
 
-1. **B33 — Nemo IDE decode only.** Replace the broad/wrong mask with the exact r1364 `x10/x08/#11/#C8` set. No memory, video, FDD, or timing changes.
-2. **B34 — configuration-port contract.** Complete `#BF/#BD/#BE` read/write decoding and readback without yet activating NMI or ULAplus behavior. Remove or explicitly quarantine the non-normative `#BE` config-read alias only after boot compatibility tests.
-3. **B35 — INT/NMI/breakpoint state machines.** Add early INT acknowledge, WAIT-paused INT duration, frame-aligned/immediate NMI, `#0066`, page `#FF`, breakpoint registers, and delayed clear as one documented unit.
-4. **B36 — WAIT transactions and remaining built-in ports.** AVR gluclock WAIT, `#F8EF..#FFEF`, DOS settling stall, then exact I/O pin-edge tests.
-5. **B37 — built-in input/audio completion.** Kempston joystick and tape/mux behavior, preserving the already accepted sound path.
-6. **B38 — ULAplus and 4:4:4 palette.** Implement as PentEvo overlays, not by attaching a second generic ULA; add renderer vectors and mid-frame tests.
-7. **B39 — final timing/video certification.** Contention, floating bus, raster transitions, all seven renderer golden vectors, and focused WD1793 command/status traces.
+1. **B33 — Nemo IDE decode only — completed.** Exact r1364
+   `x10/x08/#11/#C8` set; media UI completed in B33-R1.
+2. **B35 — configuration-port contract — completed.** The separate accepted
+   B34 media-lifecycle stage shifted the remaining build numbers by one.
+3. **B36 — INT/NMI/breakpoint state machines — implemented.** General runtime
+   regression accepted; dedicated visible INT/NMI test remains open.
+4. **B37 — WAIT transactions and remaining built-in ports.** AVR gluclock WAIT,
+   `#F8EF..#FFEF`, DOS settling stall, then exact I/O pin-edge tests.
+5. **B38 — built-in input/audio completion.** Kempston joystick and tape/mux
+   behavior, preserving the already accepted sound path.
+6. **B39 — ULAplus and 4:4:4 palette.** Implement as PentEvo overlays, not by
+   attaching a second generic ULA; add renderer vectors and mid-frame tests.
+7. **B40 — final timing/video certification.** Contention, floating bus, raster
+   transitions, all seven renderer golden vectors, and focused WD1793
+   command/status traces only if a mismatch is confirmed.
 8. **After built-in conformance:** audit the two official ZX-BUS slots and only then expose documented pluggable peripheral cards.
 
 ### Execution status on 2026-09-19
@@ -144,6 +160,8 @@ The technical order above remains canonical. Build numbers moved by one after a 
 
 ## B32 conclusion
 
-B31 is a valid continuation point and must not be rolled back. The first minimal, high-confidence correction is the isolated Nemo IDE address decoder. Runtime acceptance of any future build remains the user's decision.
+B36 is the current continuation point and must not be rolled back. The next
+minimal stage is B37: WAIT transactions and remaining built-in ports. Runtime
+acceptance of any future build remains the user's decision.
 
 B32 audit checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.

@@ -71,6 +71,16 @@ You may also be interested about this emulator history:
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
+Next development stage: B37 — documented AVR/gluclock and COM/RS232 WAIT
+transactions, the DOS settling stall, exact Z80 transaction boundaries and the
+remaining built-in ports. Peripheral expansion is intentionally deferred until
+the built-in BaseConf audit is complete.
+
+Development records: [current project journal](PROJECT_JOURNAL.md),
+[concise changelog](FORK_CHANGELOG.md), [BaseConf r1364 audit and plan](BASECONF_AUDIT_B32.md),
+and [latest B36 report](B36_RESULT.md). Older detailed reports are retained in
+[`docs/history/results`](docs/history/results/).
+
 ## Что нового
 
 ### Текущая тестовая сборка — B36
@@ -89,3 +99,13 @@ Known Alpha limitations: automatic OS boot from HDD is still being investigated;
 - [Скачать portable ZIP Alpha 0.2](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.2-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.2-alpha).
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
+
+Следующий этап: B37 — документированные WAIT-транзакции AVR/gluclock и
+COM/RS232, короткий DOS settling stall, точные границы транзакций Z80 и
+оставшиеся встроенные порты. Расширительная периферия намеренно отложена до
+завершения аудита встроенного BaseConf.
+
+Документы разработки: [постоянный журнал](PROJECT_JOURNAL.md),
+[краткая хронология](FORK_CHANGELOG.md), [аудит и план BaseConf r1364](BASECONF_AUDIT_B32.md),
+[последний отчёт B36](B36_RESULT.md). Более ранние подробные отчёты сохранены в
+[`docs/history/results`](docs/history/results/).

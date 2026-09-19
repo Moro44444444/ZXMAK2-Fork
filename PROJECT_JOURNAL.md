@@ -2,12 +2,11 @@
 
 Последнее обновление: 2026-09-19
 
-Для переноса проекта в новый чат создан файл `CHAT_CONTEXT_TRANSFER_2026-09-14.md`.
-Он содержит карту путей, команды сборки, состояние версий, известные регрессии
-и порядок продолжения. Новый чат должен прочитать его вместе с этим журналом и
-`FORK_CHANGELOG.md`; переносной файл не заменяет журнал.
-
-Этот файл является рабочим источником истины проекта. Перед изменением кода нужно сверяться с ним, а после каждой сборки дополнять его фактическим результатом проверки. Решения из памяти или из предположений не заменяют запись в журнале.
+Этот файл является постоянным рабочим источником истины проекта. Перед
+изменением кода нужно сверяться с ним, а после каждой сборки дополнять его
+фактическим результатом проверки. Решения из памяти или из предположений не
+заменяют запись в журнале. Отдельные handoff-файлы больше не используются:
+текущее состояние, история и backlog должны оставаться здесь и в Git.
 
 ## Правила работы
 
@@ -26,7 +25,42 @@
    новым этапом журнал перечитывается; при переносе проекта достаточно взять этот
    файл из репозитория вместе с `FORK_CHANGELOG.md`.
 
-## База и контрольные версии
+## Текущая точка и утверждённый порядок
+
+- Текущая принятая точка: **B36**, commit `76c75d2`. Пользователь подтвердил
+  отсутствие видимых регрессий относительно принятого поведения B01–B35.
+- Новые INT/NMI/breakpoint-переходы B36 подтверждены compiled-probe, но не
+  отдельным прикладным runtime-тестом; расширять эту приёмку нельзя.
+- Канонический аудит и технический план: `BASECONF_AUDIT_B32.md`.
+- Последний подробный отчёт: `B36_RESULT.md`. Отчёты завершённых прежних
+  этапов находятся в `docs/history/results/`.
+- Краткая хронология без дублирования технических протоколов ведётся в
+  `FORK_CHANGELOG.md`.
+
+Следующие этапы выполняются строго по одному логическому узлу:
+
+1. **B37 — WAIT и оставшиеся встроенные порты:** AVR/gluclock, COM/RS232,
+   короткий DOS settling stall и точные границы Z80-транзакций.
+2. **B38 — встроенный ввод и звук:** Kempston joystick, tape-in/tape-out и
+   документированный beeper/tape mux.
+3. **B39 — палитра:** ULAplus и официальное расширение BaseConf 4:4:4.
+4. **B40 — финальная временная сверка:** contention, floating bus,
+   raster/INT/video phase и golden-векторы видеорежимов; отдельно trace VG93,
+   только если появится подтверждённое расхождение.
+5. Только после встроенного BaseConf — два официальных ZX-BUS слота и затем
+   документированная периферия, включая отдельный этап CD/ATAPI.
+
+Независимый backlog не подмешивается в эти этапы: SD New/Eject и persistence,
+горячие клавиши reset/CMOS, автоматический HDD boot NedoOS и диагностика Rage
+на конкретном 4-ГБ SDHC-образе. Подробные требования сохранены ниже по дате
+2026-09-19.
+
+## Архивный контекст до B01 — 2026-09-12—14
+
+Раздел ниже сохранён только как история исходной базы. Он не является текущим
+планом и не отменяет аудит B32 или принятую точку B36.
+
+### База и контрольные версии
 
 - v10 рассматривалась как возможная откаточная база после неудачного этапа v12.
 - Исходной рабочей версией для следующего этапа выбрана `ZXMAK2-NedoOS-Input-v13-20260913`.
@@ -36,7 +70,7 @@
 - Версия v12 признана непригодной для дальнейшего тестирования: ATM Turbo 2+ стартует с Turbo On; после смены второго образа наблюдалась потеря холодного рестарта; QuickBoot работал некорректно.
 - Текущая рабочая копия исходников содержит незавершённые изменения. До начала следующего этапа нужно определить, какая копия является базовой, и не объявлять её стабильной без проверки.
 
-## Целевой состав машин
+### Целевой состав машин
 
 Оставить и проверить:
 
@@ -61,7 +95,7 @@
 
 Удаление заменяем на скрытие до тех пор, пока не проверены зависимости ROM, устройств и конфигураций.
 
-## ATM Turbo 2+
+### ATM Turbo 2+
 
 Требования:
 
@@ -72,7 +106,7 @@
 - смена второго и последующих образов должна работать так же, как первого;
 - QuickBoot пока не считать исправленным до отдельной проверки.
 
-## ZX-Evo / BaseConf / TSConf
+### ZX-Evo / BaseConf / TSConf
 
 - BaseConf и TSConf относятся к ZX-Evo; не переносить эти понятия на ATM Turbo.
 - Для текущего исследования нужна именно ZX-Evo BaseConf; TSConf и ATM в этот раздел не добавлять.
@@ -100,7 +134,7 @@
 | ZX-Evo config/NMI | `xxBF`, `xxBE`, `xxBD` | `#BF` — конфигурация, `#BE` — чтение состояния/завершение NMI, `#BD` — адрес breakpoint; селектор `A[12:8]` у `#BE` обязателен. |
 | ULAplus | `xx3B` | Режим и данные различаются по `A14` и управляющим битам записи. |
 
-### Аудит текущей реализации ZX-Evo BaseConf — 2026-09-13
+#### Аудит реализации ZX-Evo BaseConf на 2026-09-13
 
 Аудит выполнен сравнением текущих классов `UlaPentEvo`, `UlaAtm450`,
 `MemoryPentEvo`, `ZsdPentEvo` и состава машины в `machines.config` с локальными
@@ -156,7 +190,7 @@ ROM или прикладного теста, отдельно помечены 
 связанные WAIT. Ошибку Bad Apple нельзя заранее приписывать одному renderer:
 сначала необходимо исправить системные тайминги и Covox, затем повторить тест.
 
-### Зафиксированный порядок исправления ZX-Evo BaseConf
+#### Архивный порядок исправления до B01
 
 1. Сохранить текущую незавершённую рабочую копию отдельной резервной точкой и
    подготовить чистую копию `ZXMAK2-NedoOS-Input-v13-20260913`. Ничего из
@@ -189,7 +223,7 @@ ROM или прикладного теста, отдельно помечены 
 - В меню Tools пункт QuickBoot должен появляться только при активном TR-DOS. Иконка остаётся прежней, но становится серой/активной по состоянию.
 - Оболочку QuickBoot использовать существующую, не переписывать без отдельной необходимости.
 
-## Диски и образы
+### Диски и образы
 
 - Поддерживаемые образы: прежде всего TRD и SCL, а также образы SD-карт, используемые конкретной машиной.
 - Плата ZX-Evolution имеет отдельный контроллер SD(HC); официальное руководство также отдельно перечисляет IDE и floppy-контроллер с поддержкой до четырёх дисководов.
@@ -198,7 +232,7 @@ ROM или прикладного теста, отдельно помечены 
 - Смена образа во время работы не должна считаться бесшовной: если архитектура требует Warm Reset, это должно быть явно и одинаково реализовано.
 - Нужно проверить cold/warm reset, смену первого и второго образа, наличие образа в каждом из четырёх дисководов и повторное чтение состояния после QuickBoot.
 
-## NeoGS / General Sound
+### NeoGS / General Sound
 
 Проверенный вывод по текущим исходникам ZXMAK2:
 
@@ -209,7 +243,7 @@ ROM или прикладного теста, отдельно помечены 
 - Пункты `Access SD NeoGS` и `Reset NeoGS`, отображаемые в EVO Reset Service, принадлежат ROM ZX-Evolution и рассчитаны на физическую плату NeoGS. Наличие этих пунктов в ROM не означает, что NeoGS поддерживается эмулятором.
 - Если NeoGS когда-либо будет добавляться в ZXMAK2, это отдельная новая подсистема, требующая реализации и проверки процессора, памяти, прошивки, портов обмена, звуковых каналов, reset/NMI и собственной SD-карты. Не включать эту работу неявно в исправления BaseConf.
 
-## Scorpion ZS-256 Turbo+
+### Scorpion ZS-256 Turbo+
 
 Это отдельная аппаратная конфигурация, а не просто ProfROM-вариант существующего Scorpion.
 
@@ -231,7 +265,7 @@ ROM или прикладного теста, отдельно помечены 
 
 До реализации нужно установить конкретный ROM Turbo+, карту ROM, портовую карту, WAIT, видеотайминги, работу Beta Disk, клавиатуры и Kempston-мыши.
 
-## Известные неисправности
+### Известные неисправности на момент старта B01
 
 - После правок частот Kempston-мышь перестала работать на 3,5 и 7 МГц; проверить также 14 МГц не удалось. Симптом: курсор активируется/гаснет, но управление в программе не работает.
 - ATM Turbo 2+ ранее запускался с включённым турбо, хотя должен начинать с Turbo Off.
@@ -245,7 +279,7 @@ ROM или прикладного теста, отдельно помечены 
 - Локальное руководство пользователя ZX Evolution: `docs/revC/zxevo_user_manual.pdf`.
 - Внешняя сверка: https://bruxy.regnet.cz/web/8bit/EN/zx-evolution/ и https://github.com/tslabs/zx-evo.
 
-## Обязательный порядок следующего рабочего сеанса
+### Архивный порядок следующего рабочего сеанса до B01
 
 1. Зафиксировать и проверить базовую копию v13.
 2. Снять список изменений и определить, какие из них уже находятся в рабочей копии.
@@ -400,33 +434,6 @@ ROM или прикладного теста, отдельно помечены 
 ## ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932 - failed stage
 - FAILED: ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932; phase: B07 build and compiled write-protection / bank regression checks; write-protection patch applied: True; error: Compiled write protection test failed.
 - Original backup: L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932\before; do not treat this build as accepted.
-
-## ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932 - failure diagnosis / B07R1 verification
-- The B07 source patch was applied and projects built. B06 bank regression checks passed.
-- The protection-mask test failed because Program() disables Shadow and the next xBF7 writes ran with both DOS and Shadow OFF.
-- This is a confirmed setup defect in the probe; the complete B07 source behavior still requires the corrected compiled checks.
-- Current memory source verified byte-for-byte as B06 plus the six known B07 source fragments.
-- B07R1 changes the diagnostic setup only: enable Shadow before programming all protection masks and assert the test mode.
-- No emulator source is edited in this recovery script.
-- User B06 runtime report retained: FAT error gone, demo starts, used extended graphics work; second SD image hang not yet retested.
-
-## ZXMAK2-v13-ZXEVO-BC-WPROT-B07R1-20260915-192249 - B07 write-protection verification, corrected probe
-- Base: ZXMAK2-v13-ZXEVO-BC-BANKS-B06-20260915-190522 plus verified source patch from ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932; corrected probe only; ERS v0.61.01 FE; Git HEAD: aaf19da24ff5d333c0de531f44d815a128cd1eab.
-- Recovery from ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932; current memory source verified as exact B06 plus the known B07 protection patch.
-- No emulator source edited; the corrected compiled probe enables Shadow after Program() and asserts DOS OFF / Shadow ON.
-- Three Release projects rebuilt; executable and two checked DLLs regenerated.
-- All 65536 addresses inspected for xBF7 subscription; all 32 aliases and four D0/data cases in four DOS/Shadow combinations passed.
-- All 256 protection masks tested over both maps and four windows using real WRPORT/RDPORT/RDMEM/WRMEM and synthetic memory.
-- Read bank preserved, RAM writes blocked or allowed according to flags; page changes retain flags; reset clears flags; 12BD returns them.
-- Forced RAM0 exception and existing virtual FDD RAM FE override / BE return passed.
-- B06 regression over all 4MB, both maps, four windows, ZX128 lock and screen selection passed.
-- B01-B06 fixes and machines.config retained; ROM SHA256 verified in source/release free files and PAK entries: 620146534df8a49c6b9042df45812d1e7f90683dd8f7b813ca2c5ecac96dc1ca.
-- Before/after backup of the recovery state: L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-WPROT-B07R1-20260915-192249. Original pre-patch B06 source/release also retained in L:\Work_two\ZX\ZXMAK2-Fork\backup\ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932\before.
-- Separate release: K:\Download\ZXMAK2-v13-ZXEVO-BC-WPROT-B07R1-20260915-192249\release. Build log: K:\Download\ZXMAK2-v13-ZXEVO-BC-WPROT-B07R1-20260915-192249.log.
-- User B06 runtime result: FAT error gone, demo starts, used extended graphics work; full video acceptance remains pending.
-- Second SD image hang has not been reported as retested or fixed.
-- ROM write enable, full NMI behavior, 12BD writes and remaining port aliases stay separate pending work.
-- Decision: B07 source accepted for this scoped stage only after corrected compiled checks passed; original failed B07 remains unaccepted.
 
 ## ZXMAK2-v13-ZXEVO-BC-WPROT-B07-20260915-191932 - failure diagnosis / B07R1 verification
 - The B07 source patch was applied and projects built. B06 bank regression checks passed.
@@ -980,7 +987,7 @@ ROM или прикладного теста, отдельно помечены 
 - Bad Apple успешно запускается тремя путями: из ERS File browser, из меню и из NedoOS.
 - Других сбоев во время проверки не выявлено. B31 принята по целевым runtime-критериям NedoOS, Rage, border/multicolor и Bad Apple; это не считается исчерпывающей сертификацией всех программ и аппаратных edge cases.
 
-## Следующее обязательное направление — ZX-BUS и расширительные платы
+## Backlog после встроенного BaseConf — ZX-BUS и расширительные платы
 
 - Пользователь уточнил, что в модели ZX-Evolution BaseConf нужно представить два стандартных разъёма ZX-BUS, чтобы выбирать конфигурацию машины и устанавливать в слоты дополнительные звуковые или иные платы.
 - В текущей конфигурации `ZX-Evo BSconf` таких слотов и отдельного ZX-BUS слоя нет: встроенные `AYCHRV`, Beeper и Covox подключены непосредственно в VM-профиле. Поиск исходников подтверждает отсутствие готовой реализации ZXBUS.
@@ -1035,7 +1042,7 @@ ROM или прикладного теста, отдельно помечены 
 - `File -> Open` теперь открывает флажок `Read only` снятым; browse для FDD A-D — `Write Protect` снятым. Явно сохранённая защита существующего образа сохраняется, ZIP остаётся принудительно защищённым.
 - B33 exact port decode не менялся. B34 системные порты и остальной аппаратный backlog не начинались. FDD/Rage/NedoOS, memory, video и audio production-paths не правились, кроме двух UI default флажков носителей.
 - Release solution PASS с двумя прежними ruleset warnings. Контракт обнаружения нового Machine Settings control — PASS. Проверки: новый IDE media 10, B33 ports 786, B31 FDD 14, B30 timing 12748, B21 controller 321, B23 palette 1807, Rage SCL 113, audio 19 и DirectSound 16 — PASS.
-- Checkpoints: `backup/ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-before-20260919-090000`, `...-core-20260919-091500`, `...-ui-20260919-093000`, финальный с runtime `...-20260919-093500`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-20260919-093000\release`. Подробности: `B33_R1_RESULT.md`.
+- Checkpoints: `backup/ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-before-20260919-090000`, `...-core-20260919-091500`, `...-ui-20260919-093000`, финальный с runtime `...-20260919-093500`. Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-IDEMEDIA-B33-R1-20260919-093000\release`. Подробности: `docs/history/results/B33_R1_RESULT.md`.
 - Runtime-приёмка не заявляется. Обязательны пользовательские NEM boot/write/read-after-restart, Eject/no-HDD, writable FDD обоими путями и smoke NedoOS/Rage/B30 border-multicolor/audio.
 
 
@@ -1162,7 +1169,7 @@ ROM или прикладного теста, отдельно помечены 
 - Font readback реализован как сохранённый последний разрешённый выход font RAM активного ATM/BaseConf text renderer; состояние и фаза renderer при чтении не изменяются.
 - Перед правкой создан полный checkpoint `backup/ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-before-20260919-170627`. Первая Release-сборка прошла без ошибок; два прежних missing-ruleset warning сохранены.
 - Новый compiled `ConfigPortProbe-B35` прошёл 539 проверок. Регрессии: B34 media 33, IDE media 10, IDE ports 786, FDD 14, Rage SCL 113, B30 timing 12748, video controller 321, palette 1807, TRD 655922, audio 19, DirectSound 16 — PASS.
-- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210\release`; after-checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-after-20260919-172210`. Подробности: `B35_RESULT.md`.
+- Runtime: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210\release`; after-checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-after-20260919-172210`. Подробности: `docs/history/results/B35_RESULT.md`.
 - Portable ZIP содержит 89 файлов и побайтово проверен 89/89; SHA-256 `2D9D45D7570FD9C30E77E7E6181C15A9B5C06847056CADB3A29E699A3D07E2D8`. Профиль канонический 924 байта, пользовательских `.cmos/.nvram/.vmide/.log` нет.
 - Runtime-приёмка B35 не заявляется. Пользователю нужен smoke NedoOS, Rage одним коротким Enter, принятый B30 border/multicolor, Bad Apple, звук и повторная смена SD/HDD.
 
@@ -1186,3 +1193,28 @@ ROM или прикладного теста, отдельно помечены 
 - Пользователь провёл общий визуальный smoke-тест и сообщил, что всё ранее работавшее продолжает работать как прежде; видимых регрессий не обнаружено.
 - Это подтверждает сохранность принятого поведения B01–B35. Специального прикладного теста новых INT/NMI/breakpoint-переходов не было: они подтверждены compiled-probe на 41 проверку, но не объявляются отдельно наблюдавшимися в runtime.
 - Следующий отдельный пункт утверждённого B32-плана выпускается как B37: WAIT-транзакции AVR/gluclock и COM, DOS settling stall и оставшиеся встроенные порты. B36 с ним не смешивается.
+
+## Синхронизация документации и очистка репозитория — 2026-09-19 19:05
+
+- Production-код и runtime B36 не изменялись. Перед работой создан полный
+  checkpoint `backup/ZXMAK2-DOCSYNC-before-20260919-185806/snapshot`.
+- `PROJECT_JOURNAL.md`, `BASECONF_AUDIT_B32.md`, `FORK_CHANGELOG.md` и
+  `README.md` синхронизированы на одной текущей точке B36 и одном порядке
+  B37→B40. Старый план до B01 явно помечен как архивный, а ошибочно
+  продублированный B07-R1 удалён из журнала.
+- Подробные завершённые отчёты B31 и B33–B35 перенесены в
+  `docs/history/results/`; текущий `B36_RESULT.md` оставлен в корне. Два старых
+  handoff-файла и README прежних тестовых пакетов удалены как полностью
+  заменённые постоянным журналом, Git-историей и текущим README.
+- Удалены не подключённые к проектам legacy `*.bak`, локальный `src/debug.txt`
+  и генерируемый индекс справки `ZXMak2.chw`. Используемый старым
+  `release.bat` файл `src/filelist.txt` намеренно сохранён.
+- Краткий changelog перестроен в хронологическом порядке 2026-09-12→19 и
+  больше не дублирует построчно 200-КБ журнал. Все относительные Markdown-ссылки
+  проверены и разрешаются.
+- Контрольная Release-сборка `ZXVM.sln` после удаления артефактов завершилась
+  без ошибок; сохранились только два прежних предупреждения об отсутствующих
+  `AllRules.ruleset` и `MinimumRecommendedRules.ruleset`.
+- Итоговый checkpoint: `backup/ZXMAK2-DOCSYNC-after-20260919-191000/snapshot`.
+- Эта операция не выпускает новую runtime-сборку и не расширяет
+  пользовательскую runtime-приёмку B36.
