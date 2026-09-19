@@ -942,3 +942,8 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - Recorded a reproducible media-dependent Rage case: the demo hangs after starting from the 4-GB `cf4gbAAA.ima` at both normal and maximum emulator speed, while it completes from the 500-MB raw `sd_nedo.vhd`.
 - The extracted SCL files are byte-identical: 41839 bytes, zero differing bytes, SHA-256 `D530FF773125F4C4E8AEC786FBB8B8021BD67589C039A990B530EAC88D45306F`. The source demo file is therefore excluded as the direct cause.
 - The next diagnostic must compare the resulting RAM-disk contents first, then machine state if the RAM disks match. The main boundary under review is SDSC byte addressing versus SDHC sector addressing above 2 GiB. No production code, media image, build, or runtime acceptance changed.
+
+## 2026-09-19 — public portable-release hygiene rule
+
+- Public GitHub portable ZIPs must exclude user-generated `.cmos` and `.vmide` files, media images, logs, temporary files and absolute local paths. A `.vmz` may be included only as a clean, reproducible machine profile without mounted media.
+- The package must be checked after clean extraction before publishing. Windows Open-dialog folder history is external per-user state and is not a release artifact.
