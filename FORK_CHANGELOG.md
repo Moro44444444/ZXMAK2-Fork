@@ -967,3 +967,7 @@ CSD/OCR и поэтому считали такую карту отсутств�
 - `#BE` remains the page-`#FE` virtual-FDD return/clear strobe and is decoded consistently while inactive. B34 media lifecycle, IDE, SD, audio and video logic were not redesigned.
 - Release build PASS. Compiled checks: B35 config ports 539, B34 media 33, IDE 10/786, FDD/Rage 14/113, video 12748/321/1807/655922, audio 19/16.
 - Runtime package: `K:\Download\ZXMAK2-v13-ZXEVO-BC-CFGPORTS-B35-20260919-172210\release`; verified 89-file ZIP SHA-256 `2D9D45D7570FD9C30E77E7E6181C15A9B5C06847056CADB3A29E699A3D07E2D8`. Runtime acceptance remains pending the user's regression smoke test.
+
+### B35 runtime — accepted
+
+- The user confirmed preserved border/multicolor effects, working media replacement, IDE disk detection and IDE file access. B35 is accepted in this tested scope; INT/NMI/breakpoint remains the separate B36 stage.

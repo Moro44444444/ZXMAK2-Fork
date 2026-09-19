@@ -33,4 +33,4 @@ B35 implements the configuration-port stage already defined by the B32 audit. It
 
 ## Required runtime test
 
-Runtime acceptance is not claimed. Smoke-test NedoOS, Rage with one short Enter, the accepted B30 border/multicolor fragment, Bad Apple, sound, and repeated SD/HDD replacement. The new latches mainly prepare the next NMI/breakpoint stage; no program-specific behavior was added.
+The user completed the regression smoke test: multicolor and border effects remain correct, SD/FDD media still change normally, the IDE disk is detected, and its files are visible without errors. B35 is accepted in this tested runtime scope. This does not yet validate the next INT/NMI/breakpoint state machine, which is not part of B35.

@@ -58,7 +58,7 @@ You may also be interested about this emulator history:
 
 - Completed the official BaseConf `#BF/#BD/#BE` configuration-register contract, including six-bit `#BF` readback, controlled ROM writes and palette/font/border/breakpoint register access.
 - Preserved the accepted B34 SD/HDD replacement path and exact virtual-FDD `#13BD` ownership. INT/NMI/breakpoint activation remains the next separate stage.
-- Automated Release and regression checks pass; runtime acceptance awaits user testing.
+- Automated checks pass, and the user confirmed border/multicolor, media replacement and IDE file access without regressions.
 
 ### ZX-Evo BaseConf Alpha 0.2 — B34
 
@@ -77,7 +77,7 @@ Known Alpha limitations: automatic OS boot from HDD is still being investigated;
 
 - Завершён официальный контракт конфигурационных регистров BaseConf `#BF/#BD/#BE`: шестибитное чтение `#BF`, управляемая запись ROM и регистры палитры, шрифта, бордюра и breakpoint.
 - Сохранены принятая смена SD/HDD из B34 и точное владение virtual FDD портом `#13BD`. Активация INT/NMI/breakpoint остаётся отдельным следующим этапом.
-- Release-сборка и автоматические регрессии проходят; runtime-приёмка ожидает пользовательского теста.
+- Автоматические проверки проходят; пользователь подтвердил border/multicolor, смену носителей и доступ к файлам IDE без регрессий.
 
 ### ZX Evo BaseConf Alpha 0.2 — B34
 
