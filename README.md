@@ -13,7 +13,7 @@ Full support for Windows XP/Vista/7/8/10 x86/x64.
 Don't forgot to install DirectX 9!
 
 
-![Screenshot](https://i.imgur.com/5KqlCWQ.png)
+![ZX Evo Base Conf — EVO Reset Service](docs/images/zx-evo-baseconf.png)
 
 
 ## Supported ZX Spectrum models
@@ -26,7 +26,8 @@ The following ZX Spectrum clones are supported:
 * SCORPION 256/1024, PROF-ROM 256/1024
 * ATM 4.50
 * ATM 7.10
-* PentEvo 4096K
+* ZX Evo Base Conf
+* Santaka 002
 * PROFI 3.xx
 * PROFI 5.xx
 * SPRINTER (except spectrum config)
@@ -60,6 +61,6 @@ You may also be interested about this emulator history:
 - Fixed the PentEvo virtual FDD path used by ERS: Rage now starts with one short Enter, while NedoOS and Bad Apple compatibility is preserved.
 - Corrected Nemo IDE port decoding and added convenient HDD image selection, persistence and ejection in Machine Settings. HDD access, FAT browsing and file launching have been runtime-tested.
 - Disk images opened through the normal UI are writable by default; write protection remains available as an explicit option.
-- Added a clean portable ZX-Evo BaseConf package for testing: [download Alpha 0.1](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
+- Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.1 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.1-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.1.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.1-alpha).
 
 Known Alpha limitation: replacing an SD or HDD image for a second time in the same emulator process may still require restarting the emulator. Automatic OS boot from HDD will be handled separately.
