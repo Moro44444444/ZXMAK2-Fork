@@ -13,7 +13,7 @@ Full support for Windows XP/Vista/7/8/10 x86/x64.
 Don't forgot to install DirectX 9!
 
 
-![ZX Evo Base Conf — EVO Reset Service](docs/images/zx-evo-baseconf.png)
+![ZX Evo BaseConf — EVO Reset Service](docs/images/zx-evo-baseconf.png)
 
 
 ## Supported ZX Spectrum models
@@ -26,7 +26,7 @@ The following ZX Spectrum clones are supported:
 * SCORPION 256/1024, PROF-ROM 256/1024
 * ATM 4.50
 * ATM 7.10
-* ZX Evo Base Conf
+* ZX Evo BaseConf
 * Santaka 002
 * PROFI 3.xx
 * PROFI 5.xx
