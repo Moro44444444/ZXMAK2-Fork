@@ -1238,3 +1238,16 @@ ROM или прикладного теста, отдельно помечены 
   renderer-путях, с golden и mid-frame vectors.
 - B40, ZX-BUS, CD/ATAPI и независимый backlog в B37–B39 не подмешиваются.
   Runtime-приёмка каждого этапа остаётся исключительно за пользователем.
+
+## GitHub prerelease — ZX-Evo BaseConf Alpha 0.3 — B36 — 2026-09-20
+
+- Опубликован prerelease `v0.3-alpha` из commit `26e7159`:
+  `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha`.
+- Portable ZIP `ZXMAK2-ZXEvo-BaseConf-Alpha-0.3.zip` содержит 45 файлов,
+  размер `3388584` байта, SHA-256
+  `FF2135A0E830BFA811C015EB389A891D4C73D472F204978B24C6533B24C5EA73`.
+- Чистая распаковка проверена: `ZXMAK2.exe` присутствует; пользовательские
+  `.cmos/.nvram/.vmide`, образы носителей, логи и PDB в ZIP не входят.
+- Release notes сделаны на английском и русском языках. Публикация не меняет
+  границу runtime-приёмки B36: отдельный прикладной тест INT/NMI по-прежнему
+  ожидается от пользователя.

@@ -60,14 +60,14 @@ You may also be interested about this emulator history:
 - Added frame-aligned and breakpoint-triggered NMI, the `#0066` NOP transition, RAM page `#FF`, and delayed `#BE` exit while preserving virtual-FDD page `#FE`.
 - Full automated regression passes, and the user found no visible regression in the established runtime scenarios. Direct INT/NMI behavior remains probe-verified rather than application-tested.
 
-### ZX-Evo BaseConf Alpha 0.2 — B34
+### ZX-Evo BaseConf Alpha 0.3 — B36
 
 - Reworked ZX-Evolution BaseConf emulation against the official r1364 documentation: memory paging, hardware ports, timing, interrupts, palette and all seven documented video modes.
 - Fixed border/multicolor phase, mid-frame video switching and several audio timing/DC issues.
 - Corrected Nemo IDE port decoding and added convenient HDD image selection, persistence and ejection in Machine Settings. HDD access, FAT browsing and file launching have been runtime-tested.
 - Disk images opened through the normal UI are writable by default; write protection remains available as an explicit option.
 - Replacing or ejecting SD/HDD media now performs a controlled cold power-cycle, so repeated media changes do not require a manual emulator restart.
-- Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.2 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.2-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.2-alpha).
+- Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.3 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.3.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
@@ -89,14 +89,14 @@ and [latest B36 report](B36_RESULT.md). Older detailed reports are retained in
 - Добавлены кадровый и breakpoint-NMI, NOP на `#0066`, RAM-страница `#FF` и задержанный выход через `#BE` с сохранением virtual-FDD страницы `#FE`.
 - Полная автоматическая регрессия проходит; пользователь не обнаружил видимых регрессий в прежних сценариях. Сам INT/NMI подтверждён probe, но не отдельным прикладным тестом.
 
-### ZX Evo BaseConf Alpha 0.2 — B34
+### ZX Evo BaseConf Alpha 0.3 — B36
 
 - Эмуляция ZX-Evolution BaseConf сверена с официальной документацией r1364: память, порты, тайминги, прерывания, палитра и семь документированных видеорежимов.
 - Исправлены фаза border/multicolor, переключение видеорежимов и проблемы синхронизации звука.
 - Исправлено декодирование Nemo IDE; добавлены выбор и сохранение HDD-образа в Machine Settings. Подключение HDD, чтение FAT и запуск файлов проверены.
 - Диски, открытые через обычный интерфейс, по умолчанию доступны для записи; защиту можно включить вручную.
 - Повторная замена или извлечение SD/HDD теперь выполняет управляемый холодный перезапуск, поэтому ручной перезапуск эмулятора для смены носителя не требуется.
-- [Скачать portable ZIP Alpha 0.2](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.2-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.2.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.2-alpha).
+- [Скачать portable ZIP Alpha 0.3](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.3.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
 
