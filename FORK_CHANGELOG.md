@@ -95,15 +95,21 @@
   Пользователь не обнаружил видимых регрессий; сами INT/NMI-переходы имеют
   compiled-probe, но не отдельную runtime-приёмку.
 
+## 2026-09-20 — B37
+
+- **B37:** декодирование AVR/gluclock `F7` и COM `EF` приведено к официальным
+  уравнениям r1364; добавлены документированные регистры `#F8EF..#FFEF`,
+  внешний WAIT с паузой активного INT и трёхтактовый DOS settling stall.
+  Release и полный актуальный regression suite проходят; пользовательская
+  runtime-приёмка ожидается.
+
 ## Следующий утверждённый порядок
 
-1. **B37:** WAIT AVR/gluclock и COM/RS232, DOS settling stall, точные границы
-   Z80-транзакций и оставшиеся встроенные порты.
-2. **B38:** Kempston joystick, tape-in/tape-out, beeper/tape mux.
-3. **B39:** ULAplus и официальная палитра 4:4:4.
-4. **B40:** contention, floating bus, raster/INT/video phase, golden-векторы;
+1. **B38:** Kempston joystick, tape-in/tape-out, beeper/tape mux.
+2. **B39:** ULAplus и официальная палитра 4:4:4.
+3. **B40:** contention, floating bus, raster/INT/video phase, golden-векторы;
    VG93 trace только при подтверждённой ошибке.
-5. После полного встроенного BaseConf — два ZX-BUS слота и документированная
+4. После полного встроенного BaseConf — два ZX-BUS слота и документированная
    периферия, затем отдельный CD/ATAPI этап.
 
 ## Активный backlog

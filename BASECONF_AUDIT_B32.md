@@ -137,8 +137,9 @@ Each item is a separate checkpoint with compiled/static probes plus user runtime
    B34 media-lifecycle stage shifted the remaining build numbers by one.
 3. **B36 — INT/NMI/breakpoint state machines — implemented.** General runtime
    regression accepted; dedicated visible INT/NMI test remains open.
-4. **B37 — WAIT transactions and remaining built-in ports.** AVR gluclock WAIT,
-   `#F8EF..#FFEF`, DOS settling stall, then exact I/O pin-edge tests.
+4. **B37 — WAIT transactions and remaining built-in ports — implemented,
+   runtime pending.** AVR gluclock WAIT, `#F8EF..#FFEF`, DOS settling stall and
+   focused transaction probes are complete.
 5. **B38 — built-in input/audio completion.** Kempston joystick and tape/mux
    behavior, preserving the already accepted sound path.
 6. **B39 — ULAplus and 4:4:4 palette.** Implement as PentEvo overlays, not by
@@ -148,7 +149,7 @@ Each item is a separate checkpoint with compiled/static probes plus user runtime
    command/status traces only if a mismatch is confirmed.
 8. **After built-in conformance:** audit the two official ZX-BUS slots and only then expose documented pluggable peripheral cards.
 
-### Execution status on 2026-09-19
+### Execution status on 2026-09-20
 
 The technical order above remains canonical. Build numbers moved by one after a separate B34 media-lifecycle checkpoint was inserted without changing the hardware sequence:
 
@@ -156,7 +157,9 @@ The technical order above remains canonical. Build numbers moved by one after a 
 - safe repeated SD/HDD replacement: inserted and accepted as B34;
 - configuration ports `#BF/#BD/#BE`: completed and runtime-smoked in B35;
 - INT/NMI/breakpoint state machines: implemented in B36; general regression smoke accepted, dedicated visible INT/NMI test not performed;
-- next hardware stage: WAIT transactions and remaining built-in ports (build B37).
+- WAIT transactions, AVR/COM registers and DOS settling: implemented and
+  compiled-regression checked in B37; user runtime smoke remains pending;
+- next hardware stage after B37 acceptance: built-in input/audio (B38).
 
 ## Fixed implementation contract for B37–B39
 
@@ -245,8 +248,9 @@ unconfirmed VG93 changes, ZX-BUS and CD/ATAPI. Those remain B40 or later.
 
 ## B32 conclusion
 
-B36 is the current continuation point and must not be rolled back. The next
-minimal stage is B37: WAIT transactions and remaining built-in ports. Runtime
-acceptance of any future build remains the user's decision.
+B36 remains the last user-accepted continuation point. B37 is implemented and
+packaged, but must not be called runtime-accepted until the user completes its
+smoke test. The next minimal hardware stage after that acceptance is B38:
+built-in input/audio completion.
 
 B32 audit checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.

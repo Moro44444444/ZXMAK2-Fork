@@ -158,6 +158,20 @@ namespace ZXMAK2.Hardware.Evo
         private Mode mode;
         private byte addr;
 
+        // AVR firmware exposes the documented Kondratyev/16550-compatible
+        // register block through BaseConf comport_addr[2:0].  Physical host
+        // serial transport is intentionally outside B37; these latches and
+        // status values follow rs232.c so firmware can probe the interface.
+        private byte m_rs232Dll;
+        private byte m_rs232Dlm;
+        private byte m_rs232Ier;
+        private byte m_rs232Isr;
+        private byte m_rs232Lcr;
+        private byte m_rs232Mcr;
+        private byte m_rs232Lsr;
+        private byte m_rs232Msr;
+        private byte m_rs232Scr;
+
         private byte[] BaseConfData;
         private byte[] BootVerData;
         private string m_fileName = null;
@@ -205,9 +219,14 @@ namespace ZXMAK2.Hardware.Evo
             m_fileName = bmgr.GetSatelliteFileName("cmos");
 
             bmgr.Events.SubscribeReset(Reset);
-            bmgr.Events.SubscribeWrIo(0xFEFF, 0xDEF7, WrDEF7);
-            bmgr.Events.SubscribeWrIo(0xFEFF, 0xBEF7, WrBEF7);
-            bmgr.Events.SubscribeRdIo(0xFEFF, 0xBEF7, RdBEF7);
+            // zports.v decodes F7 by low byte, then applies A8/A13/A14
+            // equations in the handler.  This retains all RTL aliases.
+            bmgr.Events.SubscribeWrIo(0x00FF, 0x00F7, WrPortF7);
+            bmgr.Events.SubscribeRdIo(0x00FF, 0x00F7, RdPortF7);
+            // comport_rd/comport_wr decode only low byte EF; A10:A8 select
+            // the eight official #F8EF..#FFEF UART registers.
+            bmgr.Events.SubscribeWrIo(0x00FF, 0x00EF, WrComPort);
+            bmgr.Events.SubscribeRdIo(0x00FF, 0x00EF, RdComPort);
             bmgr.Events.SubscribeEndFrame(ScanKeyboard);
         }
 
@@ -254,42 +273,132 @@ namespace ZXMAK2.Hardware.Evo
         {
             mode = Mode.BaseConfVer; // посмотреть состояние по сбросу
             addr = 0;
+            ResetRs232();
             ClearKeyboardBuffer();
             SyncKeyboardState();
         }
 
-
-        /// <summary>
-        /// RTC address port
-        /// </summary>
-        private void WrDEF7(ushort addr, byte val, ref bool handled)
+        private bool IsSelectedPortF7(ushort port)
         {
-            if ((addr & 0x0100) == 0 && SHADOW)
-                this.addr = val;
-            else if ((addr & 0x0100) != 0 && !SHADOW && visable)
-                this.addr = val;
+            return SHADOW ? (port & 0x0100) == 0 : (port & 0x0100) != 0;
         }
 
-        /// <summary>
-        /// RTC write data port
-        /// </summary>
-        private void WrBEF7(ushort addr, byte val, ref bool handled)
+        private void WrPortF7(ushort port, byte val, ref bool handled)
         {
-            if ((addr & 0x0100) == 0 && SHADOW)
-                WrCMOS(val);
-            else if ((addr & 0x0100) != 0 && !SHADOW && visable)
+            if (!IsSelectedPortF7(port) || !(SHADOW || visable))
+                return;
+
+            bool addressWrite = (port & 0x2000) == 0;
+            bool dataWrite = (port & 0x4000) == 0;
+            if (!addressWrite && !dataWrite)
+                return;
+            handled = true;
+            // Both strobes may be active for an RTL alias.  The FPGA sends
+            // the address byte first and services the data transaction next.
+            if (addressWrite)
+                addr = val;
+            if (dataWrite)
                 WrCMOS(val);
         }
 
-        /// <summary>
-        /// RTC read data port
-        /// </summary>
-        private void RdBEF7(ushort addr, ref byte val, ref bool handled)
+        private void RdPortF7(ushort port, ref byte val, ref bool handled)
         {
-            if ((addr & 0x0100) == 0 && SHADOW)
-                val = RdCMOS();
-            else if ((addr & 0x0100) != 0 && !SHADOW & visable)
-                val = RdCMOS();
+            if (!IsSelectedPortF7(port) || !(SHADOW || visable) ||
+                (port & 0x4000) != 0)
+                return;
+            handled = true;
+            val = RdCMOS();
+        }
+
+        private void WrComPort(ushort port, byte val, ref bool handled)
+        {
+            handled = true;
+            WriteRs232((port >> 8) & 7, val);
+        }
+
+        private void RdComPort(ushort port, ref byte val, ref bool handled)
+        {
+            handled = true;
+            val = ReadRs232((port >> 8) & 7);
+        }
+
+        private void ResetRs232()
+        {
+            // pentevo/avr/current/rs232.c:rs232_init().
+            m_rs232Dll = 0x01;
+            m_rs232Dlm = 0x00;
+            m_rs232Ier = 0x00;
+            m_rs232Isr = 0x01;
+            m_rs232Lcr = 0x00;
+            m_rs232Mcr = 0x00;
+            m_rs232Lsr = 0x60;
+            m_rs232Msr = 0xA0;
+            m_rs232Scr = 0xFF;
+        }
+
+        private byte ReadRs232(int index)
+        {
+            switch (index & 7)
+            {
+                case 0:
+                    if ((m_rs232Lcr & 0x80) != 0)
+                        return m_rs232Dll;
+                    // No physical receive transport is attached: DAT=0 and
+                    // data-ready remains clear, as an empty firmware FIFO.
+                    m_rs232Lsr &= 0xFE;
+                    return 0;
+                case 1:
+                    return (m_rs232Lcr & 0x80) != 0 ? m_rs232Dlm : m_rs232Ier;
+                case 2: return m_rs232Isr;
+                case 3: return m_rs232Lcr;
+                case 4: return m_rs232Mcr;
+                case 5: return m_rs232Lsr;
+                case 6:
+                    byte result = m_rs232Msr;
+                    // rs232_zx_read clears delta flags after an MSR read.
+                    m_rs232Msr &= 0xF0;
+                    return result;
+                default: return m_rs232Scr;
+            }
+        }
+
+        private void WriteRs232(int index, byte value)
+        {
+            switch (index & 7)
+            {
+                case 0:
+                    if ((m_rs232Lcr & 0x80) != 0)
+                        m_rs232Dll = value;
+                    else
+                    {
+                        // B37 has no host serial endpoint.  Treat the local
+                        // sink as completing immediately, leaving THR/TEMT
+                        // asserted instead of manufacturing a stuck UART.
+                        m_rs232Lsr |= 0x60;
+                    }
+                    break;
+                case 1:
+                    if ((m_rs232Lcr & 0x80) != 0)
+                        m_rs232Dlm = value;
+                    else
+                        m_rs232Ier = (byte)(value & 0x0F);
+                    break;
+                case 2:
+                    // FIFO is permanently enabled in the AVR implementation.
+                    if ((value & 1) != 0)
+                    {
+                        if ((value & 2) != 0)
+                            m_rs232Lsr &= 0xFC;
+                        if ((value & 4) != 0)
+                            m_rs232Lsr |= 0x60;
+                    }
+                    break;
+                case 3: m_rs232Lcr = value; break;
+                case 4: m_rs232Mcr = (byte)(value & 0x1F); break;
+                case 5: break; // LSR is read-only in rs232.c.
+                case 6: break; // MSR is read-only in rs232.c.
+                case 7: m_rs232Scr = value; break;
+            }
         }
 
         #endregion

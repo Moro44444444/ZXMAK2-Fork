@@ -54,11 +54,11 @@ You may also be interested about this emulator history:
 
 ## What's new
 
-### Current development build — B36
+### Current development build — B37
 
-- Implemented the official BaseConf frame-INT acknowledge and INT counter pause contract.
-- Added frame-aligned and breakpoint-triggered NMI, the `#0066` NOP transition, RAM page `#FF`, and delayed `#BE` exit while preserving virtual-FDD page `#FE`.
-- Full automated regression passes, and the user found no visible regression in the established runtime scenarios. Direct INT/NMI behavior remains probe-verified rather than application-tested.
+- Implemented the official AVR/gluclock `F7` and COM `#F8EF..#FFEF` register/decode families, including the external WAIT lifecycle and B36 frame-INT pause.
+- Added the three-master-clock DOS-entry settling stall at the `#3Dxx` M1 transition, composed with existing memory delays by the RTL OR/max rule.
+- Full automated regression passes. B37 still requires the user's runtime smoke test; build/probe success is not runtime acceptance.
 
 ### ZX-Evo BaseConf Alpha 0.3 — B36
 
@@ -71,23 +71,22 @@ You may also be interested about this emulator history:
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
-Next development stage: B37 — documented AVR/gluclock and COM/RS232 WAIT
-transactions, the DOS settling stall, exact Z80 transaction boundaries and the
-remaining built-in ports. Peripheral expansion is intentionally deferred until
-the built-in BaseConf audit is complete.
+Next development stage after B37 runtime acceptance: B38 — the documented
+built-in Kempston joystick, tape-in/tape-out and beeper/tape mux. Peripheral
+expansion remains deferred until the built-in BaseConf audit is complete.
 
 Development records: [current project journal](PROJECT_JOURNAL.md),
 [concise changelog](FORK_CHANGELOG.md), [BaseConf r1364 audit and plan](BASECONF_AUDIT_B32.md),
-and [latest B36 report](B36_RESULT.md). Older detailed reports are retained in
+and [latest B37 report](B37_RESULT.md). Older detailed reports are retained in
 [`docs/history/results`](docs/history/results/).
 
 ## Что нового
 
-### Текущая тестовая сборка — B36
+### Текущая тестовая сборка — B37
 
-- Реализованы документированные подтверждение кадрового INT и пауза его счётчика внешним WAIT.
-- Добавлены кадровый и breakpoint-NMI, NOP на `#0066`, RAM-страница `#FF` и задержанный выход через `#BE` с сохранением virtual-FDD страницы `#FE`.
-- Полная автоматическая регрессия проходит; пользователь не обнаружил видимых регрессий в прежних сценариях. Сам INT/NMI подтверждён probe, но не отдельным прикладным тестом.
+- Реализованы официальные семейства AVR/gluclock `F7` и COM `#F8EF..#FFEF`, включая внешний WAIT и паузу кадрового INT из B36.
+- Добавлен трёхтактовый DOS settling stall на M1-переходе `#3Dxx`; он совмещается с задержками памяти по аппаратному правилу OR/max.
+- Полная автоматическая регрессия проходит. B37 ожидает пользовательского runtime smoke; успешные сборка и probe не считаются runtime-приёмкой.
 
 ### ZX Evo BaseConf Alpha 0.3 — B36
 
@@ -100,12 +99,11 @@ and [latest B36 report](B36_RESULT.md). Older detailed reports are retained in
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
 
-Следующий этап: B37 — документированные WAIT-транзакции AVR/gluclock и
-COM/RS232, короткий DOS settling stall, точные границы транзакций Z80 и
-оставшиеся встроенные порты. Расширительная периферия намеренно отложена до
-завершения аудита встроенного BaseConf.
+Следующий этап после runtime-приёмки B37: B38 — документированные встроенные
+Kempston joystick, tape-in/tape-out и beeper/tape mux. Расширительная
+периферия по-прежнему отложена до завершения аудита встроенного BaseConf.
 
 Документы разработки: [постоянный журнал](PROJECT_JOURNAL.md),
 [краткая хронология](FORK_CHANGELOG.md), [аудит и план BaseConf r1364](BASECONF_AUDIT_B32.md),
-[последний отчёт B36](B36_RESULT.md). Более ранние подробные отчёты сохранены в
+[последний отчёт B37](B37_RESULT.md). Более ранние подробные отчёты сохранены в
 [`docs/history/results`](docs/history/results/).

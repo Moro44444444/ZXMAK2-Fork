@@ -40,6 +40,20 @@ namespace ZXMAK2.Hardware.Evo
         private bool m_nmiSwitchAfterM1;
         private bool m_nmiClearAfterM1;
 
+        // atm_pager.v keeps zclk_stall asserted for at least three 28 MHz
+        // clocks when a #3Dxx M1 fetch switches the DOS ROM in.  This flag is
+        // consumed by the timing callback for that same opcode transaction.
+        private bool m_dosEntryStallPending;
+
+        // The real AVR service time depends on firmware task scheduling.  In
+        // this emulator the AVR-side work is synchronous, so preserve the
+        // shortest observable WAIT handshake instead of inventing a fixed
+        // software latency that the FPGA contract does not define.
+        private const int AvrReplyWaitMasterClocks = 1;
+        private const int DosEntryStallMasterClocks = 3;
+        private int m_externalWaitTransactions;
+        private int m_externalWaitLastMasterClocks;
+
         // PentEvo can redirect a TR-DOS FDC access to a small handler stored
         // in RAM page #FE.  ERS uses this mechanism for mounted SCL/TRD images
         // and for its RAM disk.
@@ -189,6 +203,8 @@ namespace ZXMAK2.Hardware.Evo
             }
             else if (index != 0 && (addr & 0x3F00) == 0x3D00) //ROM2 & RAM & dosgate
             {
+                if (!DOSEN)
+                    m_dosEntryStallPending = true;
                 DOSEN = true;
             }
         }
@@ -633,8 +649,6 @@ namespace ZXMAK2.Hardware.Evo
         {
             // zports.v external_port: exact low FD with A15=1 (AY), or
             // low 1F/3F/5F/7F while dos || shadow_en_reg (VG93).
-            if (CpuClockMultiplier != 4)
-                return 0;
             int low = address & 255;
             bool external = (low == 0xFD && (address & 0x8000) != 0) ||
                 ((DOSEN || SHADOW) &&
@@ -645,7 +659,40 @@ namespace ZXMAK2.Hardware.Evo
             // callback and never reaches this ordinary-IO method.
             // Exact placement of the separated stalls at Z80 pin edges is
             // a later stage; this implements their total wait budget.
-            return external ? 6 : 0;
+            int ioWait = CpuClockMultiplier == 4 && external ? 6 : 0;
+
+            // zwait.v creates independent WAIT latches for the AVR/gluclock
+            // data cycle and COM/RS232.  The FPGA does not define a fixed
+            // AVR firmware latency; the emulator performs the reply in the
+            // same synchronous callback and retains the shortest observable
+            // WAIT transaction.  zclock.v ORs concurrent wait sources, so
+            // overlapping waits compose by maximum duration, not addition.
+            int avrWait = IsAvrWaitPort(address) ? AvrReplyWaitMasterClocks : 0;
+            if (avrWait != 0)
+            {
+                m_externalWaitTransactions++;
+                m_externalWaitLastMasterClocks = avrWait;
+                var ula = m_ulaAtm as UlaPentEvo;
+                if (ula != null)
+                    ula.PauseFrameInterruptForWait(avrWait);
+            }
+            return Math.Max(ioWait, avrWait);
+        }
+
+        internal bool IsAvrWaitPort(ushort address)
+        {
+            int low = address & 0xFF;
+            // zports.v comport_rd/comport_wr decode the low byte only.
+            if (low == 0xEF)
+                return true;
+            if (low != 0xF7 || (address & 0x4000) != 0)
+                return false;
+
+            bool shadow = DOSEN || SYSEN || SHADOW;
+            bool selected = shadow ? (address & 0x0100) == 0 :
+                (address & 0x0100) != 0;
+            bool gluclockOn = shadow || CMOSEN;
+            return selected && gluclockOn;
         }
 
         public void InvalidateMemoryBuffer()
@@ -665,7 +712,8 @@ namespace ZXMAK2.Hardware.Evo
             if (Array.IndexOf(RomPages, read) >= 0)
             {
                 InvalidateMemoryBuffer();
-                return CompleteNmiM1(address, access, 0, ref value);
+                return ConsumeDosEntryStall(
+                    access, CompleteNmiM1(address, access, 0, ref value));
             }
 
             if (access == CpuMemoryAccess.Write)
@@ -690,7 +738,8 @@ namespace ZXMAK2.Hardware.Evo
                     m_dramBufferAddress = (ushort)(address & 0xFFFE);
                     m_dramBufferValid = true;
                 }
-                return CompleteNmiM1(address, access, writeDelay, ref value);
+                return ConsumeDosEntryStall(
+                    access, CompleteNmiM1(address, access, writeDelay, ref value));
             }
 
             var wordAddress = (ushort)(address & 0xFFFE);
@@ -699,7 +748,8 @@ namespace ZXMAK2.Hardware.Evo
             {
                 value = (byte)((address & 1) == 0 ?
                     m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-                return CompleteNmiM1(address, access, 0, ref value);
+                return ConsumeDosEntryStall(
+                    access, CompleteNmiM1(address, access, 0, ref value));
             }
 
             int readDelay = ReserveDram(masterTact, access);
@@ -709,7 +759,17 @@ namespace ZXMAK2.Hardware.Evo
             m_dramBufferValid = true;
             value = (byte)((address & 1) == 0 ?
                 m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-            return CompleteNmiM1(address, access, readDelay, ref value);
+            return ConsumeDosEntryStall(
+                access, CompleteNmiM1(address, access, readDelay, ref value));
+        }
+
+        private int ConsumeDosEntryStall(CpuMemoryAccess access, int delay)
+        {
+            if (access != CpuMemoryAccess.Opcode || !m_dosEntryStallPending)
+                return delay;
+            m_dosEntryStallPending = false;
+            // zclock.v combines zclk_stall, io_wait and contention by OR.
+            return Math.Max(delay, DosEntryStallMasterClocks);
         }
 
         private int CompleteNmiM1(ushort address, CpuMemoryAccess access,
@@ -877,6 +937,14 @@ namespace ZXMAK2.Hardware.Evo
         [HardwareReadOnly(true)]
         [HardwareValue("NMICLR", Description = "M1 fetches remaining before delayed #BE exit")]
         public int NmiClearM1Remaining { get { return m_nmiClearM1Remaining; } }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("EXTWAITCNT", Description = "Completed AVR/gluclock or COM WAIT transactions")]
+        public int ExternalWaitTransactions { get { return m_externalWaitTransactions; } }
+
+        [HardwareReadOnly(true)]
+        [HardwareValue("EXTWAITLAST", Description = "Last external WAIT duration in 28 MHz master clocks")]
+        public int ExternalWaitLastMasterClocks { get { return m_externalWaitLastMasterClocks; } }
 
         [HardwareValue("CMOSEN", Description = "Enable CMOS ports shadow independent")]
         public bool CMOSEN
@@ -1226,6 +1294,9 @@ namespace ZXMAK2.Hardware.Evo
             m_nmiClearM1Remaining = 0;
             m_nmiSwitchAfterM1 = false;
             m_nmiClearAfterM1 = false;
+            m_dosEntryStallPending = false;
+            m_externalWaitTransactions = 0;
+            m_externalWaitLastMasterClocks = 0;
             DOSEN = CPM;
 
             CMR0 = 0;
