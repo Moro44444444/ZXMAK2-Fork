@@ -1364,3 +1364,42 @@ ROM или прикладного теста, отдельно помечены 
 - GitHub prerelease опубликован: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha`.
   Asset `ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip`: 46 файлов, 3 400 453 байта,
   SHA-256 `5636F40820DD6B0EF9CBDF6B7E7F0F672F5E1BF3299D2EA0BFE42395DAD44979`.
+
+## B39 отклонена; B39A начата заново от B38 — 2026-09-21
+
+- Совмещённая B39 с ULAplus и 4:4:4 отклонена пользовательской runtime-
+  проверкой: вернулся паразитный звук FDD, ATM 16-color программы сбрасывались,
+  а ULAplus-демо не запускались. Этот код не используется как база.
+- По решению пользователя B39A начата от принятой B38 / Alpha 0.4. В неё
+  входит только официальная палитра `base_trdemu` 4:4:4 по `#BF.D5`;
+  ULAplus отложена и не смешивается с этой правкой.
+- Before-checkpoint:
+  `backup/ZXMAK2-v13-ZXEVO-BC-PALETTE444-B39A-before-20260921-152615/snapshot`,
+  сверено 826/826 файлов. Рабочая ветка `codex/b39a-palette444-only`.
+- Контракт сверён с официальными `base/z80/zports.v` и
+  `base/video/video_palframe.v` r1364: верхние пары RGB берутся из данных,
+  младшие — из A8/A9/A12-A15; D5 выбирает read/write interpretation и не
+  переписывает palette RAM; `BD_COLORRD` возвращает соответствующую пару.
+- При D5=0 сохранён буквальный прежний вызов `SetPaletteAtm2`. Новый путь
+  активен только для `UlaPentEvo` при D5=1, перед изменением цвета завершает
+  уже отрисованную часть кадра и обновляет все семь существующих renderer-
+  путей. ULAplus, остальные машины и периферия не затронуты.
+- `Palette444Probe-B39A` прошёл 132867 проверок: D5=0, 256×64 официальных
+  data/address-векторов, семь renderers, D5=1 readback и сохранение палитры.
+  Полный актуальный regression suite также прошёл: B23 1807, B30 12748,
+  B35 539, B36 41, B37 197981, B38 196641, FDD 14, Rage 113, TRD 655922,
+  media 33, IDE 10/786, audio 19, DirectSound 14.
+- Полная Release-сборка MSBuild 17.14.51 завершилась без ошибок; остались два
+  прежних missing-ruleset warning. Реализация зафиксирована commit `8f7d9a7`.
+- Runtime-приёмка B39A не заявляется. Требуются border/multicolor B30,
+  ATM 16-color, Rage, NedoOS, Bad Apple, отсутствие FDD-скрипа, SD/HDD и IDE;
+  отдельно — документированный 4:4:4 визуальный тест при наличии.
+- Runtime-пакет:
+  `K:\Download\ZXMAK2-v13-ZXEVO-BC-PALETTE444-B39A-20260921-154533\release`.
+  ZIP содержит 123 файла, чистая распаковка сверена 123/123 побайтно; процесс
+  `ZXMAK2.exe` оставался рабочим после четырёхсекундного startup smoke.
+  Размер ZIP 5050610 байт, SHA-256
+  `518B1CB99EF204EE501545D7C552B16B9959DED828785E5487427EB4C23E50B6`.
+- After-checkpoint:
+  `backup/ZXMAK2-v13-ZXEVO-BC-PALETTE444-B39A-after-20260921-154923/snapshot`,
+  сверено 829/829 source-файлов.

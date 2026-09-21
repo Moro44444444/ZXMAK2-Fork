@@ -253,3 +253,14 @@ minimal hardware stage after B38 acceptance is B39: ULAplus and the official
 4:4:4 palette extension.
 
 B32 audit checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.
+
+### B39 correction status — 2026-09-21
+
+- The first combined B39 attempt (ULAplus plus 4:4:4) was rejected by runtime
+  testing because it regressed FDD sound and ATM 16-color software while its
+  ULAplus path did not work.  It is not a continuation point.
+- B39A restarts from accepted B38 / Alpha 0.4 and implements only the official
+  `#BF.D5` 4:4:4 extension.  The D5=0 route is unchanged and ULAplus is
+  explicitly deferred to a separate later checkpoint.
+- B39A Release and the full compiled B23-B38 regression set pass.  Runtime
+  acceptance remains pending and is recorded in `B39A_RESULT.md`.
