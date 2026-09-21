@@ -1361,3 +1361,6 @@ ROM или прикладного теста, отдельно помечены 
 - В архив включаются только файлы запуска, зависимости, чистый профиль и ROM.
   Пользовательские `.cmos/.nvram/.vmide`, носители, логи, PDB и probes
   исключаются. ZIP имеет одну корневую папку.
+- GitHub prerelease опубликован: `https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha`.
+  Asset `ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip`: 46 файлов, 3 400 453 байта,
+  SHA-256 `5636F40820DD6B0EF9CBDF6B7E7F0F672F5E1BF3299D2EA0BFE42395DAD44979`.
