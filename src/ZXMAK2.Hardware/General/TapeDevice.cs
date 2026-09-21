@@ -52,6 +52,7 @@ namespace ZXMAK2.Hardware.General
         private int m_port;
         private int m_bit;
         private int m_bitMask;
+        private bool m_outputLoopback;
 
 
         #endregion Fields
@@ -67,6 +68,7 @@ namespace ZXMAK2.Hardware.General
             m_port = 0xFE;
             m_bit = 6;
             m_bitMask = 1 << m_bit;
+            m_outputLoopback = true;
             //OnProcessConfigChange();
 
             Blocks = new List<ITapeBlock>();
@@ -120,6 +122,16 @@ namespace ZXMAK2.Hardware.General
             }
         }
 
+        public bool OutputLoopback
+        {
+            get { return m_outputLoopback; }
+            set
+            {
+                m_outputLoopback = value;
+                OnConfigChanged();
+            }
+        }
+
         protected override void OnProcessConfigChange()
         {
             base.OnProcessConfigChange();
@@ -140,6 +152,8 @@ namespace ZXMAK2.Hardware.General
             builder.Append(string.Format("Port:  #{0:X4}", Port));
             builder.Append(Environment.NewLine);
             builder.Append(string.Format("Bit:   D{0}", Bit));
+            builder.Append(Environment.NewLine);
+            builder.Append(string.Format("Output loopback: {0}", OutputLoopback));
             builder.Append(Environment.NewLine);
             Description = builder.ToString();
         }
@@ -190,6 +204,7 @@ namespace ZXMAK2.Hardware.General
             Mask = Utils.GetXmlAttributeAsInt32(node, "mask", Mask);
             Port = Utils.GetXmlAttributeAsInt32(node, "port", Port);
             Bit = Utils.GetXmlAttributeAsInt32(node, "bit", Bit);
+            OutputLoopback = Utils.GetXmlAttributeAsBool(node, "outputLoopback", OutputLoopback);
         }
 
         protected override void OnConfigSave(XmlNode node)
@@ -201,6 +216,7 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "mask", Mask);
             Utils.SetXmlAttribute(node, "port", Port);
             Utils.SetXmlAttribute(node, "bit", Bit);
+            Utils.SetXmlAttribute(node, "outputLoopback", OutputLoopback);
         }
 
         #endregion
@@ -231,7 +247,7 @@ namespace ZXMAK2.Hardware.General
                 return;
             //handled = true;
 
-            if (!m_isPlay)
+            if (!m_isPlay && OutputLoopback)
             {
                 // http://www.worldofspectrum.org/faq/reference/48kreference.htm
                 // issue 2: Ear

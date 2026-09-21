@@ -15,17 +15,32 @@ namespace ZXMAK2.Hardware.Evo
 
         private const int KeyboardBufferSize = 256;
 
-        // Only AVR video bits 0/4/5 are implemented here. Tape/LED flags and
-        // physical VGA signal generation are still separate tasks.
+        // AVR BaseConf config0: D0 video output, D3 beeper/tape-out source,
+        // D4:D5 raster.  D2 is the live physical tape input and is supplied
+        // by TapeDevice directly to the FE/F6 reads.
         private const byte AvrVideoMask = 0x31;
+        private const byte AvrPersistentMask = 0x39;
         private const int AvrModeNvramAddress = 0xFE;
         private byte m_avrVideoConfiguration;
+        private bool m_beeperTapeOut;
         private bool m_scrollPrevious;
+        private bool m_numLockPrevious;
         private int m_scrollPressCount;
         private UlaPentEvo m_rasterUla;
 
-        [HardwareValue("AVRVIDEO", Description = "Supported AVR video bits 0/4/5 only; auxiliary flags/physical VGA pending")]
+        [HardwareValue("AVRVIDEO", Description = "AVR video bits D0/D4/D5")]
         public byte AvrVideoConfiguration { get { return m_avrVideoConfiguration; } }
+
+        [HardwareValue("BEEPERMUX", Description = "AVR D3: false=D4 beeper, true=D3 tape-out")]
+        public bool BeeperTapeOutSelected { get { return m_beeperTapeOut; } }
+
+        [HardwareValue("AVRCONFIG", Description = "Persistent BaseConf AVR config bits D0/D3/D4/D5")]
+        public byte AvrConfiguration
+        {
+            get { return (byte)(m_avrVideoConfiguration | (m_beeperTapeOut ? 0x08 : 0)); }
+        }
+
+        internal event Action BeeperMuxChanged;
 
         public string FrameDiagnosticText
         {
@@ -39,9 +54,10 @@ namespace ZXMAK2.Hardware.Evo
                     active = m_rasterUla.ActiveRasterMode;
                 }
                 return string.Format(
-                    "ZX-Evo B18: Scroll={0} AVR={1:X2} TV/VGA={2} raster req={3}:{4} active={5}:{6}{7}",
+                    "ZX-Evo B38: Scroll={0} AVR={1:X2} mux={2} TV/VGA={3} raster req={4}:{5} active={6}:{7}{8}",
                     m_scrollPressCount,
-                    m_avrVideoConfiguration,
+                    AvrConfiguration,
+                    m_beeperTapeOut ? "D3" : "D4",
                     m_avrVideoConfiguration & 1,
                     requested,
                     GetRasterName(requested),
@@ -73,8 +89,25 @@ namespace ZXMAK2.Hardware.Evo
                 m_rasterUla.RequestRaster((m_avrVideoConfiguration >> 4) & 3);
         }
 
+        internal void SetBeeperTapeOut(bool tapeOut)
+        {
+            var changed = m_beeperTapeOut != tapeOut;
+            m_beeperTapeOut = tapeOut;
+            eeprom[AvrModeNvramAddress] = (byte)(
+                (eeprom[AvrModeNvramAddress] & ~AvrPersistentMask) |
+                m_avrVideoConfiguration |
+                (m_beeperTapeOut ? 0x08 : 0));
+            if (changed)
+            {
+                var handler = BeeperMuxChanged;
+                if (handler != null)
+                    handler();
+            }
+        }
+
         private void RestoreAvrVideoConfiguration()
         {
+            m_beeperTapeOut = (eeprom[AvrModeNvramAddress] & 0x08) != 0;
             SetAvrVideoConfiguration(eeprom[AvrModeNvramAddress]);
         }
 
@@ -115,7 +148,7 @@ namespace ZXMAK2.Hardware.Evo
             Key.RightArrow, Key.End, Key.DownArrow, Key.PageDown,
             Key.Insert, Key.Delete,
             Key.LeftWindows, Key.RightWindows,
-            Key.ScrollLock
+            Key.ScrollLock, Key.NumLock
         };
 
         // Low byte is PS/2 Scan Code Set 2. Bit 8 means an E0 prefix.
@@ -148,7 +181,7 @@ namespace ZXMAK2.Hardware.Evo
             0x174, 0x169, 0x172, 0x17A,
             0x170, 0x171,
             0x11F, 0x127,
-            0x07E
+            0x07E, 0x077
         };
 
         private bool sandbox;
@@ -463,7 +496,7 @@ namespace ZXMAK2.Hardware.Evo
                     case Mode.PS2Keyboard:
                         return PopKeyboardByte();
                     case Mode.ReadConfig:
-                        return (addr & 0x0F) == 0 ? m_avrVideoConfiguration : (byte)0xFF;
+                        return (addr & 0x0F) == 0 ? AvrConfiguration : (byte)0xFF;
                     default:
                         return 0xFF;
                 }
@@ -515,6 +548,7 @@ namespace ZXMAK2.Hardware.Evo
             if (keyboardState == null)
             {
                 m_scrollPrevious = false;
+                m_numLockPrevious = false;
                 return;
             }
 
@@ -525,6 +559,13 @@ namespace ZXMAK2.Hardware.Evo
                 AdvanceAvrVideoConfiguration();
             }
             m_scrollPrevious = scroll;
+
+            // BaseConf AVR binds NumLock to func_beeper(): each rising edge
+            // toggles config0.D3 between port-FE D4 and D3.
+            var numLock = keyboardState[Key.NumLock];
+            if (numLock && !m_numLockPrevious)
+                SetBeeperTapeOut(!m_beeperTapeOut);
+            m_numLockPrevious = numLock;
 
             var enabled = mode == Mode.PS2Keyboard;
             for (var i = 0; i < KeyboardKeys.Length; i++)
@@ -539,6 +580,7 @@ namespace ZXMAK2.Hardware.Evo
         private void SyncKeyboardState()
         {
             m_scrollPrevious = keyboardState != null && keyboardState[Key.ScrollLock];
+            m_numLockPrevious = keyboardState != null && keyboardState[Key.NumLock];
             for (var i = 0; i < KeyboardKeys.Length; i++)
                 keyboardPrevious[i] = keyboardState != null && keyboardState[KeyboardKeys[i]];
         }

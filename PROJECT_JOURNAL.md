@@ -1307,3 +1307,49 @@ ROM или прикладного теста, отдельно помечены 
 - Пользовательская runtime-приёмка B37 не заявляется. Требуются NedoOS, Rage
   одним коротким Enter, B30 border/multicolor, Bad Apple, обычный звук,
   повторная смена SD/HDD, IDE file access и обычный запуск BaseConf.
+
+## ZXMAK2-v13-ZXEVO-BC-INPUTAUDIO-B38-20260921-051523 — встроенный ввод и audio mux
+
+- Этап выполнен строго в границах B38 из канонического
+  `BASECONF_AUDIT_B32.md`. ULAplus/4:4:4 (B39), итоговые contention/video
+  (B40), ZX-BUS, CD/ATAPI и независимый backlog не затрагивались.
+- Before-checkpoint:
+  `backup/ZXMAK2-v13-ZXEVO-BC-INPUTAUDIO-B38-before-20260921-045812/snapshot`.
+- Официальный контракт повторно сверялся по `base_trdemu/trunk/z80/zports.v`,
+  `zkbdmus.v`, `sound/sound.v`, `top.v` r1364 и AVR-файлам
+  `pentevo/avr/current/zx.c`, `config.h`, `joystick.c`, `tape.c`.
+- В профиль ZX-Evo BSconf добавлен Kempston joystick с точным младшим байтом
+  `#1F` и восемью битами. D0..D3 — right/left/down/up, D4..D7 — B/fire, C,
+  A, Start. Старые пятибитные профили не изменены. VG93 остаётся раньше
+  joystick в порядке устройств и владеет пересекающимся `#1F` в Shadow/DOS.
+- Tape-in подключён к D6 чтений `xxFE/xxF6`. Только для ZX-Evo отключены
+  generic FE output-loopback и отдельный tape monitor, чтобы вход не подменялся
+  FE.D4 и не дублировал аппаратный звуковой тракт.
+- Новый `BeeperPentEvo` реализует официальный mux config0.D3: FE.D4 beeper или
+  FE.D3 tape-out. Num Lock повторяет AVR `func_beeper()`, переключение
+  комбинационное относительно последнего FE-значения и сохраняется в уже
+  существующем CMOS. Scroll Lock video/raster оставлен без изменений.
+- AY, Covox, RejectDC, DirectSound underrun и другие машинные профили не
+  менялись. Visual Studio 2022 Release: 0 ошибок, два прежних missing-ruleset
+  warning.
+- Новый `InputAudioProbe-B38` прошёл 196641 проверку: profile wiring,
+  исчерпывающие `#1F` и `FE/F6` decode, Normal/Shadow/DOS arbitration,
+  joystick 8/5-bit, tape D6/loopback, CMOS persistence, Num Lock edges и
+  мгновенные mux-переходы.
+- Полная актуальная регрессия прошла: B37 WAIT 197981; B36 INT/NMI 41; B35
+  config 539; B34 media 33; IDE 10/786; FDD/Rage 14/113; B30/B23 video
+  12748/1807/655922; audio/DirectSound 43/16. В B30 probe изменено только
+  прежнее ожидание, что config0.D3 не поддерживается: с B38 этот официальный
+  бит входит в readback.
+- Runtime:
+  `K:\Download\ZXMAK2-v13-ZXEVO-BC-INPUTAUDIO-B38-20260921-051523\release`.
+  ZIP содержит 126 файлов, чистая распаковка проверена 126/126 побайтно;
+  размер 5324858 байт, SHA-256
+  `7A1F87CFFE1DB43A0F081710C8999350FA68EF3A27166D0932255A0B4F88315A`.
+- After-checkpoint:
+  `backup/ZXMAK2-v13-ZXEVO-BC-INPUTAUDIO-B38-after-20260921-051523/snapshot`,
+  проверено 834/834 source-файла.
+- Пользовательская runtime-приёмка B38 не заявляется. Нужны обычный запуск,
+  Rage/NedoOS/Bad Apple, B30 border/multicolor, звук и отсутствие нового фона,
+  SD/HDD/IDE; при наличии подходящего ПО — Kempston и tape. Следующий этап
+  только после этого — B39 ULAplus + официальная 4:4:4 palette.

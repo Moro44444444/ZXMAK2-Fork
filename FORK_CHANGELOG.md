@@ -103,13 +103,25 @@
   Release и полный актуальный regression suite проходят; пользовательская
   runtime-приёмка ожидается.
 
+## 2026-09-21 — B38
+
+- **B38:** добавлен документированный восьмибитный Kempston joystick на
+  точном младшем байте `#1F`; фактический порядок обработчиков сохраняет
+  владение VG93 пересекающимся `#1F` в Shadow/DOS.
+- Tape-in подключён к документированным чтениям `xxFE/xxF6` по D6 без
+  ошибочного loopback из FE-out. Отдельный PentEvo beeper реализует
+  сохраняемый AVR D3 mux между FE.D4 beeper и FE.D3 tape-out; Num Lock следует
+  официальной функции AVR `func_beeper()`.
+- Старые пятибитные Kempston-профили, AY, Covox, DirectSound и RejectDC не
+  изменены. Полный актуальный regression suite проходит; пользовательская
+  runtime-приёмка B38 ожидается.
+
 ## Следующий утверждённый порядок
 
-1. **B38:** Kempston joystick, tape-in/tape-out, beeper/tape mux.
-2. **B39:** ULAplus и официальная палитра 4:4:4.
-3. **B40:** contention, floating bus, raster/INT/video phase, golden-векторы;
+1. **B39:** ULAplus и официальная палитра 4:4:4.
+2. **B40:** contention, floating bus, raster/INT/video phase, golden-векторы;
    VG93 trace только при подтверждённой ошибке.
-4. После полного встроенного BaseConf — два ZX-BUS слота и документированная
+3. После полного встроенного BaseConf — два ZX-BUS слота и документированная
    периферия, затем отдельный CD/ATAPI этап.
 
 ## Активный backlog

@@ -54,11 +54,11 @@ You may also be interested about this emulator history:
 
 ## What's new
 
-### Current development build — B37
+### Current development build — B38
 
-- Implemented the official AVR/gluclock `F7` and COM `#F8EF..#FFEF` register/decode families, including the external WAIT lifecycle and B36 frame-INT pause.
-- Added the three-master-clock DOS-entry settling stall at the `#3Dxx` M1 transition, composed with existing memory delays by the RTL OR/max rule.
-- Full automated regression passes. B37 still requires the user's runtime smoke test; build/probe success is not runtime acceptance.
+- Added the documented eight-bit BaseConf Kempston joystick on exact low byte `#1F`; VG93 retains ownership in Shadow/DOS.
+- Added tape input on `xxFE/xxF6` and the persistent AVR-controlled FE.D4 beeper / FE.D3 tape-out mux, including Num Lock switching.
+- The accepted AY, Covox, DirectSound and RejectDC paths are unchanged. Full automated regression passes; B38 still requires the user's runtime smoke test.
 
 ### ZX-Evo BaseConf Alpha 0.3 — B36
 
@@ -71,22 +71,22 @@ You may also be interested about this emulator history:
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
-Next development stage after B37 runtime acceptance: B38 — the documented
-built-in Kempston joystick, tape-in/tape-out and beeper/tape mux. Peripheral
-expansion remains deferred until the built-in BaseConf audit is complete.
+Next development stage after B38 runtime acceptance: B39 — ULAplus and the
+official BaseConf 4:4:4 palette extension. Peripheral expansion remains
+deferred until the built-in BaseConf audit is complete.
 
 Development records: [current project journal](PROJECT_JOURNAL.md),
 [concise changelog](FORK_CHANGELOG.md), [BaseConf r1364 audit and plan](BASECONF_AUDIT_B32.md),
-and [latest B37 report](B37_RESULT.md). Older detailed reports are retained in
+and [latest B38 report](B38_RESULT.md). Older detailed reports are retained in
 [`docs/history/results`](docs/history/results/).
 
 ## Что нового
 
-### Текущая тестовая сборка — B37
+### Текущая тестовая сборка — B38
 
-- Реализованы официальные семейства AVR/gluclock `F7` и COM `#F8EF..#FFEF`, включая внешний WAIT и паузу кадрового INT из B36.
-- Добавлен трёхтактовый DOS settling stall на M1-переходе `#3Dxx`; он совмещается с задержками памяти по аппаратному правилу OR/max.
-- Полная автоматическая регрессия проходит. B37 ожидает пользовательского runtime smoke; успешные сборка и probe не считаются runtime-приёмкой.
+- Добавлен документированный восьмибитный Kempston joystick BaseConf на точном младшем байте `#1F`; в Shadow/DOS этот порт остаётся за VG93.
+- Добавлены tape-in на `xxFE/xxF6` и сохраняемый AVR-переключатель FE.D4 beeper / FE.D3 tape-out с управлением Num Lock.
+- Принятые тракты AY, Covox, DirectSound и RejectDC не изменены. Полная автоматическая регрессия проходит; B38 ожидает пользовательского runtime smoke.
 
 ### ZX Evo BaseConf Alpha 0.3 — B36
 
@@ -99,11 +99,11 @@ and [latest B37 report](B37_RESULT.md). Older detailed reports are retained in
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
 
-Следующий этап после runtime-приёмки B37: B38 — документированные встроенные
-Kempston joystick, tape-in/tape-out и beeper/tape mux. Расширительная
-периферия по-прежнему отложена до завершения аудита встроенного BaseConf.
+Следующий этап после runtime-приёмки B38: B39 — ULAplus и официальное
+расширение палитры BaseConf 4:4:4. Расширительная периферия по-прежнему
+отложена до завершения аудита встроенного BaseConf.
 
 Документы разработки: [постоянный журнал](PROJECT_JOURNAL.md),
 [краткая хронология](FORK_CHANGELOG.md), [аудит и план BaseConf r1364](BASECONF_AUDIT_B32.md),
-[последний отчёт B37](B37_RESULT.md). Более ранние подробные отчёты сохранены в
+[последний отчёт B38](B38_RESULT.md). Более ранние подробные отчёты сохранены в
 [`docs/history/results`](docs/history/results/).

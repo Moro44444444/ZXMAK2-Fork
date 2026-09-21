@@ -48,8 +48,8 @@ Accepted B31 runtime observations remain the regression floor:
 | `#BE` | in `base_trdemu`: write clears NMI/virtual-FDD state; no config read | B36 implements delayed NMI clear and preserves accepted virtual-FDD behavior; compatibility read alias retained | implemented with documented compatibility alias |
 | ULAplus | low byte `#3B`, register/data selected by `A14` | absent from PentEvo machine | missing documented built-in function |
 | Kempston mouse | `#FADF/#FBDF/#FFDF` | implemented | conforms structurally |
-| Kempston joystick | eight bits in `base_trdemu` | no joystick device in machine profile | missing |
-| Beeper/tape/Covox | `#FE` beeper or tape-out selected by AVR; tape-in on keyboard read; `#FB` Covox; hardware selects a source | beeper and Covox exist, but no tape device/mux | partial; do not disturb accepted B25–B27 audio path without focused tests |
+| Kempston joystick | eight bits in `base_trdemu`; VG93 owns the overlapping family in Shadow/DOS | exact low-byte `#1F`, eight-bit host state and VG93-first arbitration implemented in B38 | implemented; compiled arbitration probe passes |
+| Beeper/tape/Covox | `#FE` beeper or tape-out selected by AVR; tape-in on keyboard read; `#FB` Covox; hardware selects a source | B38 adds `xxFE/xxF6` tape-in and persistent AVR D3 mux between FE.D4/FE.D3; accepted AY/Covox/RejectDC paths are unchanged | implemented; runtime sound/tape check pending |
 
 The emulator-only `#2F/#4F/#6F/#8F` handlers are the host/ERS communication mechanism. They are not presented as physical BaseConf ports and must remain isolated from the physical-port conformance map.
 
@@ -75,8 +75,8 @@ The official frame INT starts at `int_start`, lasts up to 256 master clocks (32 
 
 Since B36 the ULA models the nominal 256-master-clock window, early interrupt
 acknowledge release and a pause input for the official external WAIT source.
-The state machine is compiled-probe verified. Actual AVR/COM WAIT producers are
-still absent until B37, so their runtime coupling is not yet accepted.
+B37 connected the AVR/COM WAIT producers and their compiled coupling checks
+pass; application-visible runtime acceptance remains with the user.
 
 ### NMI and breakpoint
 
@@ -91,10 +91,6 @@ The 28 MHz master model, 3.5/7/14 MHz choices, refresh-boundary clock changes, 1
 
 Remaining precision work:
 
-- exact separated Z80 pin-edge placement of the external-port wait pattern;
-- overlap between WAIT sources;
-- DOS-map settling stall;
-- gluclock/COM WAIT-until-AVR transactions;
 - exact contention phase and floating bus;
 - mid-frame activation edge of raster/mode changes.
 
@@ -140,8 +136,8 @@ Each item is a separate checkpoint with compiled/static probes plus user runtime
 4. **B37 — WAIT transactions and remaining built-in ports — implemented,
    runtime pending.** AVR gluclock WAIT, `#F8EF..#FFEF`, DOS settling stall and
    focused transaction probes are complete.
-5. **B38 — built-in input/audio completion.** Kempston joystick and tape/mux
-   behavior, preserving the already accepted sound path.
+5. **B38 — built-in input/audio completion — implemented, runtime pending.**
+   Kempston joystick and tape/mux behavior preserve the accepted sound path.
 6. **B39 — ULAplus and 4:4:4 palette.** Implement as PentEvo overlays, not by
    attaching a second generic ULA; add renderer vectors and mid-frame tests.
 7. **B40 — final timing/video certification.** Contention, floating bus, raster
@@ -159,7 +155,9 @@ The technical order above remains canonical. Build numbers moved by one after a 
 - INT/NMI/breakpoint state machines: implemented in B36; general regression smoke accepted, dedicated visible INT/NMI test not performed;
 - WAIT transactions, AVR/COM registers and DOS settling: implemented and
   compiled-regression checked in B37; user runtime smoke remains pending;
-- next hardware stage after B37 acceptance: built-in input/audio (B38).
+- built-in input/audio: implemented and compiled-regression checked in B38;
+  user runtime smoke remains pending;
+- next hardware stage after B38 acceptance: ULAplus and 4:4:4 palette (B39).
 
 ## Fixed implementation contract for B37–B39
 
@@ -248,9 +246,10 @@ unconfirmed VG93 changes, ZX-BUS and CD/ATAPI. Those remain B40 or later.
 
 ## B32 conclusion
 
-B36 remains the last user-accepted continuation point. B37 is implemented and
-packaged, but must not be called runtime-accepted until the user completes its
-smoke test. The next minimal hardware stage after that acceptance is B38:
-built-in input/audio completion.
+B36 remains the last explicitly user-accepted conformance continuation point.
+B37 and B38 are implemented and packaged, but neither is called runtime-
+accepted until the user completes the corresponding smoke tests. The next
+minimal hardware stage after B38 acceptance is B39: ULAplus and the official
+4:4:4 palette extension.
 
 B32 audit checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.

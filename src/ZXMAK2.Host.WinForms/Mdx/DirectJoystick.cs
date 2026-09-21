@@ -59,7 +59,8 @@ namespace ZXMAK2.Host.WinForms.Mdx
                     isRight,
                     isUp,
                     isDown,
-                    isFire);
+                    isFire,
+                    isFire ? (byte)0x10 : (byte)0x00);
             }
         }
 
@@ -295,21 +296,27 @@ namespace ZXMAK2.Host.WinForms.Mdx
                     var isUp = diState.lY < center && center - diState.lY > axisTolerance;
                     var isRight = diState.lX > center && diState.lX - center > axisTolerance;
                     var isLeft = diState.lX < center && center - diState.lX > axisTolerance;
-                    var isFire = false;
-
                     var buttons = diState.GetButtons();
-                    foreach (var button in buttons)
+                    byte kempstonButtons = 0;
+                    for (var i = 0; i < buttons.Length && i < 4; i++)
                     {
-                        // fire = any key pressed
-                        isFire |= (button & 0x80) != 0;
+                        if ((buttons[i] & 0x80) != 0)
+                            kempstonButtons |= (byte)(0x10 << i);
                     }
+
+                    // Preserve the legacy meaning: any physical button is
+                    // Fire for five-bit Kempston devices.
+                    var isFire = false;
+                    foreach (var button in buttons)
+                        isFire |= (button & 0x80) != 0;
 
                     return new StateWrapper(
                         isLeft,
                         isRight,
                         isUp,
                         isDown,
-                        isFire);
+                        isFire,
+                        kempstonButtons);
                 }
                 else if (hr == ErrorCode.DIERR_NOTACQUIRED)
                 {
@@ -332,11 +339,11 @@ namespace ZXMAK2.Host.WinForms.Mdx
             return StateWrapper.Empty;
         }
 
-        private class StateWrapper : IJoystickState
+        private class StateWrapper : IJoystickState8
         {
             #region Static
 
-            private static readonly StateWrapper s_empty = new StateWrapper(false, false, false, false, false);
+            private static readonly StateWrapper s_empty = new StateWrapper(false, false, false, false, false, 0);
 
             public static StateWrapper Empty
             {
@@ -353,17 +360,19 @@ namespace ZXMAK2.Host.WinForms.Mdx
                 bool isRight,
                 bool isUp,
                 bool isDown,
-                bool isFire)
+                bool isFire,
+                byte kempstonButtons)
             {
                 IsLeft = isLeft;
                 IsRight = isRight;
                 IsUp = isUp;
                 IsDown = isDown;
                 IsFire = isFire;
+                KempstonState = kempstonButtons;
             }
 
             public StateWrapper()
-                : this(false, false, false, false, false)
+                : this(false, false, false, false, false, 0)
             {
             }
 
@@ -372,6 +381,7 @@ namespace ZXMAK2.Host.WinForms.Mdx
             public bool IsUp { get; private set; }
             public bool IsDown { get; private set; }
             public bool IsFire { get; private set; }
+            public byte KempstonState { get; private set; }
 
             #endregion
         }

@@ -19,6 +19,7 @@ namespace ZXMAK2.Hardware.General
         private bool m_noDos;
         private int m_mask;
         private int m_port;
+        private int m_bitWidth;
 
         #endregion Fields
 
@@ -32,6 +33,7 @@ namespace ZXMAK2.Hardware.General
             m_noDos = true;
             m_mask = 0xE0;    // zx128 by default
             m_port = 0x1F;
+            m_bitWidth = 5;
             OnProcessConfigChange();
         }
 
@@ -68,12 +70,23 @@ namespace ZXMAK2.Hardware.General
             }
         }
 
+        public int BitWidth
+        {
+            get { return m_bitWidth; }
+            set
+            {
+                m_bitWidth = value < 5 ? 5 : value > 8 ? 8 : value;
+                OnConfigChanged();
+            }
+        }
+
         protected override void OnConfigLoad(XmlNode node)
         {
             base.OnConfigLoad(node);
             NoDos = Utils.GetXmlAttributeAsBool(node, "noDos", NoDos);
             Mask = Utils.GetXmlAttributeAsInt32(node, "mask", Mask);
             Port = Utils.GetXmlAttributeAsInt32(node, "port", Port);
+            BitWidth = Utils.GetXmlAttributeAsInt32(node, "bitWidth", BitWidth);
             HostId = Utils.GetXmlAttributeAsString(node, "hostId", HostId);
         }
 
@@ -83,6 +96,7 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "noDos", NoDos);
             Utils.SetXmlAttribute(node, "mask", Mask);
             Utils.SetXmlAttribute(node, "port", Port);
+            Utils.SetXmlAttribute(node, "bitWidth", BitWidth);
             Utils.SetXmlAttribute(node, "hostId", HostId);
         }
 
@@ -98,6 +112,8 @@ namespace ZXMAK2.Hardware.General
             builder.Append(string.Format("Mask:  #{0:X4}", Mask));
             builder.Append(Environment.NewLine);
             builder.Append(string.Format("Port:  #{0:X4}", Port));
+            builder.Append(Environment.NewLine);
+            builder.Append(string.Format("Bits:  {0}", BitWidth));
             builder.Append(Environment.NewLine);
             builder.Append(Environment.NewLine);
             // thanks to weiv for info
@@ -149,11 +165,16 @@ namespace ZXMAK2.Hardware.General
             handled = true;
 
             value = 0x00;
+            if (JoystickState == null)
+                return;
             if (JoystickState.IsRight) value |= 0x01;
             if (JoystickState.IsLeft) value |= 0x02;
             if (JoystickState.IsDown) value |= 0x04;
             if (JoystickState.IsUp) value |= 0x08;
             if (JoystickState.IsFire) value |= 0x10;
+            var extended = JoystickState as IJoystickState8;
+            if (BitWidth == 8 && extended != null)
+                value = (byte)((value & 0x0F) | (extended.KempstonState & 0xF0));
         }
     }
 }

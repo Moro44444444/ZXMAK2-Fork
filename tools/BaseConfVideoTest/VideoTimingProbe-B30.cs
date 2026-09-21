@@ -178,9 +178,10 @@ public static class VideoTimingProbeB30
         {
             nvram[0xFE] = (byte)value;
             ct.GetMethod("RestoreAvrVideoConfiguration", F).Invoke(cmos, null);
-            Check(ConfigRead() == (value & 0x31), "Supported video readback mask.");
+            Check(ConfigRead() == (value & 0x39), "Supported AVR config readback mask.");
             Check(nvram[0xFE] == (byte)value, "Unsupported NVRAM flags damaged.");
         }
+        ct.GetMethod("SetBeeperTapeOut", F).Invoke(cmos, new object[] { false });
         scroll = false; shift = false; Scan(); Config(0);
         foreach (byte expected in new byte[] { 0x01, 0x10, 0x11, 0x20, 0x21, 0x30, 0x31, 0x00 })
         {

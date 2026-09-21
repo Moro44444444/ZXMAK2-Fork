@@ -120,5 +120,6 @@ namespace ZXMAK2.Host.Entities
 
         // Appended to retain all existing serialized/numeric key identities.
         ScrollLock,
+        NumLock,
     }
 }
