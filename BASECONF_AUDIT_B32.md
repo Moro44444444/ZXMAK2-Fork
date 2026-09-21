@@ -262,5 +262,17 @@ B32 audit checkpoint: `backup/ZXMAK2-v13-ZXEVO-BC-AUDIT-B32-20260919-083728`.
 - B39A restarts from accepted B38 / Alpha 0.4 and implements only the official
   `#BF.D5` 4:4:4 extension.  The D5=0 route is unchanged and ULAplus is
   explicitly deferred to a separate later checkpoint.
-- B39A Release and the full compiled B23-B38 regression set pass.  Runtime
-  acceptance remains pending and is recorded in `B39A_RESULT.md`.
+- B39A Release and the full compiled B23-B38 regression set pass. Пользователь
+  принял runtime-проверку: Rage доходит до конца с чистыми SD/IDE-образами,
+  B23 проходит все семь слотов с 4-ГБ образом, border/multicolor сохранены и
+  3.5/7/14 МГц распознаются корректно. B39A — текущая принятая локальная база;
+  ULAplus по-прежнему не входит в неё и должен быть отдельным будущим этапом.
+
+### Следующая сборка: B40 — финальная conformance-проверка timing/video
+
+В B40 входят только: (1) evidence-based phase refinement contention и
+floating bus в пределах r1364, (2) mid-frame transitions raster/mode/palette
+и их связь с INT/video phase, (3) golden-векторы всех семи renderer-путей,
+(4) command/status trace VG93 без изменения его поведения до подтверждённого
+расхождения. B40 не включает ULAplus, медиа-утилиту, SD/HDD lifecycle,
+ZX-BUS, CD/ATAPI или новую периферию.
