@@ -641,6 +641,52 @@ namespace ZXMAK2.Hardware.Evo
             return delay;
         }
 
+        internal int GetContentionWait(ushort address, bool io, long masterTact)
+        {
+            if (masterTact < 0)
+                throw new ArgumentOutOfRangeException("masterTact");
+
+            var raster = m_dramRaster ?? EvoRasterTiming.Normal;
+            // zclock.v: contention is enabled only for the 48K/128K raster
+            // profiles and only while int_turbo is 00 (3.5 MHz).
+            if ((raster.Mode & 2) == 0 || CpuClockMultiplier != 1)
+                return 0;
+
+            bool contended;
+            if (io)
+            {
+                // iorq_n_a masks odd ports; the first active IORQ edge on an
+                // even address is held while the raster contention gate is on.
+                contended = (address & 1) == 0;
+            }
+            else
+            {
+                int window = address >> 14;
+                contended = window == 1 ||
+                    (raster.Mode == 3 && window == 3 && (CMR0 & 1) != 0);
+            }
+            if (!contended)
+                return 0;
+
+            int videoMode = m_pFF77 & 7;
+            for (int delay = 0; delay <= 48; delay++)
+            {
+                if (!raster.IsContentionActive(
+                    masterTact + delay, m_dramRasterOrigin * 4, videoMode))
+                    return delay;
+            }
+            throw new InvalidOperationException("BaseConf contention pulse exceeded six Z80 tacts.");
+        }
+
+        private int CombineContention(ushort address, long masterTact, int delay)
+        {
+            int contention = GetContentionWait(address, false, masterTact);
+            // zclock.v ORs cpu_stall and contend_wait.  Both begin with the
+            // same bus transaction, so overlapping intervals compose by the
+            // longer interval rather than by addition.
+            return Math.Max(delay, contention);
+        }
+
         private bool m_dramBufferValid;
         private ushort m_dramBufferAddress;
         private ushort m_dramBufferWord;
@@ -676,7 +722,9 @@ namespace ZXMAK2.Hardware.Evo
                 if (ula != null)
                     ula.PauseFrameInterruptForWait(avrWait);
             }
-            return Math.Max(ioWait, avrWait);
+            int contentionWait = GetContentionWait(
+                address, true, m_cpu == null ? 0 : m_cpu.Tact);
+            return Math.Max(Math.Max(ioWait, avrWait), contentionWait);
         }
 
         internal bool IsAvrWaitPort(ushort address)
@@ -712,8 +760,9 @@ namespace ZXMAK2.Hardware.Evo
             if (Array.IndexOf(RomPages, read) >= 0)
             {
                 InvalidateMemoryBuffer();
-                return ConsumeDosEntryStall(
-                    access, CompleteNmiM1(address, access, 0, ref value));
+                return CombineContention(address, masterTact,
+                    ConsumeDosEntryStall(
+                        access, CompleteNmiM1(address, access, 0, ref value)));
             }
 
             if (access == CpuMemoryAccess.Write)
@@ -738,8 +787,9 @@ namespace ZXMAK2.Hardware.Evo
                     m_dramBufferAddress = (ushort)(address & 0xFFFE);
                     m_dramBufferValid = true;
                 }
-                return ConsumeDosEntryStall(
-                    access, CompleteNmiM1(address, access, writeDelay, ref value));
+                return CombineContention(address, masterTact,
+                    ConsumeDosEntryStall(
+                        access, CompleteNmiM1(address, access, writeDelay, ref value)));
             }
 
             var wordAddress = (ushort)(address & 0xFFFE);
@@ -748,8 +798,9 @@ namespace ZXMAK2.Hardware.Evo
             {
                 value = (byte)((address & 1) == 0 ?
                     m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-                return ConsumeDosEntryStall(
-                    access, CompleteNmiM1(address, access, 0, ref value));
+                return CombineContention(address, masterTact,
+                    ConsumeDosEntryStall(
+                        access, CompleteNmiM1(address, access, 0, ref value)));
             }
 
             int readDelay = ReserveDram(masterTact, access);
@@ -759,8 +810,9 @@ namespace ZXMAK2.Hardware.Evo
             m_dramBufferValid = true;
             value = (byte)((address & 1) == 0 ?
                 m_dramBufferWord >> 8 : m_dramBufferWord & 255);
-            return ConsumeDosEntryStall(
-                access, CompleteNmiM1(address, access, readDelay, ref value));
+            return CombineContention(address, masterTact,
+                ConsumeDosEntryStall(
+                    access, CompleteNmiM1(address, access, readDelay, ref value)));
         }
 
         private int ConsumeDosEntryStall(CpuMemoryAccess access, int delay)

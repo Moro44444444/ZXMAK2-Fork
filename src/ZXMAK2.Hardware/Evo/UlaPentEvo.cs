@@ -545,6 +545,37 @@ namespace ZXMAK2.Hardware.Evo
             get { return (2 - (IntBaseTact & 3) + 4) & 3; }
         }
 
+        public bool IsContentionActive(long masterTact, long masterOrigin,
+            int videoMode)
+        {
+            if (masterTact < 0)
+                throw new System.ArgumentOutOfRangeException("masterTact");
+            if (masterOrigin < 0 || (masterOrigin & 3) != 0)
+                throw new System.ArgumentException("Invalid BaseConf raster origin.");
+            if ((Mode & 2) == 0)
+                return false;
+
+            long relative = (masterTact - masterOrigin) / 4;
+            long position = (relative + IntCycle) % FrameCycles;
+            if (position < 0)
+                position += FrameCycles;
+            int line = (int)(position / LineCycles);
+            int horizontal = (int)(position % LineCycles);
+            bool wide = videoMode == 0 || videoMode == 2 ||
+                videoMode == 6 || videoMode == 7;
+            int first = wide ? WideFirstLine : StandardFirstLine;
+            int height = wide ? 200 : 192;
+            if (line < first || line >= first + height)
+                return false;
+
+            // video_sync_h.v loads contend_ctr with zero after hcount 127.
+            // Its bit 8 terminates the 256-cycle window.  The official 48K
+            // pattern holds six pairs of 7 MHz cycles and releases two.
+            int counter = horizontal - 128;
+            return counter >= 0 && counter < 256 &&
+                (((counter >> 1) & 7) < 6);
+        }
+
         public void GetVideoFetch(long cycle, int videoMode, int pentMode,
             out bool go, out int bandwidth)
         {
