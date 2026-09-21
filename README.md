@@ -54,11 +54,12 @@ You may also be interested about this emulator history:
 
 ## What's new
 
-### Current development build — B38
+### ZX-Evo BaseConf Alpha 0.4 — B38
 
 - Added the documented eight-bit BaseConf Kempston joystick on exact low byte `#1F`; VG93 retains ownership in Shadow/DOS.
 - Added tape input on `xxFE/xxF6` and the persistent AVR-controlled FE.D4 beeper / FE.D3 tape-out mux, including Num Lock switching.
-- The accepted AY, Covox, DirectSound and RejectDC paths are unchanged. Full automated regression passes; B38 still requires the user's runtime smoke test.
+- The accepted AY, Covox, DirectSound and RejectDC paths are unchanged. Full automated regression passes; the user has completed a stable runtime smoke test.
+- [Download the Alpha 0.4 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
 
 ### ZX-Evo BaseConf Alpha 0.3 — B36
 
@@ -71,9 +72,9 @@ You may also be interested about this emulator history:
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
-Next development stage after B38 runtime acceptance: B39 — ULAplus and the
-official BaseConf 4:4:4 palette extension. Peripheral expansion remains
-deferred until the built-in BaseConf audit is complete.
+Next development stage: B39A — the official BaseConf 4:4:4 palette extension
+on the stable B38 baseline. ULAplus is deliberately deferred to a separate,
+opt-in stage after the built-in BaseConf audit remains stable.
 
 Development records: [current project journal](PROJECT_JOURNAL.md),
 [concise changelog](FORK_CHANGELOG.md), [BaseConf r1364 audit and plan](BASECONF_AUDIT_B32.md),
@@ -82,11 +83,12 @@ and [latest B38 report](B38_RESULT.md). Older detailed reports are retained in
 
 ## Что нового
 
-### Текущая тестовая сборка — B38
+### ZX Evo BaseConf Alpha 0.4 — B38
 
 - Добавлен документированный восьмибитный Kempston joystick BaseConf на точном младшем байте `#1F`; в Shadow/DOS этот порт остаётся за VG93.
 - Добавлены tape-in на `xxFE/xxF6` и сохраняемый AVR-переключатель FE.D4 beeper / FE.D3 tape-out с управлением Num Lock.
-- Принятые тракты AY, Covox, DirectSound и RejectDC не изменены. Полная автоматическая регрессия проходит; B38 ожидает пользовательского runtime smoke.
+- Принятые тракты AY, Covox, DirectSound и RejectDC не изменены. Полная автоматическая регрессия проходит; пользователь выполнил стабильный runtime smoke.
+- [Скачать portable ZIP Alpha 0.4](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
 
 ### ZX Evo BaseConf Alpha 0.3 — B36
 
@@ -99,9 +101,9 @@ and [latest B38 report](B38_RESULT.md). Older detailed reports are retained in
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
 
-Следующий этап после runtime-приёмки B38: B39 — ULAplus и официальное
-расширение палитры BaseConf 4:4:4. Расширительная периферия по-прежнему
-отложена до завершения аудита встроенного BaseConf.
+Следующий этап: B39A — официальное расширение палитры BaseConf 4:4:4 от
+стабильной B38. ULAplus намеренно отложена в отдельный opt-in этап после
+сохранения стабильности встроенного BaseConf.
 
 Документы разработки: [постоянный журнал](PROJECT_JOURNAL.md),
 [краткая хронология](FORK_CHANGELOG.md), [аудит и план BaseConf r1364](BASECONF_AUDIT_B32.md),
