@@ -1075,9 +1075,12 @@ namespace ZXMAK2.Hardware.Evo
                 }
                 else
                 {
-                    // Keep the accepted B01-B38 path byte-for-byte when
-                    // #BF.D5 is clear or this is not the PentEvo ULA.
-                    m_ulaAtm.SetPaletteAtm2(value);
+                    // On BaseConf the ordinary six-bit palette is live too:
+                    // preserve the already rendered scan before changing it.
+                    if (ulaPentEvo != null)
+                        ulaPentEvo.SetPaletteBaseConf6(value);
+                    else
+                        m_ulaAtm.SetPaletteAtm2(value);
                 }
             }
         }

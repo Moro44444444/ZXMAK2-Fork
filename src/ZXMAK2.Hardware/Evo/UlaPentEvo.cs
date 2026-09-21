@@ -34,7 +34,7 @@ namespace ZXMAK2.Hardware.Evo
         public int RequestedVideoSelector { get { return m_videoController.RequestedRaw; } }
         [HardwareValue("VIDEOACT", Description = "B21 active normalized BaseConf video selector")]
         public int ActiveVideoSelector { get { return (int)m_videoController.Active.Mode; } }
-        [HardwareValue("VIDEOPEND", Description = "B21 video mode waits for software frame boundary")]
+        [HardwareValue("VIDEOPEND", Description = "B40 decoded BaseConf video mode differs from active renderer")]
         public bool VideoModePending { get { return m_videoController.IsPending; } }
         internal EvoRasterTiming ActiveRaster { get { return EvoRasterTiming.ForMode(m_activeRaster); } }
 
@@ -294,6 +294,18 @@ namespace ZXMAK2.Hardware.Evo
         }
 
         /// <summary>
+        /// Writes the ordinary six-bit BaseConf/ATM palette after completing
+        /// the part of the scan already produced with the previous color.
+        /// video_palframe.v writes its palette RAM on the live 28 MHz clock;
+        /// it is not a frame-boundary operation.
+        /// </summary>
+        public void SetPaletteBaseConf6(byte value)
+        {
+            UpdateState(GetCurrentFrameTact());
+            SetPaletteAtm2(value);
+        }
+
+        /// <summary>
         /// Returns the official BD_COLORRD layout for the lower component
         /// pairs selected by #BF.D5.  Toggling D5 never rewrites palette RAM.
         /// </summary>
@@ -353,8 +365,11 @@ namespace ZXMAK2.Hardware.Evo
             m_pendingPage8000 = page8000;
             m_pendingPageC000 = pageC000;
 
-            // Memory mapping and all renderer page pointers stay current while
-            // the old renderer remains active until BeginFrameTiming commits.
+            // video_modedecode.v samples atm_vmode/pent_vmode on every 28 MHz
+            // clock.  SetPageMapping() first flushes the old renderer through
+            // the current tact, then the decoded route and page pointers become
+            // active for the rest of this frame.
+            m_videoController.Commit();
             base.SetPageMappingAtm(
                 m_videoController.Active.Mode,
                 videoPage,
