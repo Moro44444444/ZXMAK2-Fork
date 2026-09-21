@@ -908,7 +908,7 @@ namespace ZXMAK2.Hardware.Evo
             set { m_pXXBF = (byte)((m_pXXBF & ~0x10) | (value ? 0x10 : 0)); }
         }
 
-        [HardwareValue("PAL444", Description = "Latched BF.D5 palette mode; renderer activation pending B38")]
+        [HardwareValue("PAL444", Description = "BF.D5 BaseConf address-extended 4:4:4 palette mode")]
         public bool Palette444Enabled
         {
             get { return (m_pXXBF & 0x20) != 0; }
@@ -1016,7 +1016,17 @@ namespace ZXMAK2.Hardware.Evo
         {
             if ((DOSEN || SHADOW) && PEN2 && m_ulaAtm != null)
             {
-                m_ulaAtm.SetPaletteAtm2(value);
+                var ulaPentEvo = m_ulaAtm as UlaPentEvo;
+                if (Palette444Enabled && ulaPentEvo != null)
+                {
+                    ulaPentEvo.SetPaletteBaseConf444(addr, value);
+                }
+                else
+                {
+                    // Keep the accepted B01-B38 path byte-for-byte when
+                    // #BF.D5 is clear or this is not the PentEvo ULA.
+                    m_ulaAtm.SetPaletteAtm2(value);
+                }
             }
         }
 
@@ -1164,7 +1174,10 @@ namespace ZXMAK2.Hardware.Evo
                         (DOSEN ? 0x10 : 0));
                     break;
                 case 0x0D:
-                    value = m_ulaAtm != null ? m_ulaAtm.ReadConfigPalette() : (byte)0xFF;
+                    var ulaPentEvo = m_ulaAtm as UlaPentEvo;
+                    value = Palette444Enabled && ulaPentEvo != null
+                        ? ulaPentEvo.ReadConfigPaletteBaseConf444()
+                        : (m_ulaAtm != null ? m_ulaAtm.ReadConfigPalette() : (byte)0xFF);
                     break;
                 case 0x0E:
                     value = m_ulaAtm != null ? m_ulaAtm.ReadConfigFont() : (byte)0xFF;

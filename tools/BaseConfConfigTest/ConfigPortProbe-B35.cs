@@ -184,6 +184,9 @@ internal static class ConfigPortProbeB35
         Check(Read(rig, 0x10BE, 0, false, out handled) == 0x34 && handled,
             "Legacy #10BE read alias mismatch.");
 
+        // B39A gives #BF.D5 its documented readback meaning.  Clear it here
+        // because this B35 vector verifies the legacy upper-pair path.
+        Write(rig, "BusWritePortXXBF_EVO", 0x00BF, 0, false);
         var colors = (byte[])FindField(rig.UlaType, "m_atm_pal").GetValue(rig.Ula);
         FindField(rig.UlaType, "m_borderAttr").SetValue(rig.Ula, 5);
         colors[5] = 0x2D;

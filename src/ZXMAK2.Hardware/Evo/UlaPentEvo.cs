@@ -254,6 +254,77 @@ namespace ZXMAK2.Hardware.Evo
             Name = "PENTEVO";
         }
 
+        /// <summary>
+        /// Writes the BaseConf 4:4:4 palette extension selected by #BF.D5.
+        /// The upper two bits of every component keep the ordinary ATM2
+        /// active-low data encoding; the lower two bits come from the I/O
+        /// address exactly as in video_palframe.v.
+        /// </summary>
+        public void SetPaletteBaseConf444(ushort addr, byte value)
+        {
+            // Preserve the already rendered part of the frame before the
+            // visible palette RAM changes.  The accepted D5=0 path remains
+            // in UlaAtm450.SetPaletteAtm2 and is not routed through here.
+            UpdateState(GetCurrentFrameTact());
+
+            var index = ReadConfigBorder() & 0x0F;
+
+            // Keep the inherited six-bit latch synchronized with the upper
+            // pairs.  This is what #0DBD/#0DBE exposes again after D5 clears.
+            SetPaletteAtm2(value);
+
+            var red = (ActiveLowPair(value, 1, 6) << 2) |
+                ActiveLowPair(addr, 9, 14);
+            var green = (ActiveLowPair(value, 4, 7) << 2) |
+                ActiveLowPair(addr, 12, 15);
+            var blue = (ActiveLowPair(value, 0, 5) << 2) |
+                ActiveLowPair(addr, 8, 13);
+            var color = 0xFF000000U |
+                ((uint)(red * 17) << 16) |
+                ((uint)(green * 17) << 8) |
+                (uint)(blue * 17);
+
+            SpectrumRenderer.UpdatePalette(index, color);
+            Atm320Renderer.UpdatePalette(index, color);
+            Atm640Renderer.UpdatePalette(index, color);
+            AtmTxtRenderer.UpdatePalette(index, color);
+            EvoTxtRenderer.UpdatePalette(index, color);
+            EvoHwmRenderer.UpdatePalette(index, color);
+            EvoA16Renderer.UpdatePalette(index, color);
+        }
+
+        /// <summary>
+        /// Returns the official BD_COLORRD layout for the lower component
+        /// pairs selected by #BF.D5.  Toggling D5 never rewrites palette RAM.
+        /// </summary>
+        public byte ReadConfigPaletteBaseConf444()
+        {
+            var index = ReadConfigBorder() & 0x0F;
+            var color = SpectrumRenderer.Palette[index];
+            var red = ((int)(color >> 16) & 0xFF) / 17;
+            var green = ((int)(color >> 8) & 0xFF) / 17;
+            var blue = ((int)color & 0xFF) / 17;
+
+            // zports.v: { ~palcolor[4], ~palcolor[2], ~palcolor[0],
+            //             ~palcolor[5], 2'b11,
+            //             ~palcolor[3], ~palcolor[1] }
+            // where palcolor is { G[1:0], R[1:0], B[1:0] } in 4:4:4 mode.
+            return (byte)(
+                (((~green) & 0x01) << 7) |
+                (((~red) & 0x01) << 6) |
+                (((~blue) & 0x01) << 5) |
+                (((~green >> 1) & 0x01) << 4) |
+                0x0C |
+                (((~red >> 1) & 0x01) << 1) |
+                ((~blue >> 1) & 0x01));
+        }
+
+        private static int ActiveLowPair(int source, int highBit, int lowBit)
+        {
+            return (((source >> highBit) & 1) ^ 1) << 1 |
+                (((source >> lowBit) & 1) ^ 1);
+        }
+
         protected override void OnRendererInit()
         {
             base.OnRendererInit();
