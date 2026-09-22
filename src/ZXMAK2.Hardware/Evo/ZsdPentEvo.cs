@@ -19,6 +19,7 @@ namespace ZXMAK2.Hardware.Evo
         #region Fields
 
         private IMemoryDevice mem;
+        private bool m_sandbox;
         private SdCard card;
         private byte buf;
         private bool card_cs;
@@ -48,6 +49,7 @@ namespace ZXMAK2.Hardware.Evo
 
         public override void BusInit(IBusManager bmgr)
         {
+            m_sandbox = bmgr.IsSandbox;
             mem = bmgr.FindDevice<IMemoryDevice>();
             openImageCommand = new SdImageOpenCommand(
                 CommandUi_OnExecute,
@@ -79,7 +81,13 @@ namespace ZXMAK2.Hardware.Evo
                 card_cs = false;
                 buf = 0xFF;
             }
-            RestoreConfiguredCard();
+            // Machine Settings builds its editable profile in a sandbox bus.
+            // Like IDE, that bus must retain only the media descriptor: opening
+            // the same writable image there would contend with the live card.
+            if (!m_sandbox)
+            {
+                RestoreConfiguredCard();
+            }
         }
 
         public override void BusDisconnect()
@@ -110,7 +118,7 @@ namespace ZXMAK2.Hardware.Evo
         {
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttribute(
-                itemNode, "sdImage", ConfiguredImageFileName);
+                itemNode, "sdImage", configuredImageFileName ?? string.Empty);
         }
 
 
@@ -294,30 +302,9 @@ namespace ZXMAK2.Hardware.Evo
             }
         }
 
-        public string MountedImageFileName
-        {
-            get
-            {
-                lock (cardSync)
-                {
-                    return card == null ? string.Empty : card.MountedFileName ?? string.Empty;
-                }
-            }
-        }
-
         public string ConfiguredImageFileName
         {
-            get
-            {
-                lock (cardSync)
-                {
-                    if (!string.IsNullOrEmpty(configuredImageFileName))
-                    {
-                        return configuredImageFileName;
-                    }
-                    return MountedImageFileName;
-                }
-            }
+            get { return configuredImageFileName ?? string.Empty; }
         }
 
         /// <summary>
@@ -373,7 +360,6 @@ namespace ZXMAK2.Hardware.Evo
                     buf = 0xFF;
                     configuredImageFileName = fullPath;
                 }
-                OnConfigChanged();
                 Logger.Info("SD hot swap completed: '{0}'", fullPath);
             }
             catch
@@ -405,7 +391,6 @@ namespace ZXMAK2.Hardware.Evo
             {
                 previous.Close();
             }
-            OnConfigChanged();
             Logger.Info("SD card ejected");
         }
 

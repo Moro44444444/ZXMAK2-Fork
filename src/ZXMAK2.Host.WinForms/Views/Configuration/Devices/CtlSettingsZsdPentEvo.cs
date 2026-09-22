@@ -83,21 +83,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         public void Init(BusManager bmgr, IHostService host, ZsdPentEvo device)
         {
             m_device = device;
-            SetImagePath(device.ConfiguredImageFileName);
-        }
-
-        /// <summary>
-        /// FormMachineSettings supplies the live mounted path as a fallback
-        /// when a legacy profile has not yet serialized its SD attribute.
-        /// This updates only the detached settings copy until Apply is used.
-        /// </summary>
-        public void SetMountedImageFileName(string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                return;
-            }
-            SetImagePath(fileName);
+            SetImagePath(m_device.ConfiguredImageFileName);
         }
 
         private void SetImagePath(string fileName)

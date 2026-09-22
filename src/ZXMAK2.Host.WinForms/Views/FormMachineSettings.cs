@@ -426,7 +426,6 @@ namespace ZXMAK2.Host.WinForms.Views
                 m_workBus.LoadConfigXml(root);
                 m_workBus.Disconnect();
                 initWorkBus();
-                MirrorMountedSdCard();
             }
             catch (Exception ex)
             {
@@ -486,35 +485,6 @@ namespace ZXMAK2.Host.WinForms.Views
 
             lstNavigation.SelectedItems.Clear();
             lstNavigation.Items[0].Selected = true;
-        }
-
-        private void MirrorMountedSdCard()
-        {
-            var liveDevice = m_vm.Bus.FindDevice<ZsdPentEvo>();
-            if (liveDevice == null || !liveDevice.IsMediaMounted)
-            {
-                return;
-            }
-
-            var mountedFileName = liveDevice.MountedImageFileName;
-            if (string.IsNullOrEmpty(mountedFileName))
-            {
-                return;
-            }
-
-            // The form applies this detached bus, not its visual controls.
-            // Keep the model in sync before showing the fallback path; without
-            // this, Apply would write the old empty sdImage and eject the card.
-            var pendingDevice = m_workBus.FindDevice<ZsdPentEvo>();
-            if (pendingDevice != null)
-            {
-                pendingDevice.ConfigureCard(mountedFileName);
-            }
-
-            foreach (var control in m_ctlList.OfType<CtlSettingsZsdPentEvo>())
-            {
-                control.SetMountedImageFileName(mountedFileName);
-            }
         }
 
         private UserControl ResolveScreenControl(BusManager workBus, IHostService host, BusDeviceBase device)
