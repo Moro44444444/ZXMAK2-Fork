@@ -133,6 +133,13 @@ namespace ZXMAK2.Hardware.Evo
                     image, readOnly, cylinders, heads, sectors, lba);
             }
 
+            // BusManager may reuse this device instance while applying a
+            // changed machine profile.  Always clear the optional slave
+            // first; otherwise an ejected CD/DVD from the previous profile
+            // survives a reset because there is nothing below to overwrite it
+            // when ideCdConfigured is false.
+            m_ata.Devices[1].DeviceInfo.Disconnect();
+
             var hasConfiguredCdRom = Utils.GetXmlAttributeAsBool(itemNode, "ideCdConfigured", false);
             if (hasConfiguredCdRom)
             {

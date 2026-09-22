@@ -118,6 +118,29 @@ internal static class AtapiCdromProbeB41
                     var capacity = ReadData(device, 8);
                     Check(capacity[4] == 0 && capacity[5] == 0 && capacity[6] == 8 && capacity[7] == 0,
                         "READ CAPACITY did not report 2048-byte optical blocks.");
+
+                    SendPacket(device, new byte[] { 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+                    Check((device.read(AtaReg.CommandStatus) & (byte)HD_STATUS.STATUS_ERR) == 0,
+                        "TEST UNIT READY failed before SET CD SPEED.");
+                    SendPacket(device, new byte[] { 0xBB, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+                    Check((device.read(AtaReg.CommandStatus) & (byte)HD_STATUS.STATUS_ERR) == 0,
+                        "SET CD SPEED was not acknowledged.");
+
+                    SendPacket(device, new byte[] { 0x43, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0 });
+                    var toc = ReadData(device, 20);
+                    Check(toc[0] == 0 && toc[1] == 18 && toc[2] == 1 && toc[3] == 1,
+                        "READ TOC does not report a complete one-track data disc.");
+                    Check(toc[6] == 1 && toc[14] == 0xAA,
+                        "READ TOC does not include track one and lead-out descriptors.");
+
+                    SendPacket(device, new byte[] { 0x43, 0, 0, 0, 0, 0, 0, 0, 12, 1, 0, 0 });
+                    var session = ReadData(device, 12);
+                    Check(session[0] == 0 && session[1] == 10 && session[2] == 1 && session[3] == 1,
+                        "READ TOC multi-session information is not available.");
+                    Check(session[6] == 1 && session[8] == 0 && session[9] == 0 &&
+                        session[10] == 0 && session[11] == 0,
+                        "READ TOC multi-session start is not LBA zero.");
+
                     SendPacket(device, new byte[] { 0x28, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0 });
                     var readStartStatus = device.read(AtaReg.CommandStatus);
                     Check((readStartStatus & (byte)HD_STATUS.STATUS_DRQ) != 0 &&
@@ -173,6 +196,9 @@ internal static class AtapiCdromProbeB41
                 Check(!bool.Parse(disconnectedItem.GetAttribute("ideCdConfigured")) &&
                     disconnectedItem.GetAttribute("ideCdDrive") == string.Empty,
                     "Disconnected CD/DVD drive was not saved as disabled.");
+                current.LoadConfigXml(disconnectedItem);
+                Check(!current.CdRom.IsCdrom && current.CdRom.FileName == string.Empty,
+                    "An ejected CD/DVD drive survived reload into an existing IDE device.");
 
                 Console.WriteLine("AtapiCdromProbe-B41: {0} PASS", s_checks);
                 return 0;

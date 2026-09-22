@@ -759,6 +759,10 @@ namespace ZXMAK2.Hardware.Circuits.Ata
                     start_atapi_response(create_mode_sense_response(transbf[4]));
                     return;
 
+                case 0x5A: // MODE SENSE (10)
+                    start_atapi_response(create_mode_sense_10_response(read_be_uint16(transbf, 7)));
+                    return;
+
                 case 0x1B: // START STOP UNIT
                 case 0x1E: // PREVENT/ALLOW MEDIUM REMOVAL
                     // The host tray is deliberately not controlled by guest
@@ -781,21 +785,51 @@ namespace ZXMAK2.Hardware.Circuits.Ata
                         read_be_uint16(transbf, 7));
                     return;
 
-                case 0x43: // READ TOC/PMA/ATIP, format 0
+                case 0xBB: // SET CD SPEED
+                    // The Time Gal Pentagon loader issues TEST UNIT READY
+                    // before this command.  The Windows host controls the
+                    // actual speed, so acknowledging the requested setting
+                    // is the compatible ATAPI behaviour.
                     if (!atapi_p.IsMediaReady)
                     {
                         fail_atapi_command(0x02, 0x3A, 0x00);
                         return;
                     }
-                    if ((transbf[9] & 0x0F) != 0)
+                    complete_atapi_command();
+                    return;
+
+                case 0x43: // READ TOC/PMA/ATIP, formats 0 and 1
+                    if (!atapi_p.IsMediaReady)
                     {
-                        fail_atapi_command(0x05, 0x24, 0x00);
+                        fail_atapi_command(0x02, 0x3A, 0x00);
                         return;
                     }
-                    start_atapi_response(create_read_toc_response(read_be_uint16(transbf, 7)));
+                    var tocFormat = (byte)(transbf[9] & 0x0F);
+                    if (tocFormat == 0)
+                    {
+                        start_atapi_response(create_read_toc_response(
+                            transbf[6],
+                            (transbf[1] & 0x02) != 0,
+                            read_be_uint16(transbf, 7)));
+                        return;
+                    }
+                    if (tocFormat == 1)
+                    {
+                        // Multi-session information. Time Gal's standard
+                        // loader uses this to locate the current ISO session
+                        // before it starts reading its directory. A Windows
+                        // logical optical drive exposes the active medium as
+                        // one address space, so that session starts at LBA 0.
+                        start_atapi_response(create_multi_session_response(
+                            (transbf[1] & 0x02) != 0,
+                            read_be_uint16(transbf, 7)));
+                        return;
+                    }
+                    fail_atapi_command(0x05, 0x24, 0x00);
                     return;
 
                 default:
+                    Logger.Warn("ATA{0:X2}: unsupported ATAPI packet #{1:X2}", Id, command);
                     fail_atapi_command(0x05, 0x20, 0x00); // illegal request/opcode
                     return;
             }
@@ -942,6 +976,13 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             return truncate_atapi_response(response, allocationLength);
         }
 
+        private static byte[] create_mode_sense_10_response(ushort allocationLength)
+        {
+            var response = new byte[8];
+            response[1] = 6;
+            return truncate_atapi_response(response, allocationLength);
+        }
+
         private byte[] create_read_capacity_response()
         {
             var response = new byte[8];
@@ -950,16 +991,66 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             return response;
         }
 
-        private static byte[] create_read_toc_response(ushort allocationLength)
+        private byte[] create_read_toc_response(byte startingTrack, bool msf, ushort allocationLength)
         {
-            var response = new byte[12];
-            response[0] = 0;
-            response[1] = 10;
+            // Format 0 contains the first/last track followed by 8-byte
+            // descriptors.  A data CD has one data track and a lead-out;
+            // returning both lets classic NemoIDE loaders determine the
+            // complete media layout instead of seeing a truncated TOC.
+            var includeTrackOne = startingTrack == 0 || startingTrack == 1;
+            var includeLeadOut = startingTrack == 0 || startingTrack == 1 || startingTrack == 0xAA;
+            if (!includeTrackOne && !includeLeadOut)
+            {
+                return new byte[0];
+            }
+
+            var descriptorCount = (includeTrackOne ? 1 : 0) + (includeLeadOut ? 1 : 0);
+            var response = new byte[4 + descriptorCount * 8];
+            var dataLength = response.Length - 2;
+            response[0] = (byte)(dataLength >> 8);
+            response[1] = (byte)dataLength;
             response[2] = 1;
             response[3] = 1;
-            response[5] = 0x14; // data track, ADR=1
-            response[6] = 1;
+
+            var offset = 4;
+            if (includeTrackOne)
+            {
+                write_toc_descriptor(response, offset, 1, 0, msf);
+                offset += 8;
+            }
+            if (includeLeadOut)
+            {
+                write_toc_descriptor(response, offset, 0xAA, atapi_p.BlockCount, msf);
+            }
             return truncate_atapi_response(response, allocationLength);
+        }
+
+        private static byte[] create_multi_session_response(bool msf, ushort allocationLength)
+        {
+            var response = new byte[12];
+            response[1] = 10;
+            response[2] = 1; // first complete session
+            response[3] = 1; // last complete session
+            write_toc_descriptor(response, 4, 1, 0, msf);
+            return truncate_atapi_response(response, allocationLength);
+        }
+
+        private static void write_toc_descriptor(byte[] response, int offset, byte track, uint lba, bool msf)
+        {
+            response[offset + 1] = 0x14; // data track, ADR=1
+            response[offset + 2] = track;
+            if (!msf)
+            {
+                write_be_uint32(response, offset + 4, lba);
+                return;
+            }
+
+            // CD MSF reports LBA 0 as 00:02:00 (the mandatory 150-frame
+            // lead-in), with the address stored in bytes 5..7.
+            var frames = (ulong)lba + 150;
+            response[offset + 5] = (byte)(frames / (60 * 75));
+            response[offset + 6] = (byte)((frames / 75) % 60);
+            response[offset + 7] = (byte)(frames % 75);
         }
 
         private static byte[] truncate_atapi_response(byte[] response, int allocationLength)
