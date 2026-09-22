@@ -1227,8 +1227,6 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             var image = new Bitmap(32, 32);
             using (var graphics = Graphics.FromImage(image))
-            using (var outline = new Pen(Color.FromArgb(45, 55, 70), 2))
-            using (var detail = new Pen(Color.FromArgb(215, 225, 235), 1))
             {
                 graphics.Clear(Color.Magenta);
                 if (mediaKind == MediaStatusKind.SecureDigital)
@@ -1239,44 +1237,15 @@ namespace ZXMAK2.Host.WinForms.Views
                 }
                 else if (mediaKind == MediaStatusKind.HardDisk)
                 {
-                    // Compact blue hard-drive case, platter and arm. The
-                    // intentionally small palette matches the legacy toolbar
-                    // rather than introducing a photo-style asset.
-                    using (var caseBrush = new SolidBrush(Color.FromArgb(40, 96, 160)))
-                    using (var sideBrush = new SolidBrush(Color.FromArgb(27, 57, 102)))
-                    using (var platterBrush = new SolidBrush(Color.FromArgb(205, 214, 218)))
-                    using (var hubBrush = new SolidBrush(Color.FromArgb(82, 130, 184)))
-                    {
-                        graphics.FillRectangle(sideBrush, 4, 8, 24, 18);
-                        graphics.FillRectangle(caseBrush, 4, 5, 24, 19);
-                        graphics.DrawRectangle(outline, 4, 5, 24, 19);
-                        graphics.FillEllipse(platterBrush, 7, 8, 14, 14);
-                        graphics.DrawEllipse(outline, 7, 8, 14, 14);
-                        graphics.FillEllipse(hubBrush, 12, 13, 4, 4);
-                        graphics.DrawLine(outline, 21, 10, 25, 18);
-                        graphics.DrawLine(outline, 20, 16, 25, 18);
-                        graphics.FillRectangle(Brushes.WhiteSmoke, 6, 24, 5, 2);
-                        graphics.FillRectangle(Brushes.WhiteSmoke, 13, 24, 9, 2);
-                    }
+                    graphics.DrawImage(
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_32x32,
+                        new Rectangle(0, 0, 32, 32));
                 }
                 else
                 {
-                    // Floppy drive front: blue enclosure, dark disk slot,
-                    // eject key and a small activity LED.
-                    using (var caseBrush = new SolidBrush(Color.FromArgb(45, 112, 151)))
-                    using (var slotBrush = new SolidBrush(Color.FromArgb(45, 55, 70)))
-                    using (var ejectBrush = new SolidBrush(Color.FromArgb(170, 199, 220)))
-                    using (var ledBrush = new SolidBrush(Color.FromArgb(40, 180, 70)))
-                    {
-                        graphics.FillRectangle(caseBrush, 3, 7, 26, 18);
-                        graphics.DrawRectangle(outline, 3, 7, 26, 18);
-                        graphics.FillRectangle(slotBrush, 6, 11, 19, 6);
-                        graphics.DrawRectangle(outline, 6, 11, 19, 6);
-                        graphics.FillRectangle(ejectBrush, 18, 19, 6, 3);
-                        graphics.DrawRectangle(outline, 18, 19, 6, 3);
-                        graphics.FillEllipse(ledBrush, 7, 20, 3, 3);
-                        graphics.DrawLine(detail, 7, 9, 25, 9);
-                    }
+                    graphics.DrawImage(
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_32x32,
+                        new Rectangle(0, 0, 32, 32));
                 }
 
                 var dotColor = isMounted ?

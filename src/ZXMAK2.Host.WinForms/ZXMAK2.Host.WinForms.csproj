@@ -302,6 +302,8 @@
     <Content Include="Resources\EmuWarmReset_32x32.png" />
     <Content Include="Resources\EmuFullScreen_32x32.png" />
     <Content Include="Resources\EmuWindowed_32x32.png" />
+    <Content Include="Resources\EmuHddImage_32x32.png" />
+    <Content Include="Resources\EmuFddImage_32x32.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
