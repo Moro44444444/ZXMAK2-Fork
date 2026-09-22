@@ -291,6 +291,7 @@
             // menuViewScaleModeNoBorder
             //
             this.menuViewScaleModeNoBorder.Name = "menuViewScaleModeNoBorder";
+            this.menuViewScaleModeNoBorder.ShortcutKeyDisplayString = "Ctrl+B";
             this.menuViewScaleModeNoBorder.Size = new System.Drawing.Size(160, 22);
             this.menuViewScaleModeNoBorder.Text = "No Border";
             //

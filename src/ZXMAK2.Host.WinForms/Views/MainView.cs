@@ -616,6 +616,14 @@ namespace ZXMAK2.Host.WinForms.Views
                 e.Handled = true;
                 return;
             }
+            // BORDER / NO BORDER
+            if (e.Control && !e.Alt && e.KeyCode == Keys.B)
+            {
+                OnCommand(CommandViewNoBorder);
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+                return;
+            }
             //RESET
             if (e.KeyCode == Keys.F12)
             {
