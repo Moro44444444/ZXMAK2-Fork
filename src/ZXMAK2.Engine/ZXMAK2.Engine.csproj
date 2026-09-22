@@ -78,6 +78,7 @@
     <Compile Include="Interfaces\IJtagDevice.cs" />
     <Compile Include="Interfaces\IKeyboardDevice.cs" />
     <Compile Include="Interfaces\IMachineState.cs" />
+    <Compile Include="Interfaces\IMediaStatusDevice.cs" />
     <Compile Include="Interfaces\IMemoryDevice.cs" />
     <Compile Include="Interfaces\IMouseDevice.cs" />
     <Compile Include="Interfaces\IRzxFrameSource.cs" />

@@ -622,6 +622,9 @@ namespace ZXMAK2.Host.WinForms.Views
                 var ideMediaChanged = IsIdeMediaChanged(
                     m_vm.Bus.FindDevice<IdePentEvo>(),
                     m_workBus.FindDevice<IdePentEvo>());
+                var sdMediaChanged = IsSdMediaChanged(
+                    m_vm.Bus.FindDevice<ZsdPentEvo>(),
+                    m_workBus.FindDevice<ZsdPentEvo>());
 
                 if (!m_workBus.Connect())
                 {
@@ -649,11 +652,11 @@ namespace ZXMAK2.Host.WinForms.Views
                 ula = bmgr.FindDevice<IUlaDevice>();
                 ula.PortFE = (byte)portFE;
                 var memory = bmgr.FindDevice<IMemoryDevice>();
-                if (ideMediaChanged)
+                if (ideMediaChanged || sdMediaChanged)
                 {
-                    // LoadConfigXml disconnects the old ATA image before it
-                    // opens the replacement. Complete that transaction with
-                    // a cold machine start while the VM is still stopped.
+                    // Media replacement is completed by the same cold start
+                    // for IDE and SD. The emulated device sees a clean power
+                    // cycle only after old host file handles are gone.
                     m_vm.DoPowerCycle();
                 }
                 else if (memory != oldMemory)
@@ -692,6 +695,19 @@ namespace ZXMAK2.Host.WinForms.Views
                    current.Heads != pending.Heads ||
                    current.Sectors != pending.Sectors ||
                    current.Lba != pending.Lba;
+        }
+
+        private static bool IsSdMediaChanged(
+            ZsdPentEvo currentDevice,
+            ZsdPentEvo pendingDevice)
+        {
+            if (currentDevice == null || pendingDevice == null)
+                return currentDevice != pendingDevice;
+
+            return !string.Equals(
+                NormalizeMediaPath(currentDevice.ConfiguredImageFileName),
+                NormalizeMediaPath(pendingDevice.ConfiguredImageFileName),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeMediaPath(string fileName)

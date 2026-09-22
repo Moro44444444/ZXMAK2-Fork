@@ -1,6 +1,9 @@
 ﻿using System;
 
+using System.IO;
+using System.Xml;
 using ZXMAK2.Hardware.Circuits.SecureDigital;
+using ZXMAK2.Engine;
 using ZXMAK2.Host.Entities;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
@@ -11,7 +14,7 @@ using ZXMAK2.Mvvm;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class ZsdPentEvo : BusDeviceBase
+    public class ZsdPentEvo : BusDeviceBase, IMediaStatusDevice
     {
         #region Fields
 
@@ -21,6 +24,8 @@ namespace ZXMAK2.Hardware.Evo
         private bool card_cs;
         private readonly object cardSync = new object();
         private SdImageOpenCommand openImageCommand;
+        private SdImageOpenCommand ejectImageCommand;
+        private string configuredImageFileName = string.Empty;
 
         #endregion
 
@@ -48,7 +53,12 @@ namespace ZXMAK2.Hardware.Evo
                 CommandUi_OnExecute,
                 CommandUi_OnCanExecute,
                 "Open SD Card image...");
+            ejectImageCommand = new SdImageOpenCommand(
+                EjectCommandUi_OnExecute,
+                CommandUi_OnCanExecute,
+                "Eject SD Card");
             bmgr.AddCommandUi(openImageCommand);
+            bmgr.AddCommandUi(ejectImageCommand);
 
             bmgr.Events.SubscribeReset(Reset);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x0057, WrXX57);
@@ -69,6 +79,7 @@ namespace ZXMAK2.Hardware.Evo
                 card_cs = false;
                 buf = 0xFF;
             }
+            RestoreConfiguredCard();
         }
 
         public override void BusDisconnect()
@@ -86,6 +97,21 @@ namespace ZXMAK2.Hardware.Evo
         }
 
         #endregion
+
+
+        protected override void OnConfigLoad(XmlNode itemNode)
+        {
+            base.OnConfigLoad(itemNode);
+            configuredImageFileName = Utils.GetXmlAttributeAsString(
+                itemNode, "sdImage", string.Empty);
+        }
+
+        protected override void OnConfigSave(XmlNode itemNode)
+        {
+            base.OnConfigSave(itemNode);
+            Utils.SetXmlAttribute(
+                itemNode, "sdImage", configuredImageFileName ?? string.Empty);
+        }
 
 
         #region Bus handlers
@@ -207,9 +233,6 @@ namespace ZXMAK2.Hardware.Evo
             {
                 return;
             }
-            SdCard replacement = null;
-            string previousFileName = null;
-            bool previousDetached = false;
             try
             {
                 var viewResolver = Locator.Resolve<IResolver>("View");
@@ -228,52 +251,113 @@ namespace ZXMAK2.Hardware.Evo
                     return;
                 }
 
-                // Reproduce physical hot swap order: remove and close the old
-                // card before opening the new image.  Opening the replacement
-                // first can collide with an image handle retained by an
-                // earlier mount when cycling A -> B -> A.
-                SdCard previous;
+                MountCard(dlg.FileName);
+                openImageCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot open SD Card image!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void EjectCommandUi_OnExecute(Object arg)
+        {
+            try
+            {
+                EjectCard();
+                ejectImageCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot eject SD Card!\n\n{0}", ex.Message);
+            }
+        }
+
+        public MediaStatusKind MediaStatusKind
+        {
+            get { return MediaStatusKind.SecureDigital; }
+        }
+
+        public bool IsMediaMounted
+        {
+            get
+            {
                 lock (cardSync)
                 {
-                    previous = card;
-                    previousFileName = previous != null ?
-                        previous.MountedFileName : null;
-                    card = null;
-                    card_cs = false;
-                    buf = 0xFF;
-                    previousDetached = true;
+                    return card != null &&
+                        !string.IsNullOrEmpty(card.MountedFileName);
                 }
-                Logger.Info(
-                    "SD hot swap: close '{0}', open '{1}'",
-                    previousFileName ?? "<none>",
-                    dlg.FileName);
-                if (previous != null)
-                {
-                    previous.Close();
-                }
+            }
+        }
 
+        public string ConfiguredImageFileName
+        {
+            get { return configuredImageFileName ?? string.Empty; }
+        }
+
+        /// <summary>
+        /// Updates the saved configuration on a detached settings bus. A live
+        /// replacement must go through MountCard so the previous handle is
+        /// closed before the new image is opened.
+        /// </summary>
+        public void ConfigureCard(string fileName)
+        {
+            configuredImageFileName = NormalizeImageFileName(fileName);
+        }
+
+        public void MountCard(string fileName)
+        {
+            var fullPath = NormalizeImageFileName(fileName);
+            if (string.IsNullOrEmpty(fullPath))
+            {
+                EjectCard();
+                return;
+            }
+
+            // Reproduce physical hot swap order: remove and close the old
+            // card before opening the new image. Opening the replacement
+            // first can collide with an image handle retained by an earlier
+            // mount when cycling A -> B -> A.
+            SdCard previous;
+            string previousFileName;
+            lock (cardSync)
+            {
+                previous = card;
+                previousFileName = previous != null ? previous.MountedFileName : null;
+                card = null;
+                card_cs = false;
+                buf = 0xFF;
+            }
+            if (previous != null)
+            {
+                previous.Close();
+            }
+
+            SdCard replacement = null;
+            try
+            {
+                Logger.Info("SD hot swap: close '{0}', open '{1}'",
+                    previousFileName ?? "<none>", fullPath);
                 replacement = new SdCard();
-                replacement.Open(dlg.FileName);
-
+                replacement.Open(fullPath);
                 lock (cardSync)
                 {
                     card = replacement;
                     replacement = null;
                     card_cs = false;
                     buf = 0xFF;
+                    configuredImageFileName = fullPath;
                 }
-                Logger.Info("SD hot swap completed: '{0}'", dlg.FileName);
-                openImageCommand.NotifyExecutedSuccessfully();
+                Logger.Info("SD hot swap completed: '{0}'", fullPath);
             }
-            catch (Exception ex)
+            catch
             {
-                Logger.Error(ex);
-                if (previousDetached)
-                {
-                    RestorePreviousCard(previousFileName);
-                }
-                Locator.Resolve<IUserMessage>()
-                    .Error("Cannot open SD Card image!\n\n{0}", ex.Message);
+                RestorePreviousCard(previousFileName);
+                throw;
             }
             finally
             {
@@ -282,6 +366,56 @@ namespace ZXMAK2.Hardware.Evo
                     replacement.Close();
                 }
             }
+        }
+
+        public void EjectCard()
+        {
+            SdCard previous;
+            lock (cardSync)
+            {
+                previous = card;
+                card = new SdCard();
+                card_cs = false;
+                buf = 0xFF;
+                configuredImageFileName = string.Empty;
+            }
+            if (previous != null)
+            {
+                previous.Close();
+            }
+            Logger.Info("SD card ejected");
+        }
+
+        private void RestoreConfiguredCard()
+        {
+            var configured = configuredImageFileName;
+            if (string.IsNullOrEmpty(configured))
+            {
+                return;
+            }
+            try
+            {
+                MountCard(configured);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Cannot restore configured SD card: {0}", configured);
+                EjectCard();
+            }
+        }
+
+        private static string NormalizeImageFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return string.Empty;
+            }
+            var fullPath = Path.GetFullPath(fileName.Trim());
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException("SD Card image not found", fullPath);
+            }
+            return fullPath;
         }
 
         private void RestorePreviousCard(string fileName)

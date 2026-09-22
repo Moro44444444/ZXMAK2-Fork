@@ -100,6 +100,9 @@
     <Compile Include="Views\Configuration\Devices\CtlSettingsIdePentEvo.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="Views\Configuration\Devices\CtlSettingsZsdPentEvo.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="Views\Configuration\Devices\CtlSettingsGenericDevice.Designer.cs">
       <DependentUpon>CtlSettingsGenericDevice.cs</DependentUpon>
     </Compile>
