@@ -166,6 +166,15 @@
   <data name="EmuFddImage_40x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\resources\emufddimage_40x32.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="EmuSdImage_52x36" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\resources\emusdimage_52x36.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="EmuHddImage_52x36" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\resources\emuhddimage_52x36.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="EmuFddImage_52x36" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\resources\emufddimage_52x36.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
   <data name="EmuWarmReset_32x32" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\resources\emuwarmreset_32x32.png;System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>

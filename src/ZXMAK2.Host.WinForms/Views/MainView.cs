@@ -34,9 +34,10 @@ namespace ZXMAK2.Host.WinForms.Views
         // This is deliberately the only size constant for all three status dots.
         // It can be adjusted after visual feedback without redrawing the toolbar icons.
         private const int MediaStatusDotDiameter = 10;
-        private const int MediaToolbarArtworkWidth = 40;
-        private const int MediaToolbarArtworkHeight = 32;
-        private const int MediaToolbarDropDownWidth = 56;
+        private const int MediaToolbarArtworkWidth = 52;
+        private const int MediaToolbarArtworkHeight = 36;
+        private const int MediaToolbarDropDownWidth = 74;
+        private const int MediaToolbarDropDownHeight = 42;
         private readonly Dictionary<MediaStatusKind, ToolStripDropDownButton> _mediaButtons =
             new Dictionary<MediaStatusKind, ToolStripDropDownButton>();
         private readonly Dictionary<MediaStatusKind, bool?> _mediaMountedStates =
@@ -344,7 +345,9 @@ namespace ZXMAK2.Host.WinForms.Views
             // Keep every toolbar drop-down equally wide: its artwork must not compete
             // with the arrow that opens the corresponding menu.
             tbrDropDownMachines.AutoSize = false;
-            tbrDropDownMachines.Size = new Size(MediaToolbarDropDownWidth, 36);
+            tbrDropDownMachines.Size = new Size(
+                MediaToolbarDropDownWidth,
+                MediaToolbarDropDownHeight);
             var index = tbrStrip.Items.IndexOf(tbrButtonSdImage);
             tbrStrip.Items.Remove(tbrButtonSdImage);
             tbrButtonSdImage.Dispose();
@@ -360,7 +363,9 @@ namespace ZXMAK2.Host.WinForms.Views
             button.ImageTransparentColor = Color.Magenta;
             button.ImageScaling = ToolStripItemImageScaling.None;
             button.AutoSize = false;
-            button.Size = new Size(MediaToolbarDropDownWidth, 36);
+            button.Size = new Size(
+                MediaToolbarDropDownWidth,
+                MediaToolbarDropDownHeight);
             button.Text = toolTip;
             button.ToolTipText = toolTip;
             button.Enabled = false;
@@ -1240,19 +1245,19 @@ namespace ZXMAK2.Host.WinForms.Views
                 if (mediaKind == MediaStatusKind.SecureDigital)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_40x32,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_52x36,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else if (mediaKind == MediaStatusKind.HardDisk)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_40x32,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_52x36,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_40x32,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_52x36,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
 

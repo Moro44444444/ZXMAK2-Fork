@@ -307,6 +307,9 @@
     <Content Include="Resources\EmuSdImage_40x32.png" />
     <Content Include="Resources\EmuHddImage_40x32.png" />
     <Content Include="Resources\EmuFddImage_40x32.png" />
+    <Content Include="Resources\EmuSdImage_52x36.png" />
+    <Content Include="Resources\EmuHddImage_52x36.png" />
+    <Content Include="Resources\EmuFddImage_52x36.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
