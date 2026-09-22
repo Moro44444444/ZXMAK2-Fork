@@ -54,6 +54,14 @@ You may also be interested about this emulator history:
 
 ## What's new
 
+### ZX-Evo BaseConf Alpha 6 — B40
+
+- The clean portable profile now starts directly in ZX-Evo BaseConf.
+- Added toolbar media controls for FDD, HDD and SD: Load/Eject menus and clear red/green connection indicators.
+- SD card settings now use the same safe apply flow as HDD, so opening Machine Settings and pressing Apply preserves an already mounted card.
+- Added reset shortcuts: F12 for Warm Reset, Ctrl+F12 for CMOS reset and Ctrl+Alt+F12 for full machine-state reset; debugger F12 remains unchanged.
+- [Download the Alpha 6 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.6-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-6.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.6-alpha).
+
 ### ZX-Evo BaseConf Alpha 5 — B40
 
 - Added the official BaseConf 4:4:4 palette extension through `#BF.D5`, including palette readback; the existing palette path stays intact when D5 is clear.
@@ -91,6 +99,14 @@ and [latest B40 report](B40_RESULT.md). Older detailed reports are retained in
 [`docs/history/results`](docs/history/results/).
 
 ## Что нового
+
+### ZX Evo BaseConf Alpha 6 — B40
+
+- Чистый portable-профиль теперь сразу запускает ZX-Evo BaseConf.
+- Добавлено управление FDD, HDD и SD с панели: меню Load/Eject и хорошо заметные красные/зелёные индикаторы подключения.
+- Настройки SD теперь применяются по той же безопасной схеме, что HDD: открытие Machine Settings и нажатие Apply не извлекают уже подключённую карту.
+- Добавлены клавиши сброса: F12 — Warm Reset, Ctrl+F12 — сброс CMOS, Ctrl+Alt+F12 — полный сброс состояния машины; F12 в debugger остаётся без изменений.
+- [Скачать portable ZIP Alpha 6](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.6-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-6.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.6-alpha).
 
 ### ZX Evo BaseConf Alpha 5 — B40
 

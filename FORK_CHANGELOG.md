@@ -162,6 +162,17 @@
   состояний, носителей, логов, PDB и development probes.
 - Имена публичных Alpha 3/B36 и Alpha 4/B38 приведены к тому же формату.
 
+## 2026-09-22 — Alpha 6
+
+- Опубликован portable prerelease `ZX-Evo BaseConf Alpha 6 — B40`
+  (`v0.6-alpha`). Это UI- и profile-релиз поверх принятой B40: эмуляция
+  BaseConf, видео, звук, тайминги и контроллеры не менялись.
+- Чистый профиль запускает `ZX-Evo BSconf` по умолчанию.
+- Добавлены индикаторы и меню Load/Eject FDD/HDD/SD; SD приведена к безопасной
+  схеме sandbox-настроек IDE, поэтому Apply не теряет смонтированную карту.
+- Добавлены F12/Ctrl+F12/Ctrl+Alt+F12 reset-клавиши с сохранением поведения
+  F12 в debugger.
+
 ## Следующий утверждённый порядок
 
 1. **B40:** contention, floating bus, raster/INT/video phase и golden-векторы;
