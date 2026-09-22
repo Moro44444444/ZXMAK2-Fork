@@ -599,8 +599,8 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             // This must run before base.OnKeyDown: the virtual keyboard is
             // subscribed to the base KeyDown event and must never receive
-            // the host-only Alt+F9 shortcut.
-            if (e.Alt && !e.Control && !e.Shift && e.KeyCode == Keys.F9)
+            // the host-only Ctrl+Alt+F11 shortcut.
+            if (e.Alt && e.Control && !e.Shift && e.KeyCode == Keys.F11)
             {
                 OnCommand(CommandViewNoBorder);
                 e.SuppressKeyPress = true;
