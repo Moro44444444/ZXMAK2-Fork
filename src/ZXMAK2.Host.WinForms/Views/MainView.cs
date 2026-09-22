@@ -595,18 +595,21 @@ namespace ZXMAK2.Host.WinForms.Views
             Relayout(true);
         }
 
-        protected override void OnKeyDown(KeyEventArgs e)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            // This must run before base.OnKeyDown: the virtual keyboard is
-            // subscribed to the base KeyDown event and must never receive
-            // the host-only Ctrl+Alt+F11 shortcut.
-            if (e.Alt && e.Control && !e.Shift && e.KeyCode == Keys.F11)
+            // ProcessCmdKey runs before KeyDown, menus and the virtual keyboard.
+            // F11 belongs to the extended Evo keyboard map, so this host-only
+            // command must not be allowed to reach that map.
+            if (keyData == (Keys.Control | Keys.Alt | Keys.F11))
             {
                 OnCommand(CommandViewNoBorder);
-                e.SuppressKeyPress = true;
-                e.Handled = true;
-                return;
+                return true;
             }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
             base.OnKeyDown(e);
             if (_host.IsCaptured)
             {
