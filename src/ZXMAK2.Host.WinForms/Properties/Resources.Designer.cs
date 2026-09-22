@@ -249,6 +249,36 @@ namespace ZXMAK2.Host.WinForms.Properties {
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EmuSdImage_104x72 {
+            get {
+                object obj = ResourceManager.GetObject("EmuSdImage_104x72", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EmuHddImage_104x72 {
+            get {
+                object obj = ResourceManager.GetObject("EmuHddImage_104x72", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EmuFddImage_104x72 {
+            get {
+                object obj = ResourceManager.GetObject("EmuFddImage_104x72", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.

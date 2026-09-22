@@ -1242,22 +1242,25 @@ namespace ZXMAK2.Host.WinForms.Views
             using (var graphics = Graphics.FromImage(image))
             {
                 graphics.Clear(Color.Magenta);
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
                 if (mediaKind == MediaStatusKind.SecureDigital)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_52x36,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_104x72,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else if (mediaKind == MediaStatusKind.HardDisk)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_52x36,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_104x72,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_52x36,
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_104x72,
                         new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
 
