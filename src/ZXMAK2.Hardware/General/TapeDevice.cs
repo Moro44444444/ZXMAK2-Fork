@@ -53,6 +53,7 @@ namespace ZXMAK2.Hardware.General
         private int m_bit;
         private int m_bitMask;
         private bool m_outputLoopback;
+        private int m_pulseClockMultiplier = 1;
 
 
         #endregion Fields
@@ -205,6 +206,8 @@ namespace ZXMAK2.Hardware.General
             Port = Utils.GetXmlAttributeAsInt32(node, "port", Port);
             Bit = Utils.GetXmlAttributeAsInt32(node, "bit", Bit);
             OutputLoopback = Utils.GetXmlAttributeAsBool(node, "outputLoopback", OutputLoopback);
+            TapePulseClockMultiplier = Utils.GetXmlAttributeAsInt32(
+                node, "pulseClockMultiplier", TapePulseClockMultiplier);
         }
 
         protected override void OnConfigSave(XmlNode node)
@@ -217,6 +220,7 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "port", Port);
             Utils.SetXmlAttribute(node, "bit", Bit);
             Utils.SetXmlAttribute(node, "outputLoopback", OutputLoopback);
+            Utils.SetXmlAttribute(node, "pulseClockMultiplier", TapePulseClockMultiplier);
         }
 
         #endregion
@@ -442,13 +446,13 @@ namespace ZXMAK2.Hardware.General
 
         public int TapePulseClockMultiplier
         {
-            get
+            get { return m_pulseClockMultiplier; }
+            set
             {
-                // Standard tape formats count pulse duration in 3.5 MHz Z80
-                // tacts.  BaseConf instead advances Cpu.Tact in 28 MHz FPGA
-                // master tacts, as reported by its memory clock provider.
-                var clock = m_memory as ICpuClock;
-                return clock == null ? 1 : Math.Max(1, clock.MaxCpuClockMultiplier);
+                // Keep the conventional 3.5 MHz tape timebase unless a
+                // specific machine profile explicitly opts into conversion.
+                m_pulseClockMultiplier = Math.Max(1, value);
+                OnConfigChanged();
             }
         }
 
@@ -601,10 +605,9 @@ namespace ZXMAK2.Hardware.General
 				m_cpu.regs.D, m_cpu.regs.E,
 				m_cpu.regs.H, m_cpu.regs.L,
 			};
-            // Cpu.Tact is a master-clock counter on BaseConf, so apply the
-            // same conversion as the tape pulse stream to the ROM-loader
-            // polling heuristic.  This only changes machines with a faster
-            // master clock; conventional Spectrum timing keeps the old 96.
+            // The BaseConf profile explicitly uses master-clock tacts, so
+            // apply its configured conversion to the ROM-loader polling
+            // heuristic. Conventional profiles retain the old 96 exactly.
             int quickReadLimit = 96 * TapePulseClockMultiplier;
             if (delta > 0 && delta < quickReadLimit && m_cpu.regs.PC == m_lastPC && m_lastRegs != null)
             {

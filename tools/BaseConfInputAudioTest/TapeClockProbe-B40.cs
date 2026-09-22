@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Xml;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Model.Tape.Entities;
 using ZXMAK2.Model.Tape.Interfaces;
@@ -72,6 +73,23 @@ internal static class TapeClockProbeB40
         return ((TapeBlock)tape.Blocks[1]).Periods[0];
     }
 
+    private static void CheckProfileIsolation()
+    {
+        var config = new XmlDocument();
+        config.Load(Path.Combine(Directory.GetCurrentDirectory(), "src", "ZXMAK2", "machines.config"));
+
+        var baseConfTape = config.SelectSingleNode(
+            "/Machines/Bus[@name='ZX-Evo BSconf']/Device[@type='ZXMAK2.Hardware.General.TapeDevice']") as XmlElement;
+        Check(baseConfTape != null && baseConfTape.GetAttribute("pulseClockMultiplier") == "8",
+            "BaseConf must explicitly select the 8x tape master-clock conversion.");
+
+        var otherTapes = config.SelectNodes(
+            "/Machines/Bus[@name!='ZX-Evo BSconf']/Device[@type='ZXMAK2.Hardware.General.TapeDevice']");
+        foreach (XmlElement tape in otherTapes)
+            Check(!tape.HasAttribute("pulseClockMultiplier"),
+                "A non-BaseConf machine must retain standard tape timing.");
+    }
+
     public static int Main()
     {
         int standardPeriod = FirstPilotPeriod(1);
@@ -85,7 +103,8 @@ internal static class TapeClockProbeB40
             "Standard Spectrum TZX pulse must retain its 3.5 MHz duration.");
         Check(FirstTzxPilotPeriod(8) == 17344,
             "BaseConf TZX pulse must be converted to eight master tacts.");
-        Console.WriteLine("Tape clock probe B40: PASS (TAP 1x/8x)");
+        CheckProfileIsolation();
+        Console.WriteLine("Tape clock probe B40: PASS (TAP/TZX 1x/8x; profile isolated)");
         return 0;
     }
 }

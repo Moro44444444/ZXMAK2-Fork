@@ -13,9 +13,9 @@ namespace ZXMAK2.Engine.Interfaces
 		void Reset();       // loaded new image
 		bool IsPlay { get; }
 		int TactsPerSecond { get; }
-		// TAP/TZX pulse lengths use the original 3.5 MHz Z80 timebase.  A
-		// machine which exposes Cpu.Tact in a faster master-clock domain
-		// returns the factor needed to convert those pulse lengths.
+		// TAP/TZX pulse lengths use the original 3.5 MHz Z80 timebase.  The
+		// active machine profile supplies a factor when it advances Cpu.Tact
+		// in another domain (BaseConf is explicitly 8).
 		int TapePulseClockMultiplier { get; }
 		List<ITapeBlock> Blocks { get; }
 		event EventHandler TapeStateChanged;
