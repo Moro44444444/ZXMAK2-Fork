@@ -10,7 +10,6 @@ namespace ZXMAK2.Engine.Interfaces
 		void Play();
 		void Stop();
 		void Rewind();
-		void Eject();
 		void Reset();       // loaded new image
 		bool IsPlay { get; }
 		int TactsPerSecond { get; }

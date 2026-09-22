@@ -472,12 +472,6 @@ namespace ZXMAK2.Hardware.General
             Stop();
         }
 
-        public void Eject()
-        {
-            Blocks.Clear();
-            Reset();
-        }
-
         public void Play()
         {
             m_lastTact = m_cpu.Tact;

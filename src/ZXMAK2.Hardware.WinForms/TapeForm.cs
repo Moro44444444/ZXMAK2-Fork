@@ -26,7 +26,6 @@ namespace ZXMAK2.Hardware.WinForms
         private System.Windows.Forms.ToolStripButton btnPrev;
         private System.Windows.Forms.ToolStripButton btnPlay;
         private System.Windows.Forms.ToolStripButton btnNext;
-        private System.Windows.Forms.ToolStripButton btnEject;
         private System.Windows.Forms.ToolStripProgressBar toolProgressBar;
         private System.Windows.Forms.Timer timerProgress;
         private System.Windows.Forms.ToolStripButton btnUseTraps;
@@ -57,7 +56,6 @@ namespace ZXMAK2.Hardware.WinForms
             this.btnPrev = new System.Windows.Forms.ToolStripButton();
             this.btnPlay = new System.Windows.Forms.ToolStripButton();
             this.btnNext = new System.Windows.Forms.ToolStripButton();
-            this.btnEject = new System.Windows.Forms.ToolStripButton();
             this.toolProgressBar = new System.Windows.Forms.ToolStripProgressBar();
             this.btnUseTraps = new System.Windows.Forms.ToolStripButton();
             this.btnUseAutoPlay = new System.Windows.Forms.ToolStripButton();
@@ -77,8 +75,7 @@ namespace ZXMAK2.Hardware.WinForms
             this.btnNext,
             this.toolProgressBar,
             this.btnUseTraps,
-            this.btnUseAutoPlay,
-            this.btnEject});
+            this.btnUseAutoPlay});
             this.toolBar.Location = new System.Drawing.Point(0, 0);
             this.toolBar.Name = "toolBar";
             this.toolBar.Size = new System.Drawing.Size(390, 27);
@@ -124,17 +121,7 @@ namespace ZXMAK2.Hardware.WinForms
             this.btnNext.Size = new System.Drawing.Size(23, 24);
             this.btnNext.Text = "Next block";
             this.btnNext.Click += new System.EventHandler(this.toolButtonNext_Click);
-            //
-            // btnEject
-            //
-            this.btnEject.AutoSize = false;
-            this.btnEject.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnEject.Name = "btnEject";
-            this.btnEject.Size = new System.Drawing.Size(52, 24);
-            this.btnEject.Text = "Eject";
-            this.btnEject.ToolTipText = "Eject tape";
-            this.btnEject.Click += new System.EventHandler(this.toolButtonEject_Click);
-            //
+            // 
             // toolProgressBar
             // 
             this.toolProgressBar.Name = "toolProgressBar";
@@ -260,11 +247,6 @@ namespace ZXMAK2.Hardware.WinForms
             m_tape.CurrentBlock++;
         }
 
-        private void toolButtonEject_Click(object sender, EventArgs e)
-        {
-            m_tape.Eject();
-        }
-
         private void OnTapeStateChanged(object sender, EventArgs args)
         {
             if (InvokeRequired)
@@ -277,15 +259,13 @@ namespace ZXMAK2.Hardware.WinForms
                 btnRewind.Enabled =
                    btnPrev.Enabled =
                    btnPlay.Enabled =
-                   btnNext.Enabled =
-                   btnEject.Enabled = false;
+                   btnNext.Enabled = false;
                 blockList.SelectedIndex = -1;
             }
             else
             {
                 btnNext.Enabled = btnPrev.Enabled = !m_tape.IsPlay;
                 btnRewind.Enabled = btnPlay.Enabled = true;
-                btnEject.Enabled = true;
                 if (m_tape.IsPlay)
                     btnPlay.Image = ResourceImages.HardwareTapePause;
                 else
