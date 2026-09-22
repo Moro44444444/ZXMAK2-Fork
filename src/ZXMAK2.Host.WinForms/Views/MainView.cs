@@ -145,7 +145,10 @@ namespace ZXMAK2.Host.WinForms.Views
             BindCommandLight(menuViewScaleModeKeepProportion, "CommandViewScaleMode", ScaleMode.KeepProportion);
             BindCommandLight(menuViewScaleModeFixedPixelSize, "CommandViewScaleMode", ScaleMode.FixedPixelSize);
             BindCommandLight(menuViewScaleModeSquarePixelSize, "CommandViewScaleMode", ScaleMode.SquarePixelSize);
+            BindCommand(menuViewScaleModeNoBorder, "CommandViewNoBorder");
             _binding.Bind(this, "SelectedScaleMode", "RenderScaleMode");
+            _binding.Bind(renderVideo, "NoBorder", "RenderNoBorder");
+            _binding.Bind(menuViewScaleModeNoBorder, "Checked", "RenderNoBorder");
 
             BindCommandLight(menuViewVideoFilterNone, "CommandViewVideoFilter", VideoFilter.None);
             BindCommandLight(menuViewVideoFilterNoFlick, "CommandViewVideoFilter", VideoFilter.NoFlick);
@@ -195,6 +198,7 @@ namespace ZXMAK2.Host.WinForms.Views
         #region Commands
 
         public ICommand CommandViewFullScreen { get; set; }
+        public ICommand CommandViewNoBorder { get; set; }
         public ICommand CommandVmPause { get; set; }
         public ICommand CommandVmMaxSpeed { get; set; }
         public ICommand CommandVmWarmReset { get; set; }

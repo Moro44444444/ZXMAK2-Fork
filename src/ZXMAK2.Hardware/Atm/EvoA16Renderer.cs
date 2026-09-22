@@ -173,7 +173,11 @@ namespace ZXMAK2.Hardware.Atm
 
         protected virtual void OnParamsChanged()
         {
-            VideoData = new FrameVideo(Params.c_ulaWidth, Params.c_ulaHeight, 1F);
+            VideoData = new FrameVideo(
+                Params.c_ulaWidth,
+                Params.c_ulaHeight,
+                1F,
+                new System.Drawing.Rectangle(Params.c_ulaBorderLeftT * 2, Params.c_ulaBorderTop, 256, 192));
             m_ulaAction = new UlaAction[Params.c_frameTactCount];
             m_videoOffset = new int[Params.c_frameTactCount];
             m_memoryOffset = new int[Params.c_frameTactCount];

@@ -264,7 +264,11 @@ namespace ZXMAK2.Hardware.Profi
         private void OnParamsChanged()
         {
             // rebuild tables...
-            VideoData = new FrameVideo(Params.c_ulaWidth, Params.c_ulaHeight, 2F);
+            VideoData = new FrameVideo(
+                Params.c_ulaWidth,
+                Params.c_ulaHeight,
+                2F,
+                new System.Drawing.Rectangle(Params.c_ulaBorderLeftT * 4, Params.c_ulaBorderTop, 512, 240));
             m_ulaAction = new UlaAction[Params.c_frameTactCount];
             m_ulaBwOffset = new int[Params.c_frameTactCount];
             m_ulaVideoOffset = new int[Params.c_frameTactCount];

@@ -52,6 +52,7 @@ namespace ZXMAK2.Host.Presentation
 
             _syncSource = m_settingService.SyncSource;
             _renderScaleMode = m_settingService.RenderScaleMode;
+            _renderNoBorder = m_settingService.RenderNoBorder;
             _renderVideoFilter = m_settingService.RenderVideoFilter;
             _renderSize = new Size(m_settingService.WindowWidth, m_settingService.WindowHeight);
             CommandViewToolBar.Checked = m_settingService.IsToolBarVisible;
@@ -60,6 +61,7 @@ namespace ZXMAK2.Host.Presentation
             CommandViewMimicTv.Checked = m_settingService.RenderMimicTv;
             CommandViewDisplayIcon.Checked = m_settingService.RenderDisplayIcon;
             CommandViewDebugInfo.Checked = m_settingService.RenderDebugInfo;
+            CommandViewNoBorder.Checked = _renderNoBorder;
         }
 
         public void Dispose()
@@ -213,6 +215,7 @@ namespace ZXMAK2.Host.Presentation
         public ICommand CommandViewFullScreen { get; private set; }
         public ICommand CommandViewSyncSource { get; private set; }
         public ICommand CommandViewScaleMode { get; private set; }
+        public ICommand CommandViewNoBorder { get; private set; }
         public ICommand CommandViewVideoFilter { get; private set; }
         public ICommand CommandViewSmooth { get; private set; }
         public ICommand CommandViewMimicTv { get; private set; }
@@ -332,6 +335,23 @@ namespace ZXMAK2.Host.Presentation
                 }
                 CommandViewScaleMode.Update();
                 m_settingService.RenderScaleMode = value;
+            }
+        }
+
+        private bool _renderNoBorder;
+
+        public bool RenderNoBorder
+        {
+            get { return _renderNoBorder; }
+            set
+            {
+                if (!PropertyChangeVal("RenderNoBorder", ref _renderNoBorder, value))
+                {
+                    return;
+                }
+                CommandViewNoBorder.Checked = value;
+                CommandViewNoBorder.Update();
+                m_settingService.RenderNoBorder = value;
             }
         }
 
@@ -486,6 +506,7 @@ namespace ZXMAK2.Host.Presentation
             CommandViewFullScreen = new CommandDelegate(CommandViewFullScreen_OnExecute);
             CommandViewSyncSource = new CommandDelegate(CommandViewSyncSource_OnExecute, CommandViewSyncSource_OnCanExecute);
             CommandViewScaleMode = new CommandDelegate(CommandViewScaleMode_OnExecute, CommandViewScaleMode_OnCanExecute);
+            CommandViewNoBorder = new CommandDelegate(CommandViewNoBorder_OnExecute, CommandViewNoBorder_OnCanExecute);
             CommandViewVideoFilter = new CommandDelegate(CommandViewVideoFilter_OnExecute, CommandViewVideoFilter_OnCanExecute);
             CommandViewSmooth = new CommandDelegate(CommandViewSmooth_OnExecute, CommandViewSmooth_OnCanExecute);
             CommandViewMimicTv = new CommandDelegate(CommandViewMimicTv_OnExecute, CommandViewMimicTv_OnCanExecute);
@@ -513,6 +534,7 @@ namespace ZXMAK2.Host.Presentation
             CommandFileExit.Text = "Exit";
             CommandViewFullScreen.Text = "Full Screen";
             CommandViewSmooth.Text = "Antialias";
+            CommandViewNoBorder.Text = "No Border";
             CommandViewMimicTv.Text = "Mimic TV";
             CommandViewDisplayIcon.Text = "Show Icons";
             CommandViewDebugInfo.Text = "Debug Info";
@@ -541,6 +563,7 @@ namespace ZXMAK2.Host.Presentation
             CommandViewFullScreen.Update();
             CommandViewSyncSource.Update();
             CommandViewScaleMode.Update();
+            CommandViewNoBorder.Update();
             CommandViewVideoFilter.Update();
             CommandViewSmooth.Update();
             CommandViewMimicTv.Update();
@@ -700,6 +723,20 @@ namespace ZXMAK2.Host.Presentation
                 return;
             }
             RenderScaleMode = (ScaleMode)objState;
+        }
+
+        private bool CommandViewNoBorder_OnCanExecute(object objState)
+        {
+            return objState == null || objState is bool;
+        }
+
+        private void CommandViewNoBorder_OnExecute(object objState)
+        {
+            if (!CommandViewNoBorder_OnCanExecute(objState))
+            {
+                return;
+            }
+            RenderNoBorder = objState is bool ? (bool)objState : !RenderNoBorder;
         }
 
         private bool CommandViewVideoFilter_OnCanExecute(object objState)

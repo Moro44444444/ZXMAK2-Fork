@@ -13,6 +13,7 @@ namespace ZXMAK2.Host.Presentation.Interfaces
         SyncSource SyncSource { get; set; }
         
         ScaleMode RenderScaleMode { get; set; }
+        bool RenderNoBorder { get; set; }
         VideoFilter RenderVideoFilter { get; set; }
         bool RenderSmooth { get; set; }
         bool RenderMimicTv { get; set; }

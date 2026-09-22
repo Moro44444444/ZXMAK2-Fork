@@ -132,15 +132,21 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
             {
                 UpdateTextureSize(videoData.Size);
             }
-            _frameSizeNormalized = new SizeF(_frameSize.Width, _frameSize.Height * videoData.Ratio);
+            var sourceRect = NoBorder ? videoData.ActiveArea : new Rectangle(Point.Empty, _frameSize);
+            _frameSizeNormalized = new SizeF(sourceRect.Width, sourceRect.Height * videoData.Ratio);
             UpdateTextureData(videoData);
 
             var size = new Size(width, height);
             var dstRect = ScaleHelper.GetDestinationRect(ScaleMode, size, _frameSizeNormalized);
-            RenderSprite(_sprite, _texture0, _frameSize, dstRect, AntiAlias);
+            RenderSprite(_sprite, _texture0, sourceRect, dstRect, AntiAlias);
             if (MimicTv)
             {
-                RenderSprite(_spriteTv, _textureMaskTv, new Size(_frameSize.Width, (int)(_frameSize.Height * MimicTvRatio+0.5F)), dstRect, true);
+                var tvSourceRect = new Rectangle(
+                    sourceRect.Left,
+                    sourceRect.Top * MimicTvRatio,
+                    sourceRect.Width,
+                    sourceRect.Height * MimicTvRatio);
+                RenderSprite(_spriteTv, _textureMaskTv, tvSourceRect, dstRect, true);
             }
         }
 
@@ -152,6 +158,7 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
         public bool AntiAlias { get; set; }
         public bool MimicTv { get; set; }
         public ScaleMode ScaleMode { get; set; }
+        public bool NoBorder { get; set; }
         public VideoFilter VideoFilter { get; set; }
 
         public void Update(IFrameVideo videoData)
@@ -162,9 +169,10 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
                 return;
             }
             if (clone.Size != videoData.Size ||
-                clone.Ratio != videoData.Ratio)
+                clone.Ratio != videoData.Ratio ||
+                clone.ActiveArea != videoData.ActiveArea)
             {
-                clone = new FrameVideo(videoData.Size, videoData.Ratio);
+                clone = new FrameVideo(videoData.Size, videoData.Ratio, videoData.ActiveArea);
             }
             Array.Copy(
                 videoData.Buffer, 
@@ -188,7 +196,7 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
         private void RenderSprite(
             D3DXSprite sprite,
             Direct3DTexture9 texture,
-            Size srcSize,
+            Rectangle srcRect,
             RectangleF dstRect, 
             bool antiAlias)
         {
@@ -201,7 +209,7 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
                     Allocator.Device.SetSamplerState(0, D3DSAMPLERSTATETYPE.D3DSAMP_MAGFILTER, (int)D3DTEXTUREFILTERTYPE.D3DTEXF_POINT);
                     Allocator.Device.SetSamplerState(0, D3DSAMPLERSTATETYPE.D3DSAMP_MIPFILTER, (int)D3DTEXTUREFILTERTYPE.D3DTEXF_POINT);
                 }
-                D3DXHelper.Draw2D(sprite, texture, dstRect, srcSize);
+            D3DXHelper.Draw2D(sprite, texture, dstRect, srcRect);
             }
             finally
             {

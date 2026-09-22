@@ -52,14 +52,23 @@ namespace ZXMAK2.Host.WinForms.Mdx.Renderers
             RectangleF dstRect,
             Size srcSize)
         {
+            Draw2D(sprite, texture, dstRect, new Rectangle(Point.Empty, srcSize));
+        }
+
+        public unsafe static void Draw2D(
+            D3DXSprite sprite,
+            Direct3DTexture9 texture,
+            RectangleF dstRect,
+            Rectangle srcRect)
+        {
             var scale = new D3DXVECTOR2(
-                dstRect.Width / (float)srcSize.Width,
-                dstRect.Height / (float)srcSize.Height);
+                dstRect.Width / srcRect.Width,
+                dstRect.Height / srcRect.Height);
             var trans = new D3DXVECTOR2(dstRect.Location.X, dstRect.Location.Y);
             D3DMATRIX m;
             D3DMATRIX.Transformation2D(&m, null, 0f, &scale, null, 0f, &trans);
             sprite.SetTransform(ref m).CheckError();
-            sprite.Draw(texture, null, null, null, 0xffffffff).CheckError();
+            sprite.Draw(texture, GetRawRect(srcRect), null, null, 0xffffffff).CheckError();
         }
 
 

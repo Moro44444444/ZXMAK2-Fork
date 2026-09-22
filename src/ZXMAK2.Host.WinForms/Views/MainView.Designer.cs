@@ -58,6 +58,7 @@
             this.menuViewScaleModeKeepProportion = new System.Windows.Forms.ToolStripMenuItem();
             this.menuViewScaleModeFixedPixelSize = new System.Windows.Forms.ToolStripMenuItem();
             this.menuViewScaleModeSquarePixelSize = new System.Windows.Forms.ToolStripMenuItem();
+            this.menuViewScaleModeNoBorder = new System.Windows.Forms.ToolStripMenuItem();
             this.menuViewVideoFilter = new System.Windows.Forms.ToolStripMenuItem();
             this.menuViewVideoFilterNone = new System.Windows.Forms.ToolStripMenuItem();
             this.menuViewVideoFilterNoFlick = new System.Windows.Forms.ToolStripMenuItem();
@@ -257,7 +258,8 @@
             this.menuViewScaleModeStretch,
             this.menuViewScaleModeKeepProportion,
             this.menuViewScaleModeFixedPixelSize,
-            this.menuViewScaleModeSquarePixelSize});
+            this.menuViewScaleModeSquarePixelSize,
+            this.menuViewScaleModeNoBorder});
             this.menuViewScaleMode.Name = "menuViewScaleMode";
             this.menuViewScaleMode.Size = new System.Drawing.Size(188, 22);
             this.menuViewScaleMode.Text = "Scale Mode";
@@ -285,7 +287,13 @@
             this.menuViewScaleModeSquarePixelSize.Name = "menuViewScaleModeSquarePixelSize";
             this.menuViewScaleModeSquarePixelSize.Size = new System.Drawing.Size(160, 22);
             this.menuViewScaleModeSquarePixelSize.Text = "Square Pixel Size";
-            // 
+            //
+            // menuViewScaleModeNoBorder
+            //
+            this.menuViewScaleModeNoBorder.Name = "menuViewScaleModeNoBorder";
+            this.menuViewScaleModeNoBorder.Size = new System.Drawing.Size(160, 22);
+            this.menuViewScaleModeNoBorder.Text = "No Border";
+            //
             // menuViewVideoFilter
             // 
             this.menuViewVideoFilter.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -711,6 +719,7 @@
         private System.Windows.Forms.ToolStripButton tbrButtonQuickLoad;
         private System.Windows.Forms.ToolStripMenuItem menuViewMimicTv;
         private System.Windows.Forms.ToolStripMenuItem menuViewScaleModeSquarePixelSize;
+        private System.Windows.Forms.ToolStripMenuItem menuViewScaleModeNoBorder;
         private System.Windows.Forms.ToolStripSeparator menuViewSeparator3;
         private System.Windows.Forms.ToolStripMenuItem menuViewFrameSync;
         private System.Windows.Forms.ToolStripMenuItem menuViewFrameSyncTime;

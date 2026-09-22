@@ -364,7 +364,11 @@ namespace ZXMAK2.Hardware
         protected virtual void OnParamsChanged()
         {
             // rebuild tables...
-            VideoData = new FrameVideo(Params.c_ulaWidth, Params.c_ulaHeight, 1F);
+            VideoData = new FrameVideo(
+                Params.c_ulaWidth,
+                Params.c_ulaHeight,
+                1F,
+                new System.Drawing.Rectangle(Params.c_ulaBorderLeftT * 2, Params.c_ulaBorderTop, 256, 192));
             m_ulaLineOffset = new int[Params.c_frameTactCount];
             m_ulaAddrBw = new int[Params.c_frameTactCount];
             m_ulaAddrAt = new int[Params.c_frameTactCount];

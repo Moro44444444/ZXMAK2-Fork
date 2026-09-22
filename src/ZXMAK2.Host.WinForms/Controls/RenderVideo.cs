@@ -24,6 +24,8 @@ namespace ZXMAK2.Host.WinForms.Controls
         private readonly AutoResetEvent _frameEvent = new AutoResetEvent(false);
         private readonly AutoResetEvent _cancelEvent = new AutoResetEvent(false);
         private Bitmap _slowSurface;
+        private Rectangle _slowActiveArea;
+        private float _slowFrameRatio = 1F;
 
         #region .ctor
 
@@ -86,6 +88,13 @@ namespace ZXMAK2.Host.WinForms.Controls
         {
             get { return _videoLayer.ScaleMode; }
             set { _videoLayer.ScaleMode = value; }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool NoBorder
+        {
+            get { return _videoLayer.NoBorder; }
+            set { _videoLayer.NoBorder = value; Invalidate(); }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -203,6 +212,8 @@ namespace ZXMAK2.Host.WinForms.Controls
         {
             lock (_slowRenderSync)
             {
+                _slowActiveArea = frame.ActiveArea;
+                _slowFrameRatio = frame.Ratio;
                 if (_slowSurface == null || _slowSurface.Size != frame.Size)
                 {
                     if (_slowSurface != null)
@@ -255,13 +266,15 @@ namespace ZXMAK2.Host.WinForms.Controls
                 {
                     g.InterpolationMode = AntiAlias ? System.Drawing.Drawing2D.InterpolationMode.Bilinear : System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
                     
-                    var drawRect = Rectangle.Round(ScaleHelper.GetDestinationRect(ScaleMode, rect.Size, _slowSurface.Size));
+                    var sourceRect = NoBorder ? _slowActiveArea : new Rectangle(Point.Empty, _slowSurface.Size);
+                    var sourceSize = new SizeF(sourceRect.Width, sourceRect.Height * _slowFrameRatio);
+                    var drawRect = Rectangle.Round(ScaleHelper.GetDestinationRect(ScaleMode, rect.Size, sourceSize));
                     drawRect = new Rectangle(
                         drawRect.Left + rect.Left, 
                         drawRect.Top + rect.Top, 
                         drawRect.Width, 
                         drawRect.Height);
-                    g.DrawImage(_slowSurface, drawRect);
+                    g.DrawImage(_slowSurface, drawRect, sourceRect, GraphicsUnit.Pixel);
                     
                     var region = new Region(rect);
                     region.Exclude(drawRect);

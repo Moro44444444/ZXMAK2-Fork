@@ -50,6 +50,12 @@ namespace ZXMAK2.Host.WinForms.Services
             set { SetValue("RenderScaleMode", value); }
         }
 
+        public bool RenderNoBorder
+        {
+            get { return GetValue("RenderNoBorder", false); }
+            set { SetValue("RenderNoBorder", value); }
+        }
+
         public VideoFilter RenderVideoFilter
         {
             get { return GetValue("RenderVideoFilter", default(VideoFilter)); }
