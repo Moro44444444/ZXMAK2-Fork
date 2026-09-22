@@ -41,8 +41,8 @@ versa.
 
 ## Runtime acceptance
 
-Pending the user's test. Please check normal BaseConf startup, B30 border and
-multicolor, ATM 16-color software, Rage, NedoOS, Bad Apple, normal sound,
-SD/HDD replacement, IDE file browsing, and a TAP/TZX load from the BaseConf
-ROM menu (cassette icon plus data loading). This is a local test package, not
-a public GitHub release.
+Accepted by the user as the stable B40 checkpoint on 2026-09-22. In addition
+to the earlier BaseConf runtime checks, the retained-tape scenario is accepted:
+the same TAP/TZX image may be used after BaseConf↔Pentagon/Spectrum machine
+switches without reopening it. This remains a local test package, not a public
+GitHub release.

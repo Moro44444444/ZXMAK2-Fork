@@ -149,6 +149,12 @@
   повторного выбора файла. То же масштабирование применено только к
   autodetect ROM-загрузчика. WAV/CSW и остальные подсистемы не менялись.
 
+## 2026-09-22 — B40 stable checkpoint
+
+- Пользовательская runtime-приёмка B40 пройдена, включая сохранение открытой
+  TAP/TZX-ленты при смене BaseConf↔Pentagon/Spectrum. Состояние закреплено
+  локальным тегом `B40-stable`; GitHub release не создавался.
+
 ## Следующий утверждённый порядок
 
 1. **B40:** contention, floating bus, raster/INT/video phase и golden-векторы;
