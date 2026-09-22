@@ -294,6 +294,17 @@ namespace ZXMAK2.Hardware.Evo
             }
         }
 
+        public string MountedImageFileName
+        {
+            get
+            {
+                lock (cardSync)
+                {
+                    return card == null ? string.Empty : card.MountedFileName ?? string.Empty;
+                }
+            }
+        }
+
         public string ConfiguredImageFileName
         {
             get
@@ -304,7 +315,7 @@ namespace ZXMAK2.Hardware.Evo
                     {
                         return configuredImageFileName;
                     }
-                    return card == null ? string.Empty : card.MountedFileName ?? string.Empty;
+                    return MountedImageFileName;
                 }
             }
         }
@@ -362,6 +373,7 @@ namespace ZXMAK2.Hardware.Evo
                     buf = 0xFF;
                     configuredImageFileName = fullPath;
                 }
+                OnConfigChanged();
                 Logger.Info("SD hot swap completed: '{0}'", fullPath);
             }
             catch
@@ -393,6 +405,7 @@ namespace ZXMAK2.Hardware.Evo
             {
                 previous.Close();
             }
+            OnConfigChanged();
             Logger.Info("SD card ejected");
         }
 
