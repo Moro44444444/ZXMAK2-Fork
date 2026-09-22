@@ -9,7 +9,7 @@
     <Device type="ZXMAK2.Hardware.General.BeeperDevice" noDos="false" mask="0xFF" port="0xFE" bitEar="4" bitMic="-1" />
     <Device type="ZXMAK2.Hardware.General.CovoxMono" noDos="false" mask="0xFF" port="0xFB" />
     <Device type="ZXMAK2.Hardware.General.KeyboardDevice" noDos="false" mask="0xF7" port="0xFE" />
-    <Device type="ZXMAK2.Hardware.General.TapeDevice" useTraps="true" useAutoPlay="true" noDos="false" mask="0xF7" port="0xFE" bit="6" outputLoopback="false" pulseClockMultiplier="8" volume="0" />
+    <Device type="ZXMAK2.Hardware.General.TapeDevice" useTraps="true" useAutoPlay="true" noDos="false" mask="0xF7" port="0xFE" bit="6" outputLoopback="false" volume="0" />
     <Device type="ZXMAK2.Hardware.General.KempstonMouseDevice" noDos="false" />
     <Device type="ZXMAK2.Hardware.Evo.CmosPentEvo" />
     <Device type="ZXMAK2.Hardware.General.Debugger" />

@@ -28,13 +28,14 @@ The clean BaseConf profile now has the documented tape device with autoplay
 enabled, and the tape
 player correction converts TAP/TZX pulse lengths from their fixed 3.5 MHz
 format timebase to BaseConf's 28 MHz master tact counter. The ROM-loader
-autoplay detector uses the same conversion. The multiplier is explicitly 8
-only in the BaseConf profile; all other profiles retain 1. WAV/CSW playback,
-video, disks, IDE and audio output are intentionally untouched.
+autoplay detector uses the same conversion. The multiplier is derived from
+the active machine: `ZX-Evo BSconf` is 8 and every other machine is 1.
+WAV/CSW playback, video, disks, IDE and audio output are intentionally
+untouched.
 
-Saved VM profiles are also guarded: if a user switches from BaseConf to a
-different machine and an old `pulseClockMultiplier=8` remains in the VMZ, the
-device detects the non-BaseConf ULA and uses 1 automatically.
+Saved VM profiles are also guarded: any obsolete `pulseClockMultiplier` field
+is ignored. The actual machine name selects the scale, so switching machines
+cannot carry BaseConf ×8 into another machine or vice versa.
 
 ## Runtime acceptance
 

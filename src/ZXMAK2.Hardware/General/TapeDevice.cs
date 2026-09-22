@@ -53,8 +53,7 @@ namespace ZXMAK2.Hardware.General
         private int m_bit;
         private int m_bitMask;
         private bool m_outputLoopback;
-        private int m_pulseClockMultiplier = 1;
-        private bool? m_isBaseConfTiming;
+        private bool m_isBaseConfTiming;
 
 
         #endregion Fields
@@ -171,11 +170,13 @@ namespace ZXMAK2.Hardware.General
             m_frequency = TactsPerSecond;
             m_cpu = bmgr.CPU;
             m_memory = bmgr.FindDevice<IMemoryDevice>();
-            // A saved VM can retain tape options from a previously selected
-            // machine. The ×8 format conversion is valid only with the
-            // actual BaseConf ULA, never merely because a stale attribute is
-            // present in a later Pentagon/ATM/Spectrum VMZ.
-            m_isBaseConfTiming = bmgr.FindDevice<ZXMAK2.Hardware.Evo.UlaPentEvo>() != null;
+            // The stored VMZ is reused while changing machines in the UI, so
+            // tape timing must follow the actual active machine rather than
+            // a persisted tape attribute. ZX-Evo BaseConf alone uses the
+            // 28 MHz master-tact tape conversion.
+            var bus = bmgr as BusManager;
+            m_isBaseConfTiming = bus != null && string.Equals(
+                bus.Name, "ZX-Evo BSconf", StringComparison.OrdinalIgnoreCase);
 
             bmgr.Events.SubscribeRdIo(Mask, Port & Mask, ReadPortFe);
             bmgr.Events.SubscribeWrIo(Mask, Port & Mask, WritePortFe);
@@ -212,8 +213,6 @@ namespace ZXMAK2.Hardware.General
             Port = Utils.GetXmlAttributeAsInt32(node, "port", Port);
             Bit = Utils.GetXmlAttributeAsInt32(node, "bit", Bit);
             OutputLoopback = Utils.GetXmlAttributeAsBool(node, "outputLoopback", OutputLoopback);
-            TapePulseClockMultiplier = Utils.GetXmlAttributeAsInt32(
-                node, "pulseClockMultiplier", TapePulseClockMultiplier);
         }
 
         protected override void OnConfigSave(XmlNode node)
@@ -226,7 +225,6 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "port", Port);
             Utils.SetXmlAttribute(node, "bit", Bit);
             Utils.SetXmlAttribute(node, "outputLoopback", OutputLoopback);
-            Utils.SetXmlAttribute(node, "pulseClockMultiplier", TapePulseClockMultiplier);
         }
 
         #endregion
@@ -452,19 +450,7 @@ namespace ZXMAK2.Hardware.General
 
         public int TapePulseClockMultiplier
         {
-            get
-            {
-                return m_isBaseConfTiming.HasValue && !m_isBaseConfTiming.Value
-                    ? 1
-                    : m_pulseClockMultiplier;
-            }
-            set
-            {
-                // Keep the conventional 3.5 MHz tape timebase unless a
-                // specific machine profile explicitly opts into conversion.
-                m_pulseClockMultiplier = Math.Max(1, value);
-                OnConfigChanged();
-            }
+            get { return m_isBaseConfTiming ? 8 : 1; }
         }
 
         #endregion

@@ -82,8 +82,8 @@ internal static class TapeClockProbeB40
 
         var baseConfTape = config.SelectSingleNode(
             "/Machines/Bus[@name='ZX-Evo BSconf']/Device[@type='ZXMAK2.Hardware.General.TapeDevice']") as XmlElement;
-        Check(baseConfTape != null && baseConfTape.GetAttribute("pulseClockMultiplier") == "8",
-            "BaseConf must explicitly select the 8x tape master-clock conversion.");
+        Check(baseConfTape != null && !baseConfTape.HasAttribute("pulseClockMultiplier"),
+            "BaseConf tape timing must be derived at runtime, not persisted in the profile.");
 
         var otherTapes = config.SelectNodes(
             "/Machines/Bus[@name!='ZX-Evo BSconf']/Device[@type='ZXMAK2.Hardware.General.TapeDevice']");
@@ -95,7 +95,6 @@ internal static class TapeClockProbeB40
     private static void CheckStaleProfileGuard()
     {
         var tape = new TapeDevice();
-        tape.TapePulseClockMultiplier = 8;
         var timingField = typeof(TapeDevice).GetField("m_isBaseConfTiming",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Check(timingField != null, "Tape timing machine guard is missing.");
