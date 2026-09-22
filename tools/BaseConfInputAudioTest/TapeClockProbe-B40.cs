@@ -97,14 +97,24 @@ internal static class TapeClockProbeB40
         var tape = new TapeDevice();
         var timingField = typeof(TapeDevice).GetField("m_isBaseConfTiming",
             BindingFlags.Instance | BindingFlags.NonPublic);
+        var periodMethod = typeof(TapeDevice).GetMethod("getPulsePeriod",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         Check(timingField != null, "Tape timing machine guard is missing.");
+        Check(periodMethod != null, "Tape dynamic period conversion is missing.");
+
+        var block = new TapeBlock();
+        block.Periods.Add(2168);
 
         timingField.SetValue(tape, false);
         Check(tape.TapePulseClockMultiplier == 1,
             "A stale BaseConf multiplier must not affect another machine.");
+        Check((int)periodMethod.Invoke(tape, new object[] { block, 0 }) == 2168,
+            "A retained tape must play at standard speed after switching to another machine.");
         timingField.SetValue(tape, true);
         Check(tape.TapePulseClockMultiplier == 8,
             "BaseConf must retain its configured tape multiplier.");
+        Check((int)periodMethod.Invoke(tape, new object[] { block, 0 }) == 17344,
+            "The same retained tape must use BaseConf master-tact timing after switching back.");
     }
 
     public static int Main()
@@ -113,16 +123,16 @@ internal static class TapeClockProbeB40
         int baseConfPeriod = FirstPilotPeriod(8);
         Check(standardPeriod == 2168,
             "Standard Spectrum TAP pulse has unexpected duration: " + standardPeriod + ".");
-        Check(baseConfPeriod == 17344,
-            "BaseConf TAP pulse has unexpected duration: " + baseConfPeriod + ".");
+        Check(baseConfPeriod == 2168,
+            "A loaded BaseConf TAP image must retain its native duration: " + baseConfPeriod + ".");
 
         Check(FirstTzxPilotPeriod(1) == 2168,
             "Standard Spectrum TZX pulse must retain its 3.5 MHz duration.");
-        Check(FirstTzxPilotPeriod(8) == 17344,
-            "BaseConf TZX pulse must be converted to eight master tacts.");
+        Check(FirstTzxPilotPeriod(8) == 2168,
+            "A loaded BaseConf TZX image must retain its native duration.");
         CheckProfileIsolation();
         CheckStaleProfileGuard();
-        Console.WriteLine("Tape clock probe B40: PASS (TAP/TZX 1x/8x; profile and stale VMZ isolated)");
+        Console.WriteLine("Tape clock probe B40: PASS (TAP/TZX raw periods; dynamic 1x/8x profile isolation)");
         return 0;
     }
 }

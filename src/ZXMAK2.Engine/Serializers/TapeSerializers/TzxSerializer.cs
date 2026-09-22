@@ -37,9 +37,6 @@ namespace ZXMAK2.Serializers.TapeSerializers
             var blocks = Load(stream);
             if (blocks != null)
             {
-                var pulseClockMultiplier = _tape.TapePulseClockMultiplier;
-                foreach (var block in blocks)
-                    TapSerializer.ScalePeriods(block.Periods, pulseClockMultiplier);
                 _tape.Blocks.AddRange(blocks);
             }
             _tape.Reset();

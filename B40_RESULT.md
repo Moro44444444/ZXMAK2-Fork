@@ -19,23 +19,25 @@ CD/ATAPI, ZX-BUS and new peripherals are not part of this build.
 - B40 contention/open bus: 46 PASS.
 - B40 live mode/palette: 9 PASS.
 - B40 seven renderer golden vectors: 7 PASS.
-- Tape clock probe: TAP and TZX standard pulse streams PASS at both 1×
-  (ordinary Spectrum) and 8× (BaseConf master-clock) timing.
+- Tape clock probe: TAP and TZX retain native 3.5 MHz periods in storage and
+  dynamically produce both 1× (ordinary Spectrum) and 8× (BaseConf
+  master-clock) playback timing.
 
 ## Focused tape follow-up
 
 The clean BaseConf profile now has the documented tape device with autoplay
-enabled, and the tape
-player correction converts TAP/TZX pulse lengths from their fixed 3.5 MHz
-format timebase to BaseConf's 28 MHz master tact counter. The ROM-loader
-autoplay detector uses the same conversion. The multiplier is derived from
-the active machine: `ZX-Evo BSconf` is 8 and every other machine is 1.
-WAV/CSW playback, video, disks, IDE and audio output are intentionally
-untouched.
+enabled, and the tape player correction keeps TAP/TZX pulse lengths in their
+fixed 3.5 MHz format timebase and converts each pulse only when it is played.
+The ROM-loader autoplay detector uses the same current-machine conversion.
+The multiplier is derived from the active machine: `ZX-Evo BSconf` is 8 and
+every other machine is 1. Thus a loaded tape may be retained while switching
+machines. WAV/CSW playback, video, disks, IDE and audio output are
+intentionally untouched.
 
 Saved VM profiles are also guarded: any obsolete `pulseClockMultiplier` field
-is ignored. The actual machine name selects the scale, so switching machines
-cannot carry BaseConf ×8 into another machine or vice versa.
+is ignored. The actual machine name selects the scale at playback time, so
+switching machines cannot carry BaseConf ×8 into another machine or vice
+versa.
 
 ## Runtime acceptance
 

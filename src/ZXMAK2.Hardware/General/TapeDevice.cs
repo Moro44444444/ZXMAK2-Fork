@@ -496,7 +496,7 @@ namespace ZXMAK2.Hardware.General
                 }
 
                 //m_state = !m_state;
-                m_waitEdge = Blocks[m_index].GetPeriod(m_playPosition, m_frequency);
+                m_waitEdge = getPulsePeriod(Blocks[m_index], m_playPosition);
                 m_isPlay = true;
                 OnTapeStateChanged();
             }
@@ -523,6 +523,15 @@ namespace ZXMAK2.Hardware.General
         #endregion
 
         #region private methods
+
+        private int getPulsePeriod(ITapeBlock block, int position)
+        {
+            // TAP/TZX serializers retain their native 3.5 MHz periods. The
+            // bus reuses this TapeDevice when the user switches machines, so
+            // conversion belongs here rather than at image-load time.
+            return checked(block.GetPeriod(position, m_frequency) *
+                TapePulseClockMultiplier);
+        }
 
         private bool tape_bit(long globalTact)
         {
@@ -565,7 +574,7 @@ namespace ZXMAK2.Hardware.General
                     }
                     OnTapeStateChanged();
                 }
-                m_waitEdge = Blocks[m_index].GetPeriod(m_playPosition, m_frequency);
+                m_waitEdge = getPulsePeriod(Blocks[m_index], m_playPosition);
             }
             m_lastTact = globalTact - (long)delta;
             return m_state;
