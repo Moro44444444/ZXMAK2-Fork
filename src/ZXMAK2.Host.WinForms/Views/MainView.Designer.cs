@@ -291,7 +291,8 @@
             // menuViewScaleModeNoBorder
             //
             this.menuViewScaleModeNoBorder.Name = "menuViewScaleModeNoBorder";
-            this.menuViewScaleModeNoBorder.ShortcutKeyDisplayString = "F11";
+            this.menuViewScaleModeNoBorder.ShortcutKeys = System.Windows.Forms.Keys.F11;
+            this.menuViewScaleModeNoBorder.ShowShortcutKeys = true;
             this.menuViewScaleModeNoBorder.Size = new System.Drawing.Size(160, 22);
             this.menuViewScaleModeNoBorder.Text = "No Border";
             //

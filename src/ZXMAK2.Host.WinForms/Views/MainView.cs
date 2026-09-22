@@ -595,19 +595,6 @@ namespace ZXMAK2.Host.WinForms.Views
             Relayout(true);
         }
 
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-        {
-            // ProcessCmdKey runs before KeyDown, menus and the virtual keyboard.
-            // F11 belongs to the extended Evo keyboard map, so this host-only
-            // command must not be allowed to reach that map.
-            if (keyData == Keys.F11)
-            {
-                OnCommand(CommandViewNoBorder);
-                return true;
-            }
-            return base.ProcessCmdKey(ref msg, keyData);
-        }
-
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
