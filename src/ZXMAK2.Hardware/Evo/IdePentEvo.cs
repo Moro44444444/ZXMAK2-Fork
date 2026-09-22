@@ -7,12 +7,15 @@ using ZXMAK2.Engine.Entities;
 using ZXMAK2.Engine.Cpu;
 using ZXMAK2.Hardware.Circuits.Ata;
 using ZXMAK2.Host.Entities;
+using ZXMAK2.Host.Interfaces;
+using ZXMAK2.Dependency;
+using ZXMAK2.Mvvm;
 using ZXMAK2.Resources;
 
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class IdePentEvo : BusDeviceBase
+    public class IdePentEvo : BusDeviceBase, IMediaStatusDevice
     {
         #region Fields
 
@@ -27,6 +30,8 @@ namespace ZXMAK2.Hardware.Evo
         private int m_ide_hi_byte_w1;
         private int m_ide_hi_byte_r;
         private int m_ide_read;
+        private IdeMediaCommand m_openImageCommand;
+        private IdeMediaCommand m_ejectImageCommand;
 
         #endregion Fields
 
@@ -47,6 +52,17 @@ namespace ZXMAK2.Hardware.Evo
             m_cpu = bmgr.CPU;
 
             m_ideFileName = bmgr.GetSatelliteFileName("vmide");
+
+            m_openImageCommand = new IdeMediaCommand(
+                OpenImageCommand_OnExecute,
+                MediaCommand_OnCanExecute,
+                "Open HDD image...");
+            m_ejectImageCommand = new IdeMediaCommand(
+                EjectImageCommand_OnExecute,
+                MediaCommand_OnCanExecute,
+                "Eject HDD");
+            bmgr.AddCommandUi(m_openImageCommand);
+            bmgr.AddCommandUi(m_ejectImageCommand);
 
             bmgr.RegisterIcon(m_iconHdd);
             bmgr.Events.SubscribeBeginFrame(BusBeginFrame);
@@ -158,10 +174,112 @@ namespace ZXMAK2.Hardware.Evo
             m_hasConfiguredImage = true;
         }
 
+        public MediaStatusKind MediaStatusKind
+        {
+            get { return MediaStatusKind.HardDisk; }
+        }
+
+        public bool IsMediaMounted
+        {
+            get { return !string.IsNullOrEmpty(HardDisk.FileName); }
+        }
+
         #endregion
 
 
         #region Private
+
+        private bool MediaCommand_OnCanExecute(Object arg)
+        {
+            var viewResolver = Locator.Resolve<IResolver>("View");
+            return viewResolver.CheckAvailable<IOpenFileDialog>();
+        }
+
+        private void OpenImageCommand_OnExecute(Object arg)
+        {
+            if (!MediaCommand_OnCanExecute(arg))
+            {
+                return;
+            }
+            try
+            {
+                var viewResolver = Locator.Resolve<IResolver>("View");
+                var dialog = viewResolver.TryResolve<IOpenFileDialog>();
+                if (dialog == null)
+                {
+                    return;
+                }
+                dialog.CheckFileExists = true;
+                dialog.Filter = "HDD images (*.hdd, *.img, *.ima, *.vhd)|*.hdd;*.img;*.ima;*.vhd";
+                dialog.Multiselect = false;
+                if (dialog.ShowDialog(arg) != DlgResult.OK)
+                {
+                    return;
+                }
+
+                MountHardDisk(dialog.FileName, false);
+                m_openImageCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot open HDD image!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void EjectImageCommand_OnExecute(Object arg)
+        {
+            try
+            {
+                EjectHardDisk();
+                m_ejectImageCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot eject HDD!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void MountHardDisk(string fileName, bool readOnly)
+        {
+            var previous = HardDisk;
+            var previousFileName = previous.FileName;
+            var previousReadOnly = previous.ReadOnly;
+            var previousCylinders = previous.Cylinders;
+            var previousHeads = previous.Heads;
+            var previousSectors = previous.Sectors;
+            var previousLba = previous.Lba;
+
+            m_ata.Close();
+            try
+            {
+                ConfigureHardDisk(fileName, readOnly);
+                m_ata.Open();
+            }
+            catch
+            {
+                HardDisk.Configure(
+                    previousFileName,
+                    previousReadOnly,
+                    previousCylinders,
+                    previousHeads,
+                    previousSectors,
+                    previousLba);
+                m_ata.Open();
+                throw;
+            }
+        }
+
+        private void EjectHardDisk()
+        {
+            m_ata.Close();
+            DisconnectHardDisk();
+            m_ata.Open();
+            Logger.Info("HDD ejected");
+        }
 
         protected virtual void BusBeginFrame()
         {
@@ -322,6 +440,28 @@ namespace ZXMAK2.Hardware.Evo
                 Logger.Info("IDE RD {0,-13}: #{1:X2} @ PC=#{2:X4}", ataReg, value, m_cpu.regs.PC);
             }
             return value;
+        }
+
+        private sealed class IdeMediaCommand : CommandDelegate, ISuccessCommand
+        {
+            public IdeMediaCommand(
+                Action<object> action,
+                Func<object, bool> canExecute,
+                string text)
+                : base(action, canExecute, text)
+            {
+            }
+
+            public event EventHandler ExecutedSuccessfully;
+
+            public void NotifyExecutedSuccessfully()
+            {
+                var handler = ExecutedSuccessfully;
+                if (handler != null)
+                {
+                    handler(this, EventArgs.Empty);
+                }
+            }
         }
 
         //--

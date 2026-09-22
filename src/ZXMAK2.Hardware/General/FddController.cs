@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.IO;
 using System.Xml;
 using ZXMAK2.Dependency;
 using ZXMAK2.Engine;
@@ -12,12 +13,14 @@ using ZXMAK2.Serializers;
 using ZXMAK2.Host.Entities;
 using ZXMAK2.Host.Presentation;
 using ZXMAK2.Host.Presentation.Interfaces;
+using ZXMAK2.Host.Interfaces;
+using ZXMAK2.Mvvm;
 using ZXMAK2.Resources;
 
 
 namespace ZXMAK2.Hardware.General
 {
-    public class FddController : BusDeviceBase, IBetaDiskDevice, ITrDosSessionDevice
+    public class FddController : BusDeviceBase, IBetaDiskDevice, ITrDosSessionDevice, IMediaStatusDevice
     {
         #region Fields
 
@@ -30,6 +33,8 @@ namespace ZXMAK2.Hardware.General
         protected readonly Wd1793 m_wd;
 
         private IViewHolder m_viewHolder;
+        private FddMediaCommand[] m_openDriveCommands;
+        private FddMediaCommand[] m_ejectDriveCommands;
 
         #endregion
 
@@ -82,6 +87,7 @@ namespace ZXMAK2.Hardware.General
             {
                 bmgr.AddCommandUi(m_viewHolder.CommandOpen);
             }
+            CreateMediaCommands(bmgr);
         }
 
         public override void BusConnect()
@@ -189,6 +195,16 @@ namespace ZXMAK2.Hardware.General
             get { return m_isTrDosSessionActive; }
         }
 
+        public MediaStatusKind MediaStatusKind
+        {
+            get { return MediaStatusKind.Floppy; }
+        }
+
+        public bool IsMediaMounted
+        {
+            get { return m_wd.FDD.Any(disk => disk.Present); }
+        }
+
         #endregion
 
 
@@ -212,6 +228,145 @@ namespace ZXMAK2.Hardware.General
 
 
         #region Private
+
+        private void CreateMediaCommands(IBusManager bmgr)
+        {
+            m_openDriveCommands = new FddMediaCommand[m_wd.FDD.Length];
+            m_ejectDriveCommands = new FddMediaCommand[m_wd.FDD.Length];
+            for (var drive = 0; drive < m_wd.FDD.Length; drive++)
+            {
+                var currentDrive = drive;
+                m_openDriveCommands[drive] = new FddMediaCommand(
+                    arg => OpenDriveCommand_OnExecute(currentDrive, arg),
+                    MediaCommand_OnCanExecute,
+                    string.Format("Load FDD {0}:...", (char)('A' + drive)));
+                m_ejectDriveCommands[drive] = new FddMediaCommand(
+                    arg => EjectDriveCommand_OnExecute(currentDrive, arg),
+                    MediaCommand_OnCanExecute,
+                    string.Format("Eject FDD {0}:", (char)('A' + drive)));
+                bmgr.AddCommandUi(m_openDriveCommands[drive]);
+                bmgr.AddCommandUi(m_ejectDriveCommands[drive]);
+            }
+        }
+
+        private bool MediaCommand_OnCanExecute(object arg)
+        {
+            var viewResolver = Locator.Resolve<IResolver>("View");
+            return viewResolver.CheckAvailable<IOpenFileDialog>();
+        }
+
+        private void OpenDriveCommand_OnExecute(int drive, object arg)
+        {
+            if (!MediaCommand_OnCanExecute(arg))
+            {
+                return;
+            }
+            try
+            {
+                var viewResolver = Locator.Resolve<IResolver>("View");
+                var dialog = viewResolver.TryResolve<IOpenFileDialog>();
+                if (dialog == null)
+                {
+                    return;
+                }
+                dialog.CheckFileExists = true;
+                dialog.Filter = LoadManagers[drive].GetOpenExtFilter();
+                dialog.Multiselect = false;
+                if (dialog.ShowDialog(arg) != DlgResult.OK)
+                {
+                    return;
+                }
+                if (!LoadManagers[drive].CheckCanOpenFileName(dialog.FileName))
+                {
+                    throw new InvalidDataException("Unsupported floppy image format");
+                }
+
+                MountFloppy(drive, dialog.FileName, false);
+                m_openDriveCommands[drive].NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot open floppy image!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void EjectDriveCommand_OnExecute(int drive, object arg)
+        {
+            try
+            {
+                EjectFloppy(drive);
+                m_ejectDriveCommands[drive].NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>()
+                    .Error("Cannot eject floppy image!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void MountFloppy(int drive, string fileName, bool readOnly)
+        {
+            var disk = m_wd.FDD[drive];
+            var fullPath = Path.GetFullPath(fileName);
+            if (!File.Exists(fullPath))
+            {
+                throw new FileNotFoundException("Floppy image not found", fullPath);
+            }
+
+            var previousFileName = disk.FileName;
+            var previousReadOnly = disk.IsWP;
+            var previousPresent = disk.Present;
+            disk.Disconnect();
+            try
+            {
+                disk.FileName = fullPath;
+                disk.IsWP = readOnly;
+                disk.Present = true;
+                disk.Connect();
+            }
+            catch
+            {
+                disk.FileName = previousFileName;
+                disk.IsWP = previousReadOnly;
+                disk.Present = previousPresent;
+                disk.Connect();
+                throw;
+            }
+        }
+
+        private void EjectFloppy(int drive)
+        {
+            var disk = m_wd.FDD[drive];
+            disk.Disconnect();
+            disk.Present = false;
+            disk.FileName = string.Empty;
+            disk.IsWP = false;
+        }
+
+        private sealed class FddMediaCommand : CommandDelegate, ISuccessCommand
+        {
+            public FddMediaCommand(
+                Action<object> action,
+                Func<object, bool> canExecute,
+                string text)
+                : base(action, canExecute, text)
+            {
+            }
+
+            public event EventHandler ExecutedSuccessfully;
+
+            public void NotifyExecutedSuccessfully()
+            {
+                var handler = ExecutedSuccessfully;
+                if (handler != null)
+                {
+                    handler(this, EventArgs.Empty);
+                }
+            }
+        }
 
         public virtual bool IsActive
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.ComponentModel;
+using System.Linq;
 
 using ZXMAK2.Dependency;
 using ZXMAK2.Engine;
@@ -82,6 +83,25 @@ namespace ZXMAK2.Host.Presentation
 
         public void ExecuteMediaChange(ISuccessCommand command, object commandParameter)
         {
+            ExecuteMediaChange(command, commandParameter, true);
+        }
+
+        public void ExecuteFloppyMediaChange(ISuccessCommand command, object commandParameter)
+        {
+            ExecuteMediaChange(command, commandParameter, false);
+        }
+
+        public bool IsMediaMounted(MediaStatusKind mediaKind)
+        {
+            return m_vm != null && m_vm.Bus.FindDevices<IMediaStatusDevice>()
+                .Any(device => device.MediaStatusKind == mediaKind && device.IsMediaMounted);
+        }
+
+        private void ExecuteMediaChange(
+            ISuccessCommand command,
+            object commandParameter,
+            bool requiresPowerCycle)
+        {
             if (command == null)
             {
                 throw new ArgumentNullException("command");
@@ -103,11 +123,15 @@ namespace ZXMAK2.Host.Presentation
 
                 if (succeeded && m_vm != null)
                 {
-                    // Keep the VM stopped until the replacement is complete.
-                    // A PentEvo cold start clears firmware media state kept in
-                    // RAM; resuming before this point leaves the second image
-                    // attached to the first image's initialized state.
-                    m_vm.DoPowerCycle();
+                    if (requiresPowerCycle)
+                    {
+                        // Keep the VM stopped until the replacement is complete.
+                        // A PentEvo cold start clears firmware media state kept in
+                        // RAM; resuming before this point leaves the second image
+                        // attached to the first image's initialized state.
+                        m_vm.DoPowerCycle();
+                    }
+                    m_vm.SaveConfig();
                 }
             }
             finally
