@@ -10,6 +10,7 @@ namespace ZXMAK2.Engine.Interfaces
 		void Play();
 		void Stop();
 		void Rewind();
+		void Eject();
 		void Reset();       // loaded new image
 		bool IsPlay { get; }
 		int TactsPerSecond { get; }
@@ -19,6 +20,7 @@ namespace ZXMAK2.Engine.Interfaces
 		int TapePulseClockMultiplier { get; }
 		List<ITapeBlock> Blocks { get; }
 		event EventHandler TapeStateChanged;
+		event EventHandler TapeEjected;
 		int CurrentBlock { get; set; }
 		int Position { get; }
 		bool UseTraps { get; set; }

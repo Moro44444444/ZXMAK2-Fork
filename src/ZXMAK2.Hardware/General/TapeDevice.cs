@@ -391,10 +391,18 @@ namespace ZXMAK2.Hardware.General
 
         public event EventHandler TapeStateChanged;
 
+        public event EventHandler TapeEjected;
+
         protected virtual void OnTapeStateChanged()
         {
             if (TapeStateChanged != null)
                 TapeStateChanged(this, EventArgs.Empty);
+        }
+
+        protected virtual void OnTapeEjected()
+        {
+            if (TapeEjected != null)
+                TapeEjected(this, EventArgs.Empty);
         }
 
         #endregion
@@ -470,6 +478,22 @@ namespace ZXMAK2.Hardware.General
         {
             m_index = -1;
             Stop();
+        }
+
+        public void Eject()
+        {
+            m_isPlay = false;
+            m_index = -1;
+            m_playPosition = 0;
+            if (m_cpu != null)
+            {
+                m_lastTact = m_cpu.Tact;
+            }
+            m_waitEdge = 0;
+            m_iconTape.Visible = false;
+            Blocks.Clear();
+            OnTapeStateChanged();
+            OnTapeEjected();
         }
 
         public void Play()

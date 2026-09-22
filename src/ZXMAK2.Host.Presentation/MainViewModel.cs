@@ -28,6 +28,7 @@ namespace ZXMAK2.Host.Presentation
         private readonly string m_startupImage;
         private ISynchronizeInvoke m_synchronizeInvoke;
         private VirtualMachine m_vm;
+        private ITapeDevice m_tapeDevice;
         
         
         public MainViewModel(
@@ -66,6 +67,7 @@ namespace ZXMAK2.Host.Presentation
 
         public void Dispose()
         {
+            SetTapeDevice(null);
             if (m_vm != null)
             {
                 m_vm.Dispose();
@@ -471,6 +473,7 @@ namespace ZXMAK2.Host.Presentation
             {
                 Title = m_vm.Spectrum.BusManager.LoadManager.OpenFileName(m_startupImage, true);
             }
+            SetTapeDevice(m_vm.Spectrum.BusManager.FindDevice<ITapeDevice>());
             m_vm.DoRun();
             UpdateAllCommands();
         }
@@ -1005,6 +1008,7 @@ namespace ZXMAK2.Host.Presentation
                 m_vm.Bus.LoadConfigXml(busNode);
                 m_vm.DoReset();
                 m_vm.SaveConfig();
+                SetTapeDevice(m_vm.Spectrum.BusManager.FindDevice<ITapeDevice>());
                 Title = string.Empty;
                 m_vm.RequestFrame();
                 CommandTapePause.Update();
@@ -1072,6 +1076,28 @@ namespace ZXMAK2.Host.Presentation
             {
                 tape.Play();
             }
+        }
+
+        private void SetTapeDevice(ITapeDevice tapeDevice)
+        {
+            if (ReferenceEquals(m_tapeDevice, tapeDevice))
+            {
+                return;
+            }
+            if (m_tapeDevice != null)
+            {
+                m_tapeDevice.TapeEjected -= TapeDevice_OnTapeEjected;
+            }
+            m_tapeDevice = tapeDevice;
+            if (m_tapeDevice != null)
+            {
+                m_tapeDevice.TapeEjected += TapeDevice_OnTapeEjected;
+            }
+        }
+
+        private void TapeDevice_OnTapeEjected(object sender, EventArgs e)
+        {
+            ExecuteSynchronizedAsync(() => Title = string.Empty);
         }
 
         private bool CommandQuickLoad_OnCanExecute()
