@@ -34,6 +34,9 @@ namespace ZXMAK2.Host.WinForms.Views
         // This is deliberately the only size constant for all three status dots.
         // It can be adjusted after visual feedback without redrawing the toolbar icons.
         private const int MediaStatusDotDiameter = 10;
+        private const int MediaToolbarArtworkWidth = 40;
+        private const int MediaToolbarArtworkHeight = 32;
+        private const int MediaToolbarDropDownWidth = 56;
         private readonly Dictionary<MediaStatusKind, ToolStripDropDownButton> _mediaButtons =
             new Dictionary<MediaStatusKind, ToolStripDropDownButton>();
         private readonly Dictionary<MediaStatusKind, bool?> _mediaMountedStates =
@@ -338,6 +341,10 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private void InitializeMediaToolbar()
         {
+            // Keep every toolbar drop-down equally wide: its artwork must not compete
+            // with the arrow that opens the corresponding menu.
+            tbrDropDownMachines.AutoSize = false;
+            tbrDropDownMachines.Size = new Size(MediaToolbarDropDownWidth, 36);
             var index = tbrStrip.Items.IndexOf(tbrButtonSdImage);
             tbrStrip.Items.Remove(tbrButtonSdImage);
             tbrButtonSdImage.Dispose();
@@ -351,8 +358,9 @@ namespace ZXMAK2.Host.WinForms.Views
             var button = new ToolStripDropDownButton();
             button.DisplayStyle = ToolStripItemDisplayStyle.Image;
             button.ImageTransparentColor = Color.Magenta;
+            button.ImageScaling = ToolStripItemImageScaling.None;
             button.AutoSize = false;
-            button.Size = new Size(45, 36);
+            button.Size = new Size(MediaToolbarDropDownWidth, 36);
             button.Text = toolTip;
             button.ToolTipText = toolTip;
             button.Enabled = false;
@@ -1225,34 +1233,34 @@ namespace ZXMAK2.Host.WinForms.Views
             MediaStatusKind mediaKind,
             bool isMounted)
         {
-            var image = new Bitmap(32, 32);
+            var image = new Bitmap(MediaToolbarArtworkWidth, MediaToolbarArtworkHeight);
             using (var graphics = Graphics.FromImage(image))
             {
                 graphics.Clear(Color.Magenta);
                 if (mediaKind == MediaStatusKind.SecureDigital)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_32x32,
-                        new Rectangle(0, 0, 32, 32));
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_40x32,
+                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else if (mediaKind == MediaStatusKind.HardDisk)
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_32x32,
-                        new Rectangle(0, 0, 32, 32));
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_40x32,
+                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
                 else
                 {
                     graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_32x32,
-                        new Rectangle(0, 0, 32, 32));
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_40x32,
+                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
                 }
 
                 var dotColor = isMounted ?
                     Color.FromArgb(35, 180, 70) :
                     Color.FromArgb(215, 55, 50);
-                var dotX = 32 - MediaStatusDotDiameter - 1;
-                var dotY = 32 - MediaStatusDotDiameter - 1;
+                var dotX = MediaToolbarArtworkWidth - MediaStatusDotDiameter - 1;
+                var dotY = MediaToolbarArtworkHeight - MediaStatusDotDiameter - 1;
                 graphics.FillEllipse(Brushes.WhiteSmoke,
                     dotX - 1, dotY - 1,
                     MediaStatusDotDiameter + 2,
