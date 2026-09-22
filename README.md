@@ -54,49 +54,41 @@ You may also be interested about this emulator history:
 
 ## Current public test release
 
-### ZX-Evo BaseConf Alpha 6 — B40
+### ZX-Evo BaseConf Alpha 7 — B40
 
-The current downloadable prerelease is **Alpha 6**. It is based on the
-accepted B40 BaseConf emulation baseline and is intended for testing.
+The current prerelease is **Alpha 7**, based on the accepted B40 BaseConf
+emulation baseline.
 
-- Clean first launch starts directly in **ZX-Evo BaseConf**.
-- Toolbar controls are available for FDD, HDD and SD: Load/Eject menus and
-  clear red/green connection indicators.
-- SD settings use the same safe apply flow as HDD, so pressing Apply in
-  Machine Settings preserves an already mounted card.
-- F12 performs Warm Reset; Ctrl+F12 resets CMOS; Ctrl+Alt+F12 resets the full
-  machine state. F12 retains its debugger function inside the debugger.
+[**Download Alpha 7 portable ZIP**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.7-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-7.zip)
+or read the [Alpha 7 release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.7-alpha).
 
-[**Download Alpha 6 portable ZIP**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.6-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-6.zip)
-or read the [Alpha 6 release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.6-alpha).
+- `View → Scale Mode → No Border` removes only the hardware border; all four
+  existing scale modes continue to work in windowed and Full Screen display.
+- The diagnostic `Test.exe` benchmark is included and no longer inherits the
+  ZX-Evo default profile. Its renderer benchmark is back to 339–397 ms for
+  500 frames; the Alpha 6 result around 4.5 seconds was a test-profile issue,
+  not an emulation slowdown.
+- The ZIP has one root folder and excludes personal machine state, media
+  images, logs and PDB files. Extract it and run `ZXMAK2.exe`.
 
-Extract the ZIP to any folder and run `ZXMAK2.exe`. It contains one root
-folder and no personal machine state, media images, logs, PDB files or
-development probes.
+Older versions are available in the [Releases archive](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
 
-Older Alpha versions remain available in the
-[Releases archive](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
+## Текущая тестовая версия
 
-## Что скачивать
+### ZX-Evo BaseConf Alpha 7 — B40
 
-### ZX Evo BaseConf Alpha 6 — B40
+Текущая тестовая версия — **Alpha 7** на принятой базе эмуляции BaseConf B40.
 
-Текущая тестовая версия — **Alpha 6**. Она основана на принятой стабильной
-базе эмуляции BaseConf B40 и предназначена для проверки.
+[**Скачать portable ZIP Alpha 7**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.7-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-7.zip)
+или открыть [описание Alpha 7](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.7-alpha).
 
-- При первом чистом запуске сразу включается **ZX-Evo BaseConf**.
-- Для FDD, HDD и SD добавлены меню Load/Eject и понятные красные/зелёные
-  индикаторы подключения.
-- Настройки SD применяются по той же безопасной схеме, что HDD: нажатие Apply
-  в Machine Settings не извлекает уже подключённую карту.
-- F12 — Warm Reset; Ctrl+F12 — сброс CMOS; Ctrl+Alt+F12 — полный сброс
-  состояния машины. В debugger клавиша F12 сохраняет прежнюю функцию.
+- `View → Scale Mode → No Border` убирает только аппаратный бордюр; все четыре
+  режима масштаба продолжают работать в окне и Full Screen.
+- В архив включён диагностический `Test.exe`. Он больше не наследует стартовый
+  профиль ZX-Evo: renderer benchmark снова занимает 339–397 мс на 500 кадров.
+  Результат около 4,5 с в Alpha 6 был проблемой тестового профиля, а не
+  замедлением эмуляции.
+- В ZIP одна корневая папка; личные состояния машины, образы носителей, логи и
+  PDB исключены. Распакуйте архив и запустите `ZXMAK2.exe`.
 
-[**Скачать portable ZIP Alpha 6**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.6-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-6.zip)
-или открыть [описание Alpha 6](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.6-alpha).
-
-Распакуйте ZIP в любую папку и запустите `ZXMAK2.exe`. В архиве одна корневая
-папка; личные состояния эмулятора, образы носителей, логи, PDB и отладочные
-файлы не включены.
-
-Предыдущие Alpha сохранены в [архиве релизов](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
+Предыдущие версии сохранены в [архиве релизов](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
