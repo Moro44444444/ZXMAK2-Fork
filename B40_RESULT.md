@@ -44,5 +44,5 @@ versa.
 Accepted by the user as the stable B40 checkpoint on 2026-09-22. In addition
 to the earlier BaseConf runtime checks, the retained-tape scenario is accepted:
 the same TAP/TZX image may be used after BaseConf↔Pentagon/Spectrum machine
-switches without reopening it. This remains a local test package, not a public
-GitHub release.
+switches without reopening it. It is published as the portable prerelease
+`ZX-Evo BaseConf Alpha 5 — B40` (`v0.5-alpha`).
