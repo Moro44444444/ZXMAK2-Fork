@@ -1,0 +1,16 @@
+ZXMAK2 — ZX Evo BaseConf, B40 test build
+
+What changed:
+- completed documented 48K/128K contention and open-bus checks;
+- synchronized live BaseConf picture-mode and palette transitions;
+- added golden vectors for all seven BaseConf renderer routes;
+- reviewed WD1793 diagnostic trace without changing FDD behavior.
+
+Что изменено:
+- завершена документированная сверка contention 48K/128K и open bus;
+- синхронизированы живые переключения видеорежимов и палитры BaseConf;
+- добавлены golden-векторы для всех семи видеорежимов BaseConf;
+- проверена диагностическая трасса WD1793 без изменения поведения FDD.
+
+Please perform the runtime smoke test listed in B40_RESULT.md.
+Пожалуйста, выполните runtime-проверки из B40_RESULT.md.
