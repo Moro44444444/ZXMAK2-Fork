@@ -600,7 +600,7 @@
             // tbrDropDownMachines
             //
             this.tbrDropDownMachines.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Image;
-            this.tbrDropDownMachines.Image = global::ZXMAK2.Host.WinForms.Properties.Resources.EmuMachines_32x32;
+            this.tbrDropDownMachines.Image = global::ZXMAK2.Host.WinForms.Properties.Resources.EmuMachines_52x36;
             this.tbrDropDownMachines.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrDropDownMachines.Name = "tbrDropDownMachines";
             this.tbrDropDownMachines.Size = new System.Drawing.Size(45, 36);

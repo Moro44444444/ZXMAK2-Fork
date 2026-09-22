@@ -56,11 +56,13 @@ namespace ZXMAK2.Hardware.Evo
             m_openImageCommand = new IdeMediaCommand(
                 OpenImageCommand_OnExecute,
                 MediaCommand_OnCanExecute,
-                "Open HDD image...");
+                "Open HDD image...",
+                MediaCommandAction.Load);
             m_ejectImageCommand = new IdeMediaCommand(
                 EjectImageCommand_OnExecute,
                 MediaCommand_OnCanExecute,
-                "Eject HDD");
+                "Eject HDD",
+                MediaCommandAction.Eject);
             bmgr.AddCommandUi(m_openImageCommand);
             bmgr.AddCommandUi(m_ejectImageCommand);
 
@@ -442,14 +444,28 @@ namespace ZXMAK2.Hardware.Evo
             return value;
         }
 
-        private sealed class IdeMediaCommand : CommandDelegate, ISuccessCommand
+        private sealed class IdeMediaCommand : CommandDelegate, IMediaCommand
         {
             public IdeMediaCommand(
                 Action<object> action,
                 Func<object, bool> canExecute,
-                string text)
+                string text,
+                MediaCommandAction mediaAction)
                 : base(action, canExecute, text)
             {
+                MediaAction = mediaAction;
+            }
+
+            public MediaCommandKind MediaKind
+            {
+                get { return MediaCommandKind.HardDisk; }
+            }
+
+            public MediaCommandAction MediaAction { get; private set; }
+
+            public int DriveIndex
+            {
+                get { return -1; }
             }
 
             public event EventHandler ExecutedSuccessfully;

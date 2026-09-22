@@ -239,11 +239,15 @@ namespace ZXMAK2.Hardware.General
                 m_openDriveCommands[drive] = new FddMediaCommand(
                     arg => OpenDriveCommand_OnExecute(currentDrive, arg),
                     MediaCommand_OnCanExecute,
-                    string.Format("Load FDD {0}:...", (char)('A' + drive)));
+                    string.Format("Load FDD {0}:...", (char)('A' + drive)),
+                    MediaCommandAction.Load,
+                    drive);
                 m_ejectDriveCommands[drive] = new FddMediaCommand(
                     arg => EjectDriveCommand_OnExecute(currentDrive, arg),
                     MediaCommand_OnCanExecute,
-                    string.Format("Eject FDD {0}:", (char)('A' + drive)));
+                    string.Format("Eject FDD {0}:", (char)('A' + drive)),
+                    MediaCommandAction.Eject,
+                    drive);
                 bmgr.AddCommandUi(m_openDriveCommands[drive]);
                 bmgr.AddCommandUi(m_ejectDriveCommands[drive]);
             }
@@ -346,15 +350,28 @@ namespace ZXMAK2.Hardware.General
             disk.IsWP = false;
         }
 
-        private sealed class FddMediaCommand : CommandDelegate, ISuccessCommand
+        private sealed class FddMediaCommand : CommandDelegate, IMediaCommand
         {
             public FddMediaCommand(
                 Action<object> action,
                 Func<object, bool> canExecute,
-                string text)
+                string text,
+                MediaCommandAction mediaAction,
+                int driveIndex)
                 : base(action, canExecute, text)
             {
+                MediaAction = mediaAction;
+                DriveIndex = driveIndex;
             }
+
+            public MediaCommandKind MediaKind
+            {
+                get { return MediaCommandKind.Floppy; }
+            }
+
+            public MediaCommandAction MediaAction { get; private set; }
+
+            public int DriveIndex { get; private set; }
 
             public event EventHandler ExecutedSuccessfully;
 

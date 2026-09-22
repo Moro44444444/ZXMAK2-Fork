@@ -276,3 +276,141 @@ floating bus в пределах r1364, (2) mid-frame transitions raster/mode/pa
 (4) command/status trace VG93 без изменения его поведения до подтверждённого
 расхождения. B40 не включает ULAplus, медиа-утилиту, SD/HDD lifecycle,
 ZX-BUS, CD/ATAPI или новую периферию.
+
+## Continuation: post-Alpha 6 static code review — 2026-09-22
+
+### Scope and non-mutation guarantee
+
+This is a read-only review of the Alpha 6 tree after B40 / Alpha 5.  No source
+file, resource, configuration, binary, package, tag or release was changed;
+no build or emulator/test executable was run.  `git diff --check
+B40-stable..HEAD` produced no whitespace or merge-conflict diagnostics.  The
+reviewed baseline was commit `3eafc0e` (`Fix test benchmark profile
+isolation`), following `5479c7d` (`Add no-border display mode`) and `8ac7681`
+(`Prepare Alpha 6 portable release`).
+
+The untracked `src/_binverify/` directory was observed but deliberately left
+outside the review and untouched.
+
+### Confirmed architectural risk: machine-profile state inheritance (P1)
+
+`BusManager.LoadConfigXml` retains old device instances and reuses an instance
+when the incoming XML declares the same device type.  Device configuration is
+then loaded into that existing instance.  `BusDeviceBase.LoadConfigXml` does
+not first reset the instance to device defaults.  Several device loaders use
+the current property value as the fallback when an XML attribute is absent.
+
+This is observable in the profile set: a number of TapeDevice and Keyboard
+nodes omit attributes that other profiles declare explicitly.  Thus, after a
+machine switch, a missing target-profile attribute can retain a value from the
+previous machine.  This is the principal static risk for cross-machine
+behaviour, including tape parameters, keyboard mapping and mouse parameters.
+
+It must not be "fixed" by recreating every device indiscriminately: retaining
+the inserted/open tape while switching machines is a desired user workflow.
+The correct future change is to separate session state (for example the loaded
+tape) from hardware/profile configuration, then always apply the latter from
+the target profile.  It requires a focused machine-switch regression matrix.
+
+Relevant implementation:
+
+- `src/ZXMAK2.Engine/BusManager.cs` (`LoadConfigXml`);
+- `src/ZXMAK2.Engine/Entities/BusDeviceBase.cs` (`LoadConfigXml`);
+- `src/ZXMAK2.Hardware/General/KeyboardDevice.cs` (`OnConfigLoad`);
+- `src/ZXMAK2.Hardware/General/TapeDevice.cs` (`OnConfigLoad`);
+- `src/ZXMAK2.Hardware/General/KempstonMouseDevice.cs` (`OnConfigLoad`).
+
+### Code-quality findings
+
+1. **Tracked stale DirectX renderer duplicate (P2).**
+   `src/ZXMAK2.Host.WinForms/Mdx/Renderers.mdx/` contains old renderer source
+   copies, including `VideoRenderer.cs`.  The WinForms project compiles only
+   `Mdx/Renderers/`, not `Renderers.mdx`; therefore the duplicate has no
+   runtime effect, but differs from the compiled No Border implementation and
+   is a maintenance hazard.  Remove or archive it later in a standalone
+   cleanup commit, not mixed with hardware work.
+2. **Toolbar binds by display text (P2).**
+   `MainView.RegisterMediaCommand` finds FDD/HDD/SD commands by captions such
+   as `Open SD Card image...` and `Eject SD Card`.  The present captions work,
+   but a rename or localization would silently break the binding.  A later
+   cleanup should bind a stable command ID/tag rather than UI text.
+3. **Legacy visual workarounds (P3).**
+   `FormMachineSettings` contains an old PortFE preservation/reset workaround
+   and a zero-height context-menu workaround.  They are host-UI technical debt
+   only; this review found no path from them to PentEvo ports, timing or media
+   state.
+
+### Alpha 6 No Border review
+
+No Border is host-side source-rectangle cropping only.  `IFrameVideo.ActiveArea`
+defines the active picture; both DirectX and GDI renderers select that area
+before the existing scale modes are applied.  `FrameVideo` clips the active
+rectangle to the actual frame.  Consequently No Border does not change memory
+mapping, ULA port handling, INT timing, contention or the emulated machine.
+
+The DirectX clone is recreated if ActiveArea changes, avoiding stale source
+dimensions.  The toolbar artwork is refreshed only when media mount state
+changes, not allocated afresh on every status tick.
+
+Small scope gap (P2): `SprinterRenderer` does not supply an ActiveArea, so No
+Border has no crop to apply on that machine.  BaseConf/Evo/ATM renderer paths
+do supply active rectangles and are not affected by this gap.
+
+### BaseConf hardware conformance review
+
+The implementation was structurally compared with the frozen official NedoPC
+r1364 RTL snapshot recorded above (`fpga.r1364/baseconf` and
+`base_trdemu`).  The comparison covered the decode/mapping equations and
+state transitions; it is not a claim of oscilloscope-level proof for every
+possible raster-phase transition.
+
+The following current implementation groups match the relevant RTL structure:
+
+- **Memory:** 256 RAM pages of 16 KiB (4 MiB), 32 ROM pages (512 KiB), normal
+  and Shadow/DOS map selection, `#7FFD/#7FFC`, `#EFF7`, `#xx7F/#xxFF`,
+  `#xxBF` and `#xxBE` families.
+- **IDE:** normal/shadow C8 alternate-status and the x10/x08 IDE decoder
+  families.
+- **SD:** normal/shadow `#xx57` data and normal `#xx77` control family.
+- **CMOS / GLUClock / COM:** `#DFF7/#DEF7` address, `#BFF7/#BEF7` data and
+  the `#F8EF..#FFEF` COM family.
+- **FDD:** `#13BD` virtual-drive selection and physical WD93 suppression.
+- **INT and fast I/O:** active-low INT, a 256-master-clock base window,
+  extension through external WAIT, release on INT acknowledge, and the
+  six-master-clock external 14 MHz I/O duration.
+
+One documented compatibility divergence remains intentional: the emulator
+also accepts configuration reads through `#xxBD` for ERS compatibility,
+although the physical configuration-multiplex read is `#xxBE` and `#xxBD`
+normally has breakpoint-address meaning.  This alias is not a random fallback
+and must not be removed without an ERS compatibility regression test.
+
+### Accuracy boundaries, not newly confirmed regressions
+
+1. Raster/display routing is committed at a software frame boundary in places
+   where hardware may respond to a current horizontal/vertical phase.
+2. The AVR response delay uses the shortest deterministic host-side model;
+   actual firmware service latency is not a fixed FPGA constant.
+3. `UlaPentEvo` retains an old `c_ulaFlashPeriod = 25` "TODO: check" note;
+   it concerns flash-phase fidelity, not the accepted media/port/INT paths.
+
+The official RTL itself includes a TODO around exact contention signal
+synchronisation.  Therefore, if a particular demo exposes a timing mismatch,
+the appropriate next step is a narrow port/tact trace and golden vector for
+that case, not a broad timing rewrite.
+
+### Test-program and release conclusions
+
+The recent `Test` change explicitly loads its embedded test-machine profile
+after reset, isolating the benchmark from the portable release's default
+ZX-Evo BaseConf profile.  Static review found no error in that correction.
+`Test.exe` still raises its process/thread priority, so it is a benchmark and
+diagnostic tool rather than a passive end-user launcher.
+
+No new source-side failure was found in the accepted SD/HDD/FDD lifecycle,
+media status indicators, reset logic, or the BaseConf port/memory/INT mapping.
+Alpha 6 remains an appropriate stable rollback point.  The safest later work
+order is: (1) profile-state/configuration separation with switch tests,
+(2) stale-renderer cleanup, (3) stable media command IDs, and only then
+(4) evidence-driven raster/WAIT refinement if a reproducible program needs
+it.

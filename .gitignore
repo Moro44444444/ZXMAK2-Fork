@@ -6,6 +6,7 @@ _bindebug
 **/bin/
 **/obj/
 **/_binrelease/
+**/_binverify/
 *.user
 *.suo
 *.cache

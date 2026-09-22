@@ -54,11 +54,13 @@ namespace ZXMAK2.Hardware.Evo
             openImageCommand = new SdImageOpenCommand(
                 CommandUi_OnExecute,
                 CommandUi_OnCanExecute,
-                "Open SD Card image...");
+                "Open SD Card image...",
+                MediaCommandAction.Load);
             ejectImageCommand = new SdImageOpenCommand(
                 EjectCommandUi_OnExecute,
                 CommandUi_OnCanExecute,
-                "Eject SD Card");
+                "Eject SD Card",
+                MediaCommandAction.Eject);
             bmgr.AddCommandUi(openImageCommand);
             bmgr.AddCommandUi(ejectImageCommand);
 
@@ -468,14 +470,28 @@ namespace ZXMAK2.Hardware.Evo
 
         #endregion CommandUi
 
-        private sealed class SdImageOpenCommand : CommandDelegate, ISuccessCommand
+        private sealed class SdImageOpenCommand : CommandDelegate, IMediaCommand
         {
             public SdImageOpenCommand(
                 Action<object> action,
                 Func<object, bool> canExecute,
-                string text)
+                string text,
+                MediaCommandAction mediaAction)
                 : base(action, canExecute, text)
             {
+                MediaAction = mediaAction;
+            }
+
+            public MediaCommandKind MediaKind
+            {
+                get { return MediaCommandKind.SecureDigital; }
+            }
+
+            public MediaCommandAction MediaAction { get; private set; }
+
+            public int DriveIndex
+            {
+                get { return -1; }
             }
 
             public event EventHandler ExecutedSuccessfully;

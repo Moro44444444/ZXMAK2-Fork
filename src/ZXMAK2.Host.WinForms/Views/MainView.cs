@@ -307,39 +307,48 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private bool RegisterMediaCommand(ICommand command)
         {
-            var successCommand = command as ISuccessCommand;
-            if (successCommand == null)
+            var mediaCommand = command as IMediaCommand;
+            if (mediaCommand == null)
             {
                 return false;
             }
-            switch (command.Text)
+            switch (mediaCommand.MediaKind)
             {
-                case "Open SD Card image...":
-                    _openSdCommand = successCommand;
+                case MediaCommandKind.SecureDigital:
+                    if (mediaCommand.MediaAction == MediaCommandAction.Load)
+                    {
+                        _openSdCommand = mediaCommand;
+                    }
+                    else
+                    {
+                        _ejectSdCommand = mediaCommand;
+                    }
                     return true;
-                case "Eject SD Card":
-                    _ejectSdCommand = successCommand;
+                case MediaCommandKind.HardDisk:
+                    if (mediaCommand.MediaAction == MediaCommandAction.Load)
+                    {
+                        _openHddCommand = mediaCommand;
+                    }
+                    else
+                    {
+                        _ejectHddCommand = mediaCommand;
+                    }
                     return true;
-                case "Open HDD image...":
-                    _openHddCommand = successCommand;
+                case MediaCommandKind.Floppy:
+                    if (mediaCommand.DriveIndex < 0 ||
+                        mediaCommand.DriveIndex >= _openFddCommands.Length)
+                    {
+                        return false;
+                    }
+                    if (mediaCommand.MediaAction == MediaCommandAction.Load)
+                    {
+                        _openFddCommands[mediaCommand.DriveIndex] = mediaCommand;
+                    }
+                    else
+                    {
+                        _ejectFddCommands[mediaCommand.DriveIndex] = mediaCommand;
+                    }
                     return true;
-                case "Eject HDD":
-                    _ejectHddCommand = successCommand;
-                    return true;
-            }
-            for (var drive = 0; drive < 4; drive++)
-            {
-                var name = (char)('A' + drive);
-                if (command.Text == string.Format("Load FDD {0}:...", name))
-                {
-                    _openFddCommands[drive] = successCommand;
-                    return true;
-                }
-                if (command.Text == string.Format("Eject FDD {0}:", name))
-                {
-                    _ejectFddCommands[drive] = successCommand;
-                    return true;
-                }
             }
             return false;
         }
@@ -349,6 +358,7 @@ namespace ZXMAK2.Host.WinForms.Views
             // Keep every toolbar drop-down equally wide: its artwork must not compete
             // with the arrow that opens the corresponding menu.
             tbrDropDownMachines.AutoSize = false;
+            tbrDropDownMachines.ImageScaling = ToolStripItemImageScaling.None;
             tbrDropDownMachines.Size = new Size(
                 MediaToolbarDropDownWidth,
                 MediaToolbarDropDownHeight);

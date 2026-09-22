@@ -60,6 +60,7 @@
     <Compile Include="BindingTools\TargetPropertyChangedEventArgs.cs" />
     <Compile Include="CommandDelegate.cs" />
     <Compile Include="ICommand.cs" />
+    <Compile Include="IMediaCommand.cs" />
     <Compile Include="ISuccessCommand.cs" />
     <Compile Include="IValueConverter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
