@@ -155,6 +155,13 @@
   TAP/TZX-ленты при смене BaseConf↔Pentagon/Spectrum. Состояние закреплено
   локальным тегом `B40-stable`; GitHub release не создавался.
 
+## 2026-09-22 — Alpha 5
+
+- B40 опубликована как portable prerelease `ZX-Evo BaseConf Alpha 5 — B40`
+  (`v0.5-alpha`). Архив содержит одну корневую папку и очищен от личных
+  состояний, носителей, логов, PDB и development probes.
+- Имена публичных Alpha 3/B36 и Alpha 4/B38 приведены к тому же формату.
+
 ## Следующий утверждённый порядок
 
 1. **B40:** contention, floating bus, raster/INT/video phase и golden-векторы;

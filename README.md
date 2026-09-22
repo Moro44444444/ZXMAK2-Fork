@@ -54,58 +54,76 @@ You may also be interested about this emulator history:
 
 ## What's new
 
-### ZX-Evo BaseConf Alpha 0.4 — B38
+### ZX-Evo BaseConf Alpha 5 — B40
+
+- Added the official BaseConf 4:4:4 palette extension through `#BF.D5`, including palette readback; the existing palette path stays intact when D5 is clear.
+- Refined documented 48K/128K contention and verified open-bus behaviour.
+- Video mode and palette switches now preserve the already rendered part of a frame; all seven BaseConf renderer paths have golden-vector coverage.
+- Added the documented BaseConf tape profile and corrected TAP/TZX timing. One opened tape can now be used while switching between BaseConf and Spectrum/Pentagon without reopening it.
+- Reviewed the existing WD1793 trace; no confirmed controller discrepancy was found, so FDD behaviour was not changed.
+- [Download the Alpha 5 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.5-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-5.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.5-alpha).
+
+### ZX-Evo BaseConf Alpha 4 — B38
 
 - Added the documented eight-bit BaseConf Kempston joystick on exact low byte `#1F`; VG93 retains ownership in Shadow/DOS.
 - Added tape input on `xxFE/xxF6` and the persistent AVR-controlled FE.D4 beeper / FE.D3 tape-out mux, including Num Lock switching.
 - The accepted AY, Covox, DirectSound and RejectDC paths are unchanged. Full automated regression passes; the user has completed a stable runtime smoke test.
-- [Download the Alpha 0.4 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
+- [Download the Alpha 4 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-4.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
 
-### ZX-Evo BaseConf Alpha 0.3 — B36
+### ZX-Evo BaseConf Alpha 3 — B36
 
 - Reworked ZX-Evolution BaseConf emulation against the official r1364 documentation: memory paging, hardware ports, timing, interrupts, palette and all seven documented video modes.
 - Fixed border/multicolor phase, mid-frame video switching and several audio timing/DC issues.
 - Corrected Nemo IDE port decoding and added convenient HDD image selection, persistence and ejection in Machine Settings. HDD access, FAT browsing and file launching have been runtime-tested.
 - Disk images opened through the normal UI are writable by default; write protection remains available as an explicit option.
 - Replacing or ejecting SD/HDD media now performs a controlled cold power-cycle, so repeated media changes do not require a manual emulator restart.
-- Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 0.3 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.3.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
+- Added a clean portable ZX-Evo BaseConf package for testing: [download the Alpha 3 portable ZIP](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-3.zip) or [view the release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
 
 Known Alpha limitations: automatic OS boot from HDD is still being investigated; the SDHC/Rage case with one specific 4-GB image is under diagnosis.
 
-Next development stage: B39A — the official BaseConf 4:4:4 palette extension
-on the stable B38 baseline. ULAplus is deliberately deferred to a separate,
-opt-in stage after the built-in BaseConf audit remains stable.
+Next development stage: ULAplus as a separate, opt-in compatibility stage;
+then the two documented ZX-BUS slots and documented peripherals. CD/ATAPI is
+kept as a separate later stage.
 
 Development records: [current project journal](PROJECT_JOURNAL.md),
 [concise changelog](FORK_CHANGELOG.md), [BaseConf r1364 audit and plan](BASECONF_AUDIT_B32.md),
-and [latest B38 report](B38_RESULT.md). Older detailed reports are retained in
+and [latest B40 report](B40_RESULT.md). Older detailed reports are retained in
 [`docs/history/results`](docs/history/results/).
 
 ## Что нового
 
-### ZX Evo BaseConf Alpha 0.4 — B38
+### ZX Evo BaseConf Alpha 5 — B40
+
+- Добавлено официальное расширение палитры BaseConf 4:4:4 через `#BF.D5`, включая чтение палитры; прежний путь палитры при выключенном D5 сохранён.
+- Уточнены документированные задержки contention для 48K/128K и проверено поведение floating bus.
+- Переключения видеорежимов и палитры сохраняют уже отрисованную часть кадра; все семь видеопутей BaseConf покрыты golden-векторами.
+- Добавлен документированный профиль ленты BaseConf и исправлены тайминги TAP/TZX. Одну открытую ленту можно использовать при переходах между BaseConf и Spectrum/Pentagon без повторного выбора файла.
+- Проверена существующая трассировка WD1793; подтверждённого расхождения не найдено, поэтому поведение FDD не менялось.
+- [Скачать portable ZIP Alpha 5](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.5-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-5.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.5-alpha).
+
+### ZX Evo BaseConf Alpha 4 — B38
 
 - Добавлен документированный восьмибитный Kempston joystick BaseConf на точном младшем байте `#1F`; в Shadow/DOS этот порт остаётся за VG93.
 - Добавлены tape-in на `xxFE/xxF6` и сохраняемый AVR-переключатель FE.D4 beeper / FE.D3 tape-out с управлением Num Lock.
 - Принятые тракты AY, Covox, DirectSound и RejectDC не изменены. Полная автоматическая регрессия проходит; пользователь выполнил стабильный runtime smoke.
-- [Скачать portable ZIP Alpha 0.4](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.4.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
+- [Скачать portable ZIP Alpha 4](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.4-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-4.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.4-alpha).
 
-### ZX Evo BaseConf Alpha 0.3 — B36
+### ZX Evo BaseConf Alpha 3 — B36
 
 - Эмуляция ZX-Evolution BaseConf сверена с официальной документацией r1364: память, порты, тайминги, прерывания, палитра и семь документированных видеорежимов.
 - Исправлены фаза border/multicolor, переключение видеорежимов и проблемы синхронизации звука.
 - Исправлено декодирование Nemo IDE; добавлены выбор и сохранение HDD-образа в Machine Settings. Подключение HDD, чтение FAT и запуск файлов проверены.
 - Диски, открытые через обычный интерфейс, по умолчанию доступны для записи; защиту можно включить вручную.
 - Повторная замена или извлечение SD/HDD теперь выполняет управляемый холодный перезапуск, поэтому ручной перезапуск эмулятора для смены носителя не требуется.
-- [Скачать portable ZIP Alpha 0.3](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-0.3.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
+- [Скачать portable ZIP Alpha 3](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.3-alpha/ZXMAK2-ZXEvo-BaseConf-Alpha-3.zip) или открыть [страницу релиза](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.3-alpha).
 
 Известные ограничения Alpha: автоматическая загрузка ОС с HDD ещё исследуется; диагностируется сценарий SDHC/Rage с одним конкретным образом 4 ГБ.
 
-Следующий этап: B39A — официальное расширение палитры BaseConf 4:4:4 от
-стабильной B38. ULAplus намеренно отложена в отдельный opt-in этап после
-сохранения стабильности встроенного BaseConf.
+Следующий этап: ULAplus как отдельный opt-in этап совместимости; затем два
+документированных слота ZX-BUS и документированная периферия. CD/ATAPI
+остаётся отдельным следующим этапом.
 
 Документы разработки: [постоянный журнал](PROJECT_JOURNAL.md),
 [краткая хронология](FORK_CHANGELOG.md), [аудит и план BaseConf r1364](BASECONF_AUDIT_B32.md),
-[последний отчёт B38](B38_RESULT.md). Более ранние подробные отчёты сохранены в
+[последний отчёт B40](B40_RESULT.md). Более ранние подробные отчёты сохранены в
 [`docs/history/results`](docs/history/results/).

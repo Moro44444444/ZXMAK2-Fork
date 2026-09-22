@@ -1,16 +1,20 @@
-ZXMAK2 — ZX Evo BaseConf, B40 test build
+ZXMAK2 — ZX Evo BaseConf Alpha 5 — B40 stable
 
 What changed:
+- added the documented BaseConf 4:4:4 palette through #BF.D5 and palette readback;
 - completed documented 48K/128K contention and open-bus checks;
 - synchronized live BaseConf picture-mode and palette transitions;
 - added golden vectors for all seven BaseConf renderer routes;
+- added the documented BaseConf tape profile and correct retained TAP/TZX timing across machine switches;
 - reviewed WD1793 diagnostic trace without changing FDD behavior.
 
 Что изменено:
+- добавлена документированная палитра BaseConf 4:4:4 через #BF.D5 и чтение палитры;
 - завершена документированная сверка contention 48K/128K и open bus;
 - синхронизированы живые переключения видеорежимов и палитры BaseConf;
 - добавлены golden-векторы для всех семи видеорежимов BaseConf;
+- добавлены профиль ленты BaseConf и корректные тайминги сохранённой TAP/TZX-ленты при смене машины;
 - проверена диагностическая трасса WD1793 без изменения поведения FDD.
 
-Please perform the runtime smoke test listed in B40_RESULT.md.
-Пожалуйста, выполните runtime-проверки из B40_RESULT.md.
+This portable package contains no personal machine state or media images.
+В portable-пакете нет персонального состояния машины и образов носителей.
