@@ -686,7 +686,7 @@ namespace ZXMAK2.Host.WinForms.Views
 
             var current = currentDevice.HardDisk;
             var pending = pendingDevice.HardDisk;
-            return !string.Equals(
+            var hardDiskChanged = !string.Equals(
                        NormalizeMediaPath(current.FileName),
                        NormalizeMediaPath(pending.FileName),
                        StringComparison.OrdinalIgnoreCase) ||
@@ -695,6 +695,16 @@ namespace ZXMAK2.Host.WinForms.Views
                    current.Heads != pending.Heads ||
                    current.Sectors != pending.Sectors ||
                    current.Lba != pending.Lba;
+            if (hardDiskChanged)
+                return true;
+
+            var currentCdRom = currentDevice.CdRom;
+            var pendingCdRom = pendingDevice.CdRom;
+            return !string.Equals(
+                       NormalizeMediaPath(currentCdRom.FileName),
+                       NormalizeMediaPath(pendingCdRom.FileName),
+                       StringComparison.OrdinalIgnoreCase) ||
+                   currentCdRom.IsCdrom != pendingCdRom.IsCdrom;
         }
 
         private static bool IsSdMediaChanged(

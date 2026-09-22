@@ -132,6 +132,28 @@ namespace ZXMAK2.Hardware.Evo
                 m_ata.Devices[0].DeviceInfo.Configure(
                     image, readOnly, cylinders, heads, sectors, lba);
             }
+
+            var hasConfiguredCdRom = Utils.GetXmlAttributeAsBool(itemNode, "ideCdConfigured", false);
+            if (hasConfiguredCdRom)
+            {
+                var drive = Utils.GetXmlAttributeAsString(itemNode, "ideCdDrive", string.Empty);
+                if (!string.IsNullOrEmpty(drive))
+                {
+                    try
+                    {
+                        m_ata.Devices[1].DeviceInfo.ConfigureCdromDrive(drive);
+                    }
+                    catch (Exception ex)
+                    {
+                        // A portable profile can legitimately be opened on a
+                        // computer without the previously selected host drive.
+                        // Leave the optional slave disconnected rather than
+                        // aborting startup of the complete virtual machine.
+                        Logger.Warn("IDE CD/DVD drive {0} is unavailable: {1}", drive, ex.Message);
+                        m_ata.Devices[1].DeviceInfo.Disconnect();
+                    }
+                }
+            }
         }
 
         protected override void OnConfigSave(XmlNode itemNode)
@@ -146,6 +168,10 @@ namespace ZXMAK2.Hardware.Evo
             Utils.SetXmlAttribute(itemNode, "ideHeads", info.Heads);
             Utils.SetXmlAttribute(itemNode, "ideSectors", info.Sectors);
             Utils.SetXmlAttribute(itemNode, "ideLba", info.Lba);
+            var cdrom = CdRom;
+            Utils.SetXmlAttribute(itemNode, "ideCdConfigured",
+                cdrom.IsCdrom && !string.IsNullOrEmpty(cdrom.FileName));
+            Utils.SetXmlAttribute(itemNode, "ideCdDrive", cdrom.FileName ?? string.Empty);
         }
 
         #endregion
@@ -164,6 +190,15 @@ namespace ZXMAK2.Hardware.Evo
             get { return m_ata.Devices[0].DeviceInfo; }
         }
 
+        /// <summary>
+        /// The documented second device on BaseConf's single Nemo IDE channel.
+        /// HDD remains the master; an optional Windows CD/DVD drive is slave.
+        /// </summary>
+        public AtaDeviceInfo CdRom
+        {
+            get { return m_ata.Devices[1].DeviceInfo; }
+        }
+
         public void ConfigureHardDisk(string fileName, bool readOnly)
         {
             HardDisk.ConfigureImage(fileName, readOnly);
@@ -174,6 +209,16 @@ namespace ZXMAK2.Hardware.Evo
         {
             HardDisk.Disconnect();
             m_hasConfiguredImage = true;
+        }
+
+        public void ConfigureCdRom(string driveName)
+        {
+            CdRom.ConfigureCdromDrive(driveName);
+        }
+
+        public void DisconnectCdRom()
+        {
+            CdRom.Disconnect();
         }
 
         public MediaStatusKind MediaStatusKind

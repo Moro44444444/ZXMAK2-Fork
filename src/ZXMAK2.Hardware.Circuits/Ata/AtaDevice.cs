@@ -26,7 +26,14 @@ namespace ZXMAK2.Hardware.Circuits.Ata
         private readonly byte[] transbf = new byte[0xFFFF]; // ATAPI is able to tranfer 0xFFFF bytes. passing more leads to error
 
         private readonly AtaPasser ata_p = new AtaPasser();
-        //ATAPI_PASSER atapi_p;
+        private readonly AtapiPasser atapi_p = new AtapiPasser();
+        private byte[] atapiResponse;
+        private int atapiResponseOffset;
+        private uint atapiReadLba;
+        private uint atapiReadBlocks;
+        private byte atapiSenseKey;
+        private byte atapiSenseAsc;
+        private byte atapiSenseAscq;
 
         public bool LedIo;
         public bool LogIo;
@@ -42,6 +49,7 @@ namespace ZXMAK2.Hardware.Circuits.Ata
         public void Dispose()
         {
             ata_p.Dispose();
+            atapi_p.Dispose();
         }
 
         public byte Id
@@ -62,13 +70,14 @@ namespace ZXMAK2.Hardware.Circuits.Ata
 
         public bool loaded()
         {
-            //was crashed at atapi_p.loaded() if no master or slave device!!! see fix in ATAPI_PASSER //Alone Coder
-            return ata_p.IsLoaded();// || atapi_p.loaded(); 
+            return atapi ? atapi_p.IsAttached : ata_p.IsLoaded();
         }
 
         private void configure(AtaDeviceInfo cfg)
         {
             ata_p.Close();
+            atapi_p.Close();
+            atapi = false;
             c = cfg.Cylinders;
             h = cfg.Heads;
             s = cfg.Sectors;
@@ -82,23 +91,29 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             if (String.IsNullOrEmpty(cfg.FileName))
                 return;
 
+            if (cfg.IsCdrom)
+            {
+                atapi = atapi_p.Open(cfg.FileName);
+                lba = atapi_p.BlockCount;
+                if (lba == 0)
+                {
+                    // An empty tray is still a present ATAPI device.  The
+                    // packet command will report "medium not present".
+                    lba = 1;
+                }
+                return;
+            }
+
             var filedev = new PhysicalDeviceInfo();
             filedev.filename = cfg.FileName;
-            filedev.type = cfg.IsCdrom ? DEVTYPE.ATA_FILECD : DEVTYPE.ATA_FILEHDD;
+            filedev.type = DEVTYPE.ATA_FILEHDD;
 
             bool success = false;
             if (filedev.type == DEVTYPE.ATA_FILEHDD)
             {
                 filedev.usage = DEVUSAGE.ATA_OP_USE;
-                success = ata_p.Open(filedev, cfg.ReadOnly | cfg.IsCdrom);
-                atapi = false;
+                success = ata_p.Open(filedev, cfg.ReadOnly);
             }
-            //if (filedev.type == DEVTYPE.ATA_FILECD)
-            //{
-            //    filedev.usage = DEVUSAGE.ATA_OP_USE;
-            //    errCode = atapi_p.open(filedev);
-            //    atapi = 1;
-            //}
             if (success)
             {
                 return;
@@ -198,8 +213,10 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             if (transptr < transcount)
                 return result;
             // look to state, prepare next block
-            if (state == HD_STATE.S_READ_ID || state == HD_STATE.S_READ_ATAPI)
+            if (state == HD_STATE.S_READ_ID)
                 command_ok();
+            else if (state == HD_STATE.S_READ_ATAPI)
+                prepare_next_atapi_data_phase();
             if (state == HD_STATE.S_READ_SECTORS)
             {
                 //       __debugbreak();
@@ -399,10 +416,11 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             if (cmd == 0xA0)
             { // packet
                 state = HD_STATE.S_RECV_PACKET;
-                reg.status = HD_STATUS.STATUS_DRQ;
+                reg.status = HD_STATUS.STATUS_DRDY | HD_STATUS.STATUS_DSC | HD_STATUS.STATUS_DRQ;
                 reg.intreason = ATAPI_INT_REASON.INT_COD;
                 transptr = 0;
                 transcount = 6;
+                intrq = true;
                 return true;
             }
 
@@ -517,6 +535,17 @@ namespace ZXMAK2.Hardware.Circuits.Ata
                 make_ata_string(transbf, 23 * 2, 4, _deviceInfo.FirmwareRevision);	// Firmware revision
                 make_ata_string(transbf, 27 * 2, 20, _deviceInfo.ModelNumber);	    // Model number
 
+                if (atapi)
+                {
+                    // ATAPI identify-packet response: CD-ROM, removable,
+                    // 12-byte packets and a 2048-byte logical block size.
+                    setUInt16(transbf, 0 * 2, 0x8580);
+                    setUInt16(transbf, 49 * 2, 0x0200);
+                    setUInt16(transbf, 80 * 2, 0x003E);
+                    setUInt16(transbf, 81 * 2, 0x0013);
+                }
+                else
+                {
                 setUInt16(transbf, 0 * 2, 0x045A);		// [General configuration]
                 setUInt16(transbf, 1 * 2, (UInt16)c);
                 setUInt16(transbf, 3 * 2, (UInt16)h);
@@ -529,6 +558,7 @@ namespace ZXMAK2.Hardware.Circuits.Ata
                 setUInt16(transbf, 80 * 2, 0x3E);		// support specifications up to ATA-5
                 setUInt16(transbf, 81 * 2, 0x13);		// ATA/ATAPI-5 T13 1321D revision 3
                 setUInt16(transbf, 82 * 2, 0x60);		// supported look-ahead and write cache
+                }
 
                 // make checksum
                 transbf[510] = 0xA5;
@@ -702,18 +732,276 @@ namespace ZXMAK2.Hardware.Circuits.Ata
 
         public void handle_atapi_packet()
         {
-            Logger.Error("ATA{0:X2}: handle_atapi_packet: method not implemented", Id);
+            var command = transbf[0];
+            if (LogIo)
+            {
+                Logger.Info("ATA{0:X2}: ATAPI packet #{1:X2}", Id, command);
+            }
+
+            switch (command)
+            {
+                case 0x00: // TEST UNIT READY
+                    if (atapi_p.IsMediaReady)
+                        complete_atapi_command();
+                    else
+                        fail_atapi_command(0x02, 0x3A, 0x00); // not ready, no medium
+                    return;
+
+                case 0x03: // REQUEST SENSE
+                    start_atapi_response(create_request_sense_response(transbf[4]));
+                    return;
+
+                case 0x12: // INQUIRY
+                    start_atapi_response(create_inquiry_response(transbf[4]));
+                    return;
+
+                case 0x1A: // MODE SENSE (6)
+                    start_atapi_response(create_mode_sense_response(transbf[4]));
+                    return;
+
+                case 0x1B: // START STOP UNIT
+                case 0x1E: // PREVENT/ALLOW MEDIUM REMOVAL
+                    // The host tray is deliberately not controlled by guest
+                    // software.  The selected Windows drive remains attached.
+                    complete_atapi_command();
+                    return;
+
+                case 0x25: // READ CAPACITY (10)
+                    if (!atapi_p.IsMediaReady)
+                    {
+                        fail_atapi_command(0x02, 0x3A, 0x00);
+                        return;
+                    }
+                    start_atapi_response(create_read_capacity_response());
+                    return;
+
+                case 0x28: // READ (10)
+                    start_atapi_read(
+                        read_be_uint32(transbf, 2),
+                        read_be_uint16(transbf, 7));
+                    return;
+
+                case 0x43: // READ TOC/PMA/ATIP, format 0
+                    if (!atapi_p.IsMediaReady)
+                    {
+                        fail_atapi_command(0x02, 0x3A, 0x00);
+                        return;
+                    }
+                    if ((transbf[9] & 0x0F) != 0)
+                    {
+                        fail_atapi_command(0x05, 0x24, 0x00);
+                        return;
+                    }
+                    start_atapi_response(create_read_toc_response(read_be_uint16(transbf, 7)));
+                    return;
+
+                default:
+                    fail_atapi_command(0x05, 0x20, 0x00); // illegal request/opcode
+                    return;
+            }
         }
 
-        public void handle_atapi_packet_emulate()
+        private void start_atapi_read(uint startLba, uint blocks)
         {
-            Logger.Error("ATA{0:X2}: handle_atapi_packet_emulate: method not implemented", Id);
+            if (!atapi_p.IsMediaReady)
+            {
+                fail_atapi_command(0x02, 0x3A, 0x00);
+                return;
+            }
+            if (blocks == 0)
+            {
+                complete_atapi_command();
+                return;
+            }
+            var end = (ulong)startLba + blocks;
+            if (end > atapi_p.BlockCount)
+            {
+                fail_atapi_command(0x05, 0x21, 0x00); // LBA out of range
+                return;
+            }
+            atapiResponse = null;
+            atapiResponseOffset = 0;
+            atapiReadLba = startLba;
+            atapiReadBlocks = blocks;
+            prepare_next_atapi_data_phase();
         }
 
-        public void exec_mode_select()
+        private void start_atapi_response(byte[] response)
         {
+            atapiResponse = response ?? new byte[0];
+            atapiResponseOffset = 0;
+            atapiReadBlocks = 0;
+            prepare_next_atapi_data_phase();
         }
 
+        private void prepare_next_atapi_data_phase()
+        {
+            if (atapiResponse == null || atapiResponseOffset >= atapiResponse.Length)
+            {
+                if (atapiReadBlocks == 0)
+                {
+                    complete_atapi_command();
+                    return;
+                }
+
+                atapiResponse = new byte[AtapiPasser.BlockSize];
+                atapiResponseOffset = 0;
+                if (!atapi_p.ReadBlock(atapiReadLba, atapiResponse, 0))
+                {
+                    fail_atapi_command(0x03, 0x11, 0x00); // unrecovered read error
+                    return;
+                }
+                atapiReadLba++;
+                atapiReadBlocks--;
+            }
+
+            var available = atapiResponse.Length - atapiResponseOffset;
+            // The byte count is a 16-bit ATA register, but an ATAPI phase
+            // is word based.  Keep the transfer even and inside transbf.
+            var limit = reg.atapi_count == 0 ? 0xFFFE : (reg.atapi_count & 0xFFFE);
+            if (limit == 0)
+            {
+                limit = 0xFFFE;
+            }
+            var bytes = Math.Min(available, limit);
+            if ((bytes & 1) != 0)
+            {
+                bytes++;
+            }
+            for (var i = 0; i < bytes; i++)
+            {
+                transbf[i] = i < available ? atapiResponse[atapiResponseOffset + i] : (byte)0;
+            }
+            atapiResponseOffset += Math.Min(available, bytes);
+            transptr = 0;
+            transcount = (uint)(bytes >> 1);
+            state = HD_STATE.S_READ_ATAPI;
+            reg.atapi_count = (ushort)bytes;
+            reg.err = HD_ERROR.ERR_NONE;
+            reg.intreason = ATAPI_INT_REASON.INT_IO;
+            reg.status = HD_STATUS.STATUS_DRDY | HD_STATUS.STATUS_DSC | HD_STATUS.STATUS_DRQ;
+            intrq = true;
+        }
+
+        private void complete_atapi_command()
+        {
+            atapiResponse = null;
+            atapiResponseOffset = 0;
+            atapiReadBlocks = 0;
+            command_ok();
+            reg.intreason = ATAPI_INT_REASON.INT_COD | ATAPI_INT_REASON.INT_IO;
+            intrq = true;
+        }
+
+        private void fail_atapi_command(byte senseKey, byte asc, byte ascq)
+        {
+            atapiSenseKey = senseKey;
+            atapiSenseAsc = asc;
+            atapiSenseAscq = ascq;
+            atapiResponse = null;
+            atapiResponseOffset = 0;
+            atapiReadBlocks = 0;
+            state = HD_STATE.S_IDLE;
+            transptr = 0xFFFFFFFF;
+            reg.err = HD_ERROR.ERR_ABRT;
+            reg.intreason = ATAPI_INT_REASON.INT_COD | ATAPI_INT_REASON.INT_IO;
+            reg.status = HD_STATUS.STATUS_DRDY | HD_STATUS.STATUS_DSC | HD_STATUS.STATUS_ERR;
+            intrq = true;
+        }
+
+        private byte[] create_request_sense_response(byte allocationLength)
+        {
+            var response = new byte[18];
+            response[0] = 0x70;
+            response[2] = atapiSenseKey;
+            response[7] = 10;
+            response[12] = atapiSenseAsc;
+            response[13] = atapiSenseAscq;
+            atapiSenseKey = atapiSenseAsc = atapiSenseAscq = 0;
+            return truncate_atapi_response(response, allocationLength);
+        }
+
+        private static byte[] create_inquiry_response(byte allocationLength)
+        {
+            var response = new byte[36];
+            response[0] = 0x05; // CD/DVD device
+            response[1] = 0x80; // removable medium
+            response[2] = 0x05; // MMC-3 compatible command set
+            response[3] = 0x02;
+            response[4] = 31;
+            copy_scsi_ascii(response, 8, 8, "ZXMAK2");
+            copy_scsi_ascii(response, 16, 16, "CD/DVD-ROM");
+            copy_scsi_ascii(response, 32, 4, "1.0");
+            return truncate_atapi_response(response, allocationLength);
+        }
+
+        private static byte[] create_mode_sense_response(byte allocationLength)
+        {
+            var response = new byte[4];
+            response[0] = 3;
+            return truncate_atapi_response(response, allocationLength);
+        }
+
+        private byte[] create_read_capacity_response()
+        {
+            var response = new byte[8];
+            write_be_uint32(response, 0, atapi_p.BlockCount - 1);
+            write_be_uint32(response, 4, AtapiPasser.BlockSize);
+            return response;
+        }
+
+        private static byte[] create_read_toc_response(ushort allocationLength)
+        {
+            var response = new byte[12];
+            response[0] = 0;
+            response[1] = 10;
+            response[2] = 1;
+            response[3] = 1;
+            response[5] = 0x14; // data track, ADR=1
+            response[6] = 1;
+            return truncate_atapi_response(response, allocationLength);
+        }
+
+        private static byte[] truncate_atapi_response(byte[] response, int allocationLength)
+        {
+            if (allocationLength >= response.Length)
+            {
+                return response;
+            }
+            var result = new byte[allocationLength];
+            Array.Copy(response, result, allocationLength);
+            return result;
+        }
+
+        private static uint read_be_uint32(byte[] source, int offset)
+        {
+            return ((uint)source[offset] << 24) |
+                ((uint)source[offset + 1] << 16) |
+                ((uint)source[offset + 2] << 8) |
+                source[offset + 3];
+        }
+
+        private static ushort read_be_uint16(byte[] source, int offset)
+        {
+            return (ushort)((source[offset] << 8) | source[offset + 1]);
+        }
+
+        private static void write_be_uint32(byte[] destination, int offset, uint value)
+        {
+            destination[offset] = (byte)(value >> 24);
+            destination[offset + 1] = (byte)(value >> 16);
+            destination[offset + 2] = (byte)(value >> 8);
+            destination[offset + 3] = (byte)value;
+        }
+
+        private static void copy_scsi_ascii(byte[] destination, int offset, int length, string source)
+        {
+            for (var index = 0; index < length; index++)
+            {
+                destination[offset + index] = index < source.Length ?
+                    (byte)source[index] : (byte)0x20;
+            }
+        }
         #region Utils
 
         private static void make_ata_string(byte[] dst, int dstOffset, int n_words, string srcText)

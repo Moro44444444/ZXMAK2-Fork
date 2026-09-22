@@ -116,6 +116,38 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             Configure(string.Empty, false, 20, 16, 63, 20160);
         }
 
+        /// <summary>
+        /// Configures a Windows CD/DVD logical drive as a read-only ATAPI
+        /// device. The optical medium may be absent at configuration time.
+        /// </summary>
+        public void ConfigureCdromDrive(string driveName)
+        {
+            var normalized = AtapiPasser.NormalizeDriveName(driveName);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                throw new ArgumentException("Select a Windows CD/DVD drive", "driveName");
+            }
+
+            var drive = new DriveInfo(normalized);
+            if (drive.DriveType != DriveType.CDRom)
+            {
+                throw new ArgumentException("Selected drive is not a CD/DVD drive", "driveName");
+            }
+
+            FileName = normalized;
+            ReadOnly = true;
+            IsCdrom = true;
+            // ATAPI optical media use logical 2048-byte blocks, not ATA CHS.
+            // Keep a harmless non-zero geometry only for the shared descriptor.
+            Cylinders = 1;
+            Heads = 1;
+            Sectors = 1;
+            Lba = 1;
+            SerialNumber = DefaultSerial;
+            FirmwareRevision = GetVersion();
+            ModelNumber = "ZXMAK2 CD/DVD-ROM";
+        }
+
         public void Configure(
             string fileName,
             bool readOnly,
@@ -136,6 +168,7 @@ namespace ZXMAK2.Hardware.Circuits.Ata
             FileName = fileName ?? string.Empty;
             ReadOnly = readOnly;
             IsCdrom = false;
+            ModelNumber = DefaultModel;
             Cylinders = cylinders;
             Heads = heads;
             Sectors = sectors;
