@@ -24,7 +24,8 @@ CD/ATAPI, ZX-BUS and new peripherals are not part of this build.
 
 ## Focused tape follow-up
 
-The clean BaseConf profile now has the documented tape device, and the tape
+The clean BaseConf profile now has the documented tape device with autoplay
+enabled, and the tape
 player correction converts TAP/TZX pulse lengths from their fixed 3.5 MHz
 format timebase to BaseConf's 28 MHz master tact counter. The ROM-loader
 autoplay detector uses the same conversion. WAV/CSW playback, video, disks,
