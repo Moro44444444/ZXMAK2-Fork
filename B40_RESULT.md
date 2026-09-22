@@ -32,6 +32,10 @@ autoplay detector uses the same conversion. The multiplier is explicitly 8
 only in the BaseConf profile; all other profiles retain 1. WAV/CSW playback,
 video, disks, IDE and audio output are intentionally untouched.
 
+Saved VM profiles are also guarded: if a user switches from BaseConf to a
+different machine and an old `pulseClockMultiplier=8` remains in the VMZ, the
+device detects the non-BaseConf ULA and uses 1 automatically.
+
 ## Runtime acceptance
 
 Pending the user's test. Please check normal BaseConf startup, B30 border and

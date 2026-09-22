@@ -54,6 +54,7 @@ namespace ZXMAK2.Hardware.General
         private int m_bitMask;
         private bool m_outputLoopback;
         private int m_pulseClockMultiplier = 1;
+        private bool? m_isBaseConfTiming;
 
 
         #endregion Fields
@@ -170,6 +171,11 @@ namespace ZXMAK2.Hardware.General
             m_frequency = TactsPerSecond;
             m_cpu = bmgr.CPU;
             m_memory = bmgr.FindDevice<IMemoryDevice>();
+            // A saved VM can retain tape options from a previously selected
+            // machine. The ×8 format conversion is valid only with the
+            // actual BaseConf ULA, never merely because a stale attribute is
+            // present in a later Pentagon/ATM/Spectrum VMZ.
+            m_isBaseConfTiming = bmgr.FindDevice<ZXMAK2.Hardware.Evo.UlaPentEvo>() != null;
 
             bmgr.Events.SubscribeRdIo(Mask, Port & Mask, ReadPortFe);
             bmgr.Events.SubscribeWrIo(Mask, Port & Mask, WritePortFe);
@@ -446,7 +452,12 @@ namespace ZXMAK2.Hardware.General
 
         public int TapePulseClockMultiplier
         {
-            get { return m_pulseClockMultiplier; }
+            get
+            {
+                return m_isBaseConfTiming.HasValue && !m_isBaseConfTiming.Value
+                    ? 1
+                    : m_pulseClockMultiplier;
+            }
             set
             {
                 // Keep the conventional 3.5 MHz tape timebase unless a

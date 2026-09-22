@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using System.Reflection;
 using ZXMAK2.Engine.Interfaces;
+using ZXMAK2.Hardware.General;
 using ZXMAK2.Model.Tape.Entities;
 using ZXMAK2.Model.Tape.Interfaces;
 using ZXMAK2.Serializers.TapeSerializers;
@@ -90,6 +92,22 @@ internal static class TapeClockProbeB40
                 "A non-BaseConf machine must retain standard tape timing.");
     }
 
+    private static void CheckStaleProfileGuard()
+    {
+        var tape = new TapeDevice();
+        tape.TapePulseClockMultiplier = 8;
+        var timingField = typeof(TapeDevice).GetField("m_isBaseConfTiming",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Check(timingField != null, "Tape timing machine guard is missing.");
+
+        timingField.SetValue(tape, false);
+        Check(tape.TapePulseClockMultiplier == 1,
+            "A stale BaseConf multiplier must not affect another machine.");
+        timingField.SetValue(tape, true);
+        Check(tape.TapePulseClockMultiplier == 8,
+            "BaseConf must retain its configured tape multiplier.");
+    }
+
     public static int Main()
     {
         int standardPeriod = FirstPilotPeriod(1);
@@ -104,7 +122,8 @@ internal static class TapeClockProbeB40
         Check(FirstTzxPilotPeriod(8) == 17344,
             "BaseConf TZX pulse must be converted to eight master tacts.");
         CheckProfileIsolation();
-        Console.WriteLine("Tape clock probe B40: PASS (TAP/TZX 1x/8x; profile isolated)");
+        CheckStaleProfileGuard();
+        Console.WriteLine("Tape clock probe B40: PASS (TAP/TZX 1x/8x; profile and stale VMZ isolated)");
         return 0;
     }
 }
