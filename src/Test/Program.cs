@@ -92,7 +92,6 @@ namespace Test
 		{
 			IMemoryDevice mem = new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();// MemoryPentagon128();
             var p128 = GetTestMachine(Resources.machines_test);
-			p128.Init();
 			p128.BusManager.Disconnect();
 			p128.BusManager.Clear();
 			p128.BusManager.Add((BusDeviceBase)mem);
@@ -174,6 +173,12 @@ namespace Test
             var machine = new Spectrum();
             try
             {
+                // Spectrum.Init loads the portable profile's default machine.
+                // The benchmark must start from its embedded MainTest profile,
+                // not reuse devices (and their configuration) from that default.
+                machine.Init();
+                machine.BusManager.Disconnect();
+                machine.BusManager.Clear();
                 machine.BusManager.LoadConfigXml(config.DocumentElement);
                 //var sxml = new XmlDocument();
                 //var node = sxml.AppendChild(sxml.CreateElement("Bus"));
@@ -361,7 +366,6 @@ namespace Test
 		private static void runZexall()
 		{
             var p128 = GetTestMachine(Resources.machines_test);
-			p128.Init();
 			p128.IsRunning = true;
 			p128.DebugReset();
 			p128.ExecuteFrame();
@@ -415,7 +419,6 @@ namespace Test
 		private static void ExecTests(string testName, int frameCount)
 		{
             var p128 = GetTestMachine(Resources.machines_test);
-			p128.Init();
 			p128.IsRunning = true;
 			p128.DebugReset();
 			p128.ExecuteFrame();
@@ -439,7 +442,6 @@ namespace Test
         private static void ExecLightTests(string testName, int frameCount)
         {
             var p128 = GetTestMachine(Resources.machines_testLight);
-            p128.Init();
             p128.IsRunning = true;
             p128.DebugReset();
             p128.ExecuteFrame();
