@@ -618,6 +618,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     // This form does not receive a debugger-window F12 key,
                     // so the debugger keeps its own existing F12 behavior.
                     OnCommand(CommandVmWarmReset);
+                    RefreshMediaToolbarStates();
                 }
                 e.SuppressKeyPress = true;
                 e.Handled = true;
@@ -1180,11 +1181,17 @@ namespace ZXMAK2.Host.WinForms.Views
             }
         }
 
+        private void RefreshMediaToolbarStates()
+        {
+            _mediaMountedStates.Clear();
+            UpdateMediaToolbarStates();
+        }
+
         private void RequestCmosReset()
         {
             var query = _resolver.TryResolve<IUserQuery>();
             if (query == null || query.Show(
-                    "Reset the persistent CMOS configuration? A timestamped backup will be created.",
+                    "Reset CMOS? Machine settings will be returned to their initial state.",
                     "Reset CMOS",
                     DlgButtonSet.YesNo,
                     DlgIcon.Warning) != DlgResult.Yes)
@@ -1192,7 +1199,11 @@ namespace ZXMAK2.Host.WinForms.Views
                 return;
             }
             var viewModel = DataContext as IMainViewModel;
-            if (viewModel == null || !viewModel.ResetCmosState())
+            if (viewModel != null && viewModel.ResetCmosState())
+            {
+                RefreshMediaToolbarStates();
+            }
+            else
             {
                 _resolver.Resolve<IUserMessage>().Warning(
                     "The current machine has no resettable CMOS state.");
@@ -1203,7 +1214,7 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             var query = _resolver.TryResolve<IUserQuery>();
             if (query == null || query.Show(
-                    "Reset saved machine state and restart ZXMAK2? A timestamped backup will be created. Media images and ROM files are not deleted.",
+                    "Perform full reset? ZXMAK2 will be returned to its initial state.",
                     "Full reset",
                     DlgButtonSet.YesNo,
                     DlgIcon.Warning) != DlgResult.Yes)
@@ -1215,6 +1226,7 @@ namespace ZXMAK2.Host.WinForms.Views
             {
                 return;
             }
+            RefreshMediaToolbarStates();
             Application.Restart();
             Close();
         }

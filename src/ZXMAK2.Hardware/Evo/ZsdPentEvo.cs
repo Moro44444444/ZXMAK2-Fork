@@ -110,7 +110,7 @@ namespace ZXMAK2.Hardware.Evo
         {
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttribute(
-                itemNode, "sdImage", configuredImageFileName ?? string.Empty);
+                itemNode, "sdImage", ConfiguredImageFileName);
         }
 
 
@@ -296,7 +296,17 @@ namespace ZXMAK2.Hardware.Evo
 
         public string ConfiguredImageFileName
         {
-            get { return configuredImageFileName ?? string.Empty; }
+            get
+            {
+                lock (cardSync)
+                {
+                    if (!string.IsNullOrEmpty(configuredImageFileName))
+                    {
+                        return configuredImageFileName;
+                    }
+                    return card == null ? string.Empty : card.MountedFileName ?? string.Empty;
+                }
+            }
         }
 
         /// <summary>

@@ -108,7 +108,6 @@ namespace ZXMAK2.Host.Presentation
             {
                 return false;
             }
-            BackupStateFiles("cmos", state.PersistentStateFileName);
             var wasRunning = m_vm.IsRunning;
             if (wasRunning)
             {
@@ -137,15 +136,6 @@ namespace ZXMAK2.Host.Presentation
                 return false;
             }
             var appFolder = Utils.GetAppDataFolder();
-            var state = m_vm.Bus.FindDevice<IPersistentStateDevice>();
-            BackupStateFiles(
-                "factory",
-                Path.Combine(appFolder, "ZXMAK2.vmz"),
-                Path.Combine(appFolder, "ZXMAK2.vmide"),
-                Path.Combine(appFolder, "ZXMAK2.cmos"),
-                Path.Combine(appFolder, "ZXMAK2.nvram"),
-                state == null ? null : state.PersistentStateFileName);
-
             m_vm.Dispose();
             m_vm = null;
             DeleteStateFile(Path.Combine(appFolder, "ZXMAK2.vmz"));
@@ -181,6 +171,11 @@ namespace ZXMAK2.Host.Presentation
 
                 if (succeeded && m_vm != null)
                 {
+                    // Persist a selected IDE/SD image before the controlled
+                    // power cycle. A cold start reconstructs firmware state;
+                    // saving first keeps the settings dialog and the device
+                    // configuration in agreement with the mounted media.
+                    m_vm.SaveConfig();
                     if (requiresPowerCycle)
                     {
                         // Keep the VM stopped until the replacement is complete.
@@ -210,30 +205,6 @@ namespace ZXMAK2.Host.Presentation
             }
         }
 
-        private static void BackupStateFiles(string scope, params string[] fileNames)
-        {
-            var existingFiles = fileNames
-                .Where(fileName => !string.IsNullOrEmpty(fileName) && File.Exists(fileName))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (existingFiles.Length == 0)
-            {
-                return;
-            }
-            var backupFolder = Path.Combine(
-                Utils.GetAppDataFolder(),
-                "StateBackups",
-                string.Format("{0}-{1:yyyyMMdd-HHmmss}", scope, DateTime.Now));
-            Directory.CreateDirectory(backupFolder);
-            foreach (var fileName in existingFiles)
-            {
-                File.Copy(
-                    fileName,
-                    Path.Combine(backupFolder, Path.GetFileName(fileName)),
-                    true);
-            }
-        }
-        
         #region Commands
 
         public ICommand CommandFileOpen { get; private set; }
