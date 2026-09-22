@@ -97,6 +97,64 @@ namespace ZXMAK2.Host.Presentation
                 .Any(device => device.MediaStatusKind == mediaKind && device.IsMediaMounted);
         }
 
+        public bool ResetCmosState()
+        {
+            if (m_vm == null)
+            {
+                return false;
+            }
+            var state = m_vm.Bus.FindDevice<IPersistentStateDevice>();
+            if (state == null)
+            {
+                return false;
+            }
+            BackupStateFiles("cmos", state.PersistentStateFileName);
+            var wasRunning = m_vm.IsRunning;
+            if (wasRunning)
+            {
+                m_vm.DoStop();
+            }
+            try
+            {
+                state.ResetPersistentState();
+                m_vm.DoReset();
+                m_vm.SaveConfig();
+            }
+            finally
+            {
+                if (wasRunning && !m_vm.IsRunning)
+                {
+                    m_vm.DoRun();
+                }
+            }
+            return true;
+        }
+
+        public bool PrepareFactoryReset()
+        {
+            if (m_vm == null)
+            {
+                return false;
+            }
+            var appFolder = Utils.GetAppDataFolder();
+            var state = m_vm.Bus.FindDevice<IPersistentStateDevice>();
+            BackupStateFiles(
+                "factory",
+                Path.Combine(appFolder, "ZXMAK2.vmz"),
+                Path.Combine(appFolder, "ZXMAK2.vmide"),
+                Path.Combine(appFolder, "ZXMAK2.cmos"),
+                Path.Combine(appFolder, "ZXMAK2.nvram"),
+                state == null ? null : state.PersistentStateFileName);
+
+            m_vm.Dispose();
+            m_vm = null;
+            DeleteStateFile(Path.Combine(appFolder, "ZXMAK2.vmz"));
+            DeleteStateFile(Path.Combine(appFolder, "ZXMAK2.vmide"));
+            DeleteStateFile(Path.Combine(appFolder, "ZXMAK2.cmos"));
+            DeleteStateFile(Path.Combine(appFolder, "ZXMAK2.nvram"));
+            return true;
+        }
+
         private void ExecuteMediaChange(
             ISuccessCommand command,
             object commandParameter,
@@ -141,6 +199,38 @@ namespace ZXMAK2.Host.Presentation
                 {
                     m_vm.DoRun();
                 }
+            }
+        }
+
+        private static void DeleteStateFile(string fileName)
+        {
+            if (!string.IsNullOrEmpty(fileName) && File.Exists(fileName))
+            {
+                File.Delete(fileName);
+            }
+        }
+
+        private static void BackupStateFiles(string scope, params string[] fileNames)
+        {
+            var existingFiles = fileNames
+                .Where(fileName => !string.IsNullOrEmpty(fileName) && File.Exists(fileName))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (existingFiles.Length == 0)
+            {
+                return;
+            }
+            var backupFolder = Path.Combine(
+                Utils.GetAppDataFolder(),
+                "StateBackups",
+                string.Format("{0}-{1:yyyyMMdd-HHmmss}", scope, DateTime.Now));
+            Directory.CreateDirectory(backupFolder);
+            foreach (var fileName in existingFiles)
+            {
+                File.Copy(
+                    fileName,
+                    Path.Combine(backupFolder, Path.GetFileName(fileName)),
+                    true);
             }
         }
         

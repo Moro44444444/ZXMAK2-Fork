@@ -31,7 +31,22 @@ namespace ZXMAK2.Host.WinForms.Views
         private readonly BindingService _binding;
         private readonly ToolStripMenuItem _menuToolsQuickBoot = new ToolStripMenuItem();
         private readonly Timer _quickBootStateTimer = new Timer();
+        // This is deliberately the only size constant for all three status dots.
+        // It can be adjusted after visual feedback without redrawing the toolbar icons.
+        private const int MediaStatusDotDiameter = 10;
+        private readonly Dictionary<MediaStatusKind, ToolStripDropDownButton> _mediaButtons =
+            new Dictionary<MediaStatusKind, ToolStripDropDownButton>();
+        private readonly Dictionary<MediaStatusKind, bool?> _mediaMountedStates =
+            new Dictionary<MediaStatusKind, bool?>();
+        private readonly List<ToolStripItemBindingAdapter> _mediaItemAdapters =
+            new List<ToolStripItemBindingAdapter>();
         private bool? _quickBootAvailable;
+        private ISuccessCommand _openSdCommand;
+        private ISuccessCommand _ejectSdCommand;
+        private ISuccessCommand _openHddCommand;
+        private ISuccessCommand _ejectHddCommand;
+        private readonly ISuccessCommand[] _openFddCommands = new ISuccessCommand[4];
+        private readonly ISuccessCommand[] _ejectFddCommands = new ISuccessCommand[4];
 
         private IHostService _host;
 
@@ -63,6 +78,7 @@ namespace ZXMAK2.Host.WinForms.Views
 
             SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint, true);
             InitializeComponent();
+            InitializeMediaToolbar();
             Icon = ResourceImages.IconApp;
             LoadMachineMenu();
 
@@ -250,19 +266,25 @@ namespace ZXMAK2.Host.WinForms.Views
                 .ForEach(arg => arg.Dispose());
             _deviceItemAdapters.Clear();
             menuTools.DropDownItems.Clear();
-            tbrButtonSdImage.Enabled = false;
+            _openSdCommand = null;
+            _ejectSdCommand = null;
+            _openHddCommand = null;
+            _ejectHddCommand = null;
+            Array.Clear(_openFddCommands, 0, _openFddCommands.Length);
+            Array.Clear(_ejectFddCommands, 0, _ejectFddCommands.Length);
+            _mediaMountedStates.Clear();
+            ClearMediaToolbarMenus();
+            UpdateMediaToolbarStates();
             _quickBootAvailable = null;
         }
 
         public void Add(ICommand command)
         {
-            var isSdImageCommand = string.Compare(
-                command.Text,
-                "Open SD Card image...",
-                true) == 0;
-            var boundCommand = isSdImageCommand ?
-                CreateSdImageCommand(command) :
-                command;
+            if (RegisterMediaCommand(command))
+            {
+                RebuildMediaToolbarMenus();
+                return;
+            }
             var subMenu = menuTools.DropDownItems.Add(command.Text) as ToolStripMenuItem;
             if (subMenu == null)
             {
@@ -270,42 +292,154 @@ namespace ZXMAK2.Host.WinForms.Views
             }
             var adapter = new ToolStripItemBindingAdapter(subMenu);
             adapter.CommandParameter = this;
-            adapter.Command = boundCommand;
+            adapter.Command = command;
             _deviceItemAdapters.Add(adapter);
-            if (isSdImageCommand)
-            {
-                var toolBarAdapter = new ToolStripItemBindingAdapter(tbrButtonSdImage);
-                toolBarAdapter.CommandParameter = this;
-                toolBarAdapter.Command = boundCommand;
-                _deviceItemAdapters.Add(toolBarAdapter);
-            }
             SortMenuTools();
         }
 
-        private ICommand CreateSdImageCommand(ICommand command)
+        private bool RegisterMediaCommand(ICommand command)
         {
             var successCommand = command as ISuccessCommand;
             if (successCommand == null)
             {
-                return command;
+                return false;
             }
-            return new CommandDelegate(
-                arg => ExecuteSdImageCommand(successCommand, arg),
-                arg => successCommand.CanExecute(arg),
-                command.Text);
+            switch (command.Text)
+            {
+                case "Open SD Card image...":
+                    _openSdCommand = successCommand;
+                    return true;
+                case "Eject SD Card":
+                    _ejectSdCommand = successCommand;
+                    return true;
+                case "Open HDD image...":
+                    _openHddCommand = successCommand;
+                    return true;
+                case "Eject HDD":
+                    _ejectHddCommand = successCommand;
+                    return true;
+            }
+            for (var drive = 0; drive < 4; drive++)
+            {
+                var name = (char)('A' + drive);
+                if (command.Text == string.Format("Load FDD {0}:...", name))
+                {
+                    _openFddCommands[drive] = successCommand;
+                    return true;
+                }
+                if (command.Text == string.Format("Eject FDD {0}:", name))
+                {
+                    _ejectFddCommands[drive] = successCommand;
+                    return true;
+                }
+            }
+            return false;
         }
 
-        private void ExecuteSdImageCommand(
-            ISuccessCommand command,
-            object commandParameter)
+        private void InitializeMediaToolbar()
         {
-            var viewModel = DataContext as IMainViewModel;
-            if (viewModel != null)
+            var index = tbrStrip.Items.IndexOf(tbrButtonSdImage);
+            tbrStrip.Items.Remove(tbrButtonSdImage);
+            tbrButtonSdImage.Dispose();
+            AddMediaToolbarButton(MediaStatusKind.Floppy, "Floppy disk images", index++);
+            AddMediaToolbarButton(MediaStatusKind.HardDisk, "HDD image", index++);
+            AddMediaToolbarButton(MediaStatusKind.SecureDigital, "SD card image", index);
+        }
+
+        private void AddMediaToolbarButton(MediaStatusKind mediaKind, string toolTip, int index)
+        {
+            var button = new ToolStripDropDownButton();
+            button.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            button.ImageTransparentColor = Color.Magenta;
+            button.AutoSize = false;
+            button.Size = new Size(45, 36);
+            button.Text = toolTip;
+            button.ToolTipText = toolTip;
+            button.Enabled = false;
+            _mediaButtons.Add(mediaKind, button);
+            tbrStrip.Items.Insert(index, button);
+            SetMediaToolbarImage(mediaKind, false);
+        }
+
+        private void ClearMediaToolbarMenus()
+        {
+            _mediaItemAdapters.ForEach(adapter => adapter.Dispose());
+            _mediaItemAdapters.Clear();
+            foreach (var button in _mediaButtons.Values)
             {
-                viewModel.ExecuteMediaChange(command, commandParameter);
+                button.DropDownItems.Clear();
+                button.Enabled = false;
+            }
+        }
+
+        private void RebuildMediaToolbarMenus()
+        {
+            ClearMediaToolbarMenus();
+            AddMediaMenuItem(MediaStatusKind.SecureDigital, "Load SD", _openSdCommand, true);
+            AddMediaMenuItem(MediaStatusKind.SecureDigital, "Eject SD", _ejectSdCommand, true);
+            AddMediaMenuItem(MediaStatusKind.HardDisk, "Load HDD", _openHddCommand, true);
+            AddMediaMenuItem(MediaStatusKind.HardDisk, "Eject HDD", _ejectHddCommand, true);
+            for (var drive = 0; drive < 4; drive++)
+            {
+                AddMediaMenuItem(
+                    MediaStatusKind.Floppy,
+                    string.Format("Load {0}:", (char)('A' + drive)),
+                    _openFddCommands[drive],
+                    false);
+                AddMediaMenuItem(
+                    MediaStatusKind.Floppy,
+                    string.Format("Eject {0}:", (char)('A' + drive)),
+                    _ejectFddCommands[drive],
+                    false);
+            }
+            foreach (var pair in _mediaButtons)
+            {
+                pair.Value.Enabled = pair.Value.DropDownItems.Count > 0;
+            }
+            UpdateMediaToolbarStates();
+        }
+
+        private void AddMediaMenuItem(
+            MediaStatusKind mediaKind,
+            string text,
+            ISuccessCommand sourceCommand,
+            bool requiresPowerCycle)
+        {
+            if (sourceCommand == null)
+            {
                 return;
             }
-            command.Execute(commandParameter);
+            var item = new ToolStripMenuItem(text);
+            var command = new CommandDelegate(
+                arg => ExecuteMediaCommand(sourceCommand, arg, requiresPowerCycle),
+                arg => sourceCommand.CanExecute(arg),
+                text);
+            var adapter = new ToolStripItemBindingAdapter(item);
+            adapter.CommandParameter = this;
+            adapter.Command = command;
+            _mediaItemAdapters.Add(adapter);
+            _mediaButtons[mediaKind].DropDownItems.Add(item);
+        }
+
+        private void ExecuteMediaCommand(
+            ISuccessCommand command,
+            object commandParameter,
+            bool requiresPowerCycle)
+        {
+            var viewModel = DataContext as IMainViewModel;
+            if (viewModel == null)
+            {
+                command.Execute(commandParameter);
+                return;
+            }
+            if (requiresPowerCycle)
+            {
+                viewModel.ExecuteMediaChange(command, commandParameter);
+            }
+            else
+            {
+                viewModel.ExecuteFloppyMediaChange(command, commandParameter);
+            }
         }
 
         #endregion IHostUi
@@ -398,6 +532,16 @@ namespace ZXMAK2.Host.WinForms.Views
                 _quickBootStateTimer.Tick -= QuickBootStateTimer_OnTick;
                 _quickBootStateTimer.Dispose();
                 menuTools.DropDownOpening -= MenuTools_OnDropDownOpening;
+                _mediaItemAdapters.ForEach(adapter => adapter.Dispose());
+                _mediaItemAdapters.Clear();
+                foreach (var button in _mediaButtons.Values)
+                {
+                    if (button.Image != null)
+                    {
+                        button.Image.Dispose();
+                        button.Image = null;
+                    }
+                }
                 OnViewClosed();
                 if (_host != null)
                 {
@@ -446,7 +590,28 @@ namespace ZXMAK2.Host.WinForms.Views
                 return;
             }
             //RESET
-            if (e.Alt && e.Control && e.KeyCode == Keys.Insert)
+            if (e.KeyCode == Keys.F12)
+            {
+                if (e.Alt && e.Control)
+                {
+                    RequestFactoryReset();
+                }
+                else if (e.Control && !e.Alt)
+                {
+                    RequestCmosReset();
+                }
+                else if (!e.Alt && !e.Shift)
+                {
+                    // This form does not receive a debugger-window F12 key,
+                    // so the debugger keeps its own existing F12 behavior.
+                    OnCommand(CommandVmWarmReset);
+                }
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+                return;
+            }
+            if (e.Alt && e.Control &&
+                (e.KeyCode == Keys.Insert || e.KeyCode == Keys.End))
             {
                 OnCommand(CommandVmWarmReset, true);
                 e.Handled = true;
@@ -484,7 +649,8 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             base.OnKeyUp(e);
             //RESET
-            if (e.Alt && e.Control && e.KeyCode == Keys.Insert)
+            if (e.Alt && e.Control &&
+                (e.KeyCode == Keys.Insert || e.KeyCode == Keys.End))
             {
                 OnCommand(CommandVmWarmReset, false);
                 e.Handled = true;
@@ -984,9 +1150,136 @@ namespace ZXMAK2.Host.WinForms.Views
             return StringComparer.CurrentCultureIgnoreCase.Compare(x.Text, y.Text);
         }
 
+        private void UpdateMediaToolbarStates()
+        {
+            var viewModel = DataContext as IMainViewModel;
+            foreach (var mediaKind in _mediaButtons.Keys)
+            {
+                var isMounted = viewModel != null && viewModel.IsMediaMounted(mediaKind);
+                bool? lastState;
+                if (_mediaMountedStates.TryGetValue(mediaKind, out lastState) &&
+                    lastState.HasValue && lastState.Value == isMounted)
+                {
+                    continue;
+                }
+                _mediaMountedStates[mediaKind] = isMounted;
+                SetMediaToolbarImage(mediaKind, isMounted);
+            }
+        }
+
+        private void RequestCmosReset()
+        {
+            var query = _resolver.TryResolve<IUserQuery>();
+            if (query == null || query.Show(
+                    "Reset the persistent CMOS configuration? A timestamped backup will be created.",
+                    "Reset CMOS",
+                    DlgButtonSet.YesNo,
+                    DlgIcon.Warning) != DlgResult.Yes)
+            {
+                return;
+            }
+            var viewModel = DataContext as IMainViewModel;
+            if (viewModel == null || !viewModel.ResetCmosState())
+            {
+                _resolver.Resolve<IUserMessage>().Warning(
+                    "The current machine has no resettable CMOS state.");
+            }
+        }
+
+        private void RequestFactoryReset()
+        {
+            var query = _resolver.TryResolve<IUserQuery>();
+            if (query == null || query.Show(
+                    "Reset saved machine state and restart ZXMAK2? A timestamped backup will be created. Media images and ROM files are not deleted.",
+                    "Full reset",
+                    DlgButtonSet.YesNo,
+                    DlgIcon.Warning) != DlgResult.Yes)
+            {
+                return;
+            }
+            var viewModel = DataContext as IMainViewModel;
+            if (viewModel == null || !viewModel.PrepareFactoryReset())
+            {
+                return;
+            }
+            Application.Restart();
+            Close();
+        }
+
+        private void SetMediaToolbarImage(MediaStatusKind mediaKind, bool isMounted)
+        {
+            ToolStripDropDownButton button;
+            if (!_mediaButtons.TryGetValue(mediaKind, out button))
+            {
+                return;
+            }
+            var oldImage = button.Image;
+            button.Image = CreateMediaToolbarImage(mediaKind, isMounted);
+            if (oldImage != null)
+            {
+                oldImage.Dispose();
+            }
+        }
+
+        private static Bitmap CreateMediaToolbarImage(
+            MediaStatusKind mediaKind,
+            bool isMounted)
+        {
+            var image = new Bitmap(32, 32);
+            using (var graphics = Graphics.FromImage(image))
+            using (var outline = new Pen(Color.FromArgb(45, 55, 70), 2))
+            using (var detail = new Pen(Color.FromArgb(215, 225, 235), 1))
+            {
+                graphics.Clear(Color.Magenta);
+                if (mediaKind == MediaStatusKind.SecureDigital)
+                {
+                    graphics.DrawImage(
+                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_32x32,
+                        new Rectangle(0, 0, 32, 32));
+                }
+                else if (mediaKind == MediaStatusKind.HardDisk)
+                {
+                    graphics.FillRectangle(Brushes.SteelBlue, 4, 5, 24, 22);
+                    graphics.DrawRectangle(outline, 4, 5, 24, 22);
+                    graphics.DrawLine(detail, 7, 10, 25, 10);
+                    graphics.DrawLine(detail, 7, 14, 25, 14);
+                    graphics.FillEllipse(Brushes.WhiteSmoke, 8, 18, 3, 3);
+                    graphics.FillEllipse(Brushes.WhiteSmoke, 14, 18, 3, 3);
+                }
+                else
+                {
+                    graphics.FillRectangle(Brushes.SteelBlue, 3, 7, 26, 18);
+                    graphics.DrawRectangle(outline, 3, 7, 26, 18);
+                    graphics.FillRectangle(Brushes.WhiteSmoke, 7, 10, 18, 7);
+                    graphics.FillRectangle(Brushes.DarkSlateGray, 9, 11, 14, 5);
+                    graphics.DrawLine(detail, 7, 21, 25, 21);
+                }
+
+                var dotColor = isMounted ?
+                    Color.FromArgb(35, 180, 70) :
+                    Color.FromArgb(215, 55, 50);
+                var dotX = 32 - MediaStatusDotDiameter - 1;
+                var dotY = 32 - MediaStatusDotDiameter - 1;
+                graphics.FillEllipse(Brushes.WhiteSmoke,
+                    dotX - 1, dotY - 1,
+                    MediaStatusDotDiameter + 2,
+                    MediaStatusDotDiameter + 2);
+                using (var dotBrush = new SolidBrush(dotColor))
+                {
+                    graphics.FillEllipse(dotBrush,
+                        dotX, dotY,
+                        MediaStatusDotDiameter,
+                        MediaStatusDotDiameter);
+                }
+            }
+            image.MakeTransparent(Color.Magenta);
+            return image;
+        }
+
         private void QuickBootStateTimer_OnTick(object sender, EventArgs e)
         {
             UpdateQuickBootAvailability();
+            UpdateMediaToolbarStates();
         }
 
         private void MenuTools_OnDropDownOpening(object sender, EventArgs e)

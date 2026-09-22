@@ -9,7 +9,7 @@ using ZXMAK2.Host.Interfaces;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class CmosPentEvo : BusDeviceBase, IKeyboardDevice, IFrameDiagnosticProvider
+    public class CmosPentEvo : BusDeviceBase, IKeyboardDevice, IFrameDiagnosticProvider, IPersistentStateDevice
     {
         #region Fields
 
@@ -236,6 +236,24 @@ namespace ZXMAK2.Hardware.Evo
             get { return (mem == null) ? false : mem.DOSEN || mem.SYSEN || mem.SHADOW; }
         }
 
+        public string PersistentStateFileName
+        {
+            get { return m_fileName; }
+        }
+
+        public void ResetPersistentState()
+        {
+            Array.Clear(eeprom, 0, eeprom.Length);
+            m_avrVideoConfiguration = 0;
+            m_beeperTapeOut = false;
+            Reset();
+            if (m_rasterUla != null)
+            {
+                m_rasterUla.RequestRaster(0);
+            }
+            SaveEeprom();
+        }
+
         private bool visable
         {
             get { return (mem == null) ? false : mem.CMOSEN; }
@@ -286,21 +304,27 @@ namespace ZXMAK2.Hardware.Evo
 
         public override void BusDisconnect()
         {
-            if (!sandbox)
-            {
-                using (eepromFile = File.Open(m_fileName, FileMode.OpenOrCreate))
-                {
-                    eepromFile.Write(eeprom, 0, 256);
-                    eepromFile.Flush();
-                    eepromFile.Close();
-                }
-            }
+            SaveEeprom();
         }
 
         #endregion
 
 
         #region Private
+
+        private void SaveEeprom()
+        {
+            if (sandbox || string.IsNullOrEmpty(m_fileName))
+            {
+                return;
+            }
+            using (eepromFile = File.Open(m_fileName, FileMode.OpenOrCreate))
+            {
+                eepromFile.Write(eeprom, 0, eeprom.Length);
+                eepromFile.Flush();
+                eepromFile.Close();
+            }
+        }
 
         void Reset()
         {
