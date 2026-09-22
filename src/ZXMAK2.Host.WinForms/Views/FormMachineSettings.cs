@@ -502,6 +502,15 @@ namespace ZXMAK2.Host.WinForms.Views
                 return;
             }
 
+            // The form applies this detached bus, not its visual controls.
+            // Keep the model in sync before showing the fallback path; without
+            // this, Apply would write the old empty sdImage and eject the card.
+            var pendingDevice = m_workBus.FindDevice<ZsdPentEvo>();
+            if (pendingDevice != null)
+            {
+                pendingDevice.ConfigureCard(mountedFileName);
+            }
+
             foreach (var control in m_ctlList.OfType<CtlSettingsZsdPentEvo>())
             {
                 control.SetMountedImageFileName(mountedFileName);
