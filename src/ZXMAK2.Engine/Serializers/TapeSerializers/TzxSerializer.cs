@@ -34,15 +34,18 @@ namespace ZXMAK2.Serializers.TapeSerializers
         public override void Deserialize(Stream stream)
         {
             _tape.Blocks.Clear();
-            var blocks = Load(stream, _tape.TactsPerSecond);
+            var blocks = Load(stream);
             if (blocks != null)
             {
+                var pulseClockMultiplier = _tape.TapePulseClockMultiplier;
+                foreach (var block in blocks)
+                    TapSerializer.ScalePeriods(block.Periods, pulseClockMultiplier);
                 _tape.Blocks.AddRange(blocks);
             }
             _tape.Reset();
         }
 
-        private static IEnumerable<ITapeBlock> Load(Stream stream, int frequency)
+        private static IEnumerable<TapeBlock> Load(Stream stream)
         {
             byte[] snbuf = new byte[stream.Length];
             stream.Read(snbuf, 0, snbuf.Length);
@@ -454,8 +457,10 @@ namespace ZXMAK2.Serializers.TapeSerializers
                 null;
             if (ltb != null)
             {
-                ltb.Periods.Add(frequency / 220);
-                ltb.Periods.Add(frequency / 220);
+                // TZX pulses use the 3.5 MHz tape timebase.  The caller
+                // scales the complete stream to the machine clock below.
+                ltb.Periods.Add(3500000 / 220);
+                ltb.Periods.Add(3500000 / 220);
             }
             return tzxBlocks;
         }

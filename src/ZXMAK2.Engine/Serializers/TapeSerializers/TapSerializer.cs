@@ -32,7 +32,7 @@ namespace ZXMAK2.Serializers.TapeSerializers
 		public override void Deserialize(Stream stream)
 		{
             _tape.Blocks.Clear();
-            var blocks = Load(stream);
+            var blocks = Load(stream, _tape.TapePulseClockMultiplier);
             if (blocks != null)
             {
                 _tape.Blocks.AddRange(blocks);
@@ -40,7 +40,7 @@ namespace ZXMAK2.Serializers.TapeSerializers
             _tape.Reset();
         }
 
-        private static IEnumerable<ITapeBlock> Load(Stream stream)
+        private static IEnumerable<ITapeBlock> Load(Stream stream, int pulseClockMultiplier)
         {
             var list = new List<TapeBlock>();
             byte[] bsize = new byte[2];
@@ -54,11 +54,20 @@ namespace ZXMAK2.Serializers.TapeSerializers
 				var tb = new TapeBlock();
 				tb.Description = getBlockDescription(block, 0, block.Length);
 				tb.Periods = getBlockPeriods(block, 0, block.Length, 2168, 667, 735, 855, 1710, (block[0] < 4) ? 8064 : 3220, 1000, 8);
+                ScalePeriods(tb.Periods, pulseClockMultiplier);
                 tb.TapData = block;
                 list.Add(tb);
 			}
             return list;
 		}
+
+        internal static void ScalePeriods(List<int> periods, int multiplier)
+        {
+            if (multiplier <= 1)
+                return;
+            for (int index = 0; index < periods.Count; index++)
+                periods[index] = checked(periods[index] * multiplier);
+        }
 
 		#endregion
 

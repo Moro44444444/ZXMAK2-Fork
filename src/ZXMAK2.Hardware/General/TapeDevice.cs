@@ -440,6 +440,18 @@ namespace ZXMAK2.Hardware.General
             get { return FrameTactCount * 50; }
         }
 
+        public int TapePulseClockMultiplier
+        {
+            get
+            {
+                // Standard tape formats count pulse duration in 3.5 MHz Z80
+                // tacts.  BaseConf instead advances Cpu.Tact in 28 MHz FPGA
+                // master tacts, as reported by its memory clock provider.
+                var clock = m_memory as ICpuClock;
+                return clock == null ? 1 : Math.Max(1, clock.MaxCpuClockMultiplier);
+            }
+        }
+
         #endregion
 
         #region Public Methods
@@ -589,7 +601,12 @@ namespace ZXMAK2.Hardware.General
 				m_cpu.regs.D, m_cpu.regs.E,
 				m_cpu.regs.H, m_cpu.regs.L,
 			};
-            if (delta > 0 && delta < 96 && m_cpu.regs.PC == m_lastPC && m_lastRegs != null)
+            // Cpu.Tact is a master-clock counter on BaseConf, so apply the
+            // same conversion as the tape pulse stream to the ROM-loader
+            // polling heuristic.  This only changes machines with a faster
+            // master clock; conventional Spectrum timing keeps the old 96.
+            int quickReadLimit = 96 * TapePulseClockMultiplier;
+            if (delta > 0 && delta < quickReadLimit && m_cpu.regs.PC == m_lastPC && m_lastRegs != null)
             {
                 int diffCount = 0;
                 int diffValue = 0;
