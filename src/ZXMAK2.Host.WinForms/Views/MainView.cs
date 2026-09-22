@@ -600,7 +600,7 @@ namespace ZXMAK2.Host.WinForms.Views
             // ProcessCmdKey runs before KeyDown, menus and the virtual keyboard.
             // F11 belongs to the extended Evo keyboard map, so this host-only
             // command must not be allowed to reach that map.
-            if (keyData == (Keys.Control | Keys.Alt | Keys.F11))
+            if (keyData == Keys.F11)
             {
                 OnCommand(CommandViewNoBorder);
                 return true;
