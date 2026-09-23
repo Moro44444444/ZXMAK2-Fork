@@ -163,6 +163,14 @@ namespace ZXMAK2.Hardware.Sprinter
             get { return _wd.FDD; }
         }
 
+        public bool IsDriveMounted(int driveIndex)
+        {
+            return driveIndex >= 0 &&
+                driveIndex < _wd.FDD.Length &&
+                _wd.FDD[driveIndex] != null &&
+                _wd.FDD[driveIndex].Present;
+        }
+
         public bool NoDelay
         {
             get { return _wd.NoDelay; }

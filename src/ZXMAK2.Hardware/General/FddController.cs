@@ -182,6 +182,14 @@ namespace ZXMAK2.Hardware.General
             get { return m_wd.FDD; }
         }
 
+        public bool IsDriveMounted(int driveIndex)
+        {
+            return driveIndex >= 0 &&
+                driveIndex < m_wd.FDD.Length &&
+                m_wd.FDD[driveIndex] != null &&
+                m_wd.FDD[driveIndex].Present;
+        }
+
         public bool NoDelay
         {
             get { return m_wd.NoDelay; }

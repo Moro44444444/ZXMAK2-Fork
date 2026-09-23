@@ -13,6 +13,7 @@ namespace ZXMAK2.Host.Presentation.Interfaces
         void ExecuteMediaChange(ISuccessCommand command, object commandParameter);
         void ExecuteFloppyMediaChange(ISuccessCommand command, object commandParameter);
         bool IsMediaMounted(MediaStatusKind mediaKind);
+        bool IsFloppyMounted(int driveIndex);
         bool ResetCmosState();
         bool PrepareFactoryReset();
     }

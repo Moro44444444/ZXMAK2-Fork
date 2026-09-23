@@ -7,6 +7,7 @@ namespace ZXMAK2.Engine.Interfaces
 	{
         bool DOSEN { get; set; }
         DiskImage[] FDD { get; }
+        bool IsDriveMounted(int driveIndex);
         bool NoDelay { get; set; }
         bool LogIo { get; set; }
 

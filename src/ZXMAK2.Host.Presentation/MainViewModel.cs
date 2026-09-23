@@ -101,6 +101,15 @@ namespace ZXMAK2.Host.Presentation
                 .Any(device => device.MediaStatusKind == mediaKind && device.IsMediaMounted);
         }
 
+        public bool IsFloppyMounted(int driveIndex)
+        {
+            if (m_vm == null || driveIndex < 0)
+                return false;
+            var controller = m_vm.Bus.FindDevices<IBetaDiskDevice>()
+                .FirstOrDefault();
+            return controller != null && controller.IsDriveMounted(driveIndex);
+        }
+
         public bool ResetCmosState()
         {
             if (m_vm == null)

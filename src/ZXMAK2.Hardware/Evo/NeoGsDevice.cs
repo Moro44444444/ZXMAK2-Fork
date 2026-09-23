@@ -31,6 +31,8 @@ namespace ZXMAK2.Hardware.Evo
         private const long MasterTicksPerDac = MasterClock / 37500;
         private const int OutputGainNumerator = 3;
         private const int OutputGainDenominator = 2;
+        private const int Mp3GainNumerator = 7;
+        private const int Mp3GainDenominator = 5;
 
         private readonly byte[] m_rom = new byte[RomSize];
         private readonly byte[] m_ram = new byte[RamSize];
@@ -398,8 +400,8 @@ namespace ZXMAK2.Hardware.Evo
                 short right;
                 if (m_codec.TryReadSample(out left, out right))
                 {
-                    m_mp3Left = left;
-                    m_mp3Right = right;
+                    m_mp3Left = ApplyMp3Gain(left);
+                    m_mp3Right = ApplyMp3Gain(right);
                 }
                 else
                 {
@@ -462,6 +464,11 @@ namespace ZXMAK2.Hardware.Evo
         private static int ApplyOutputGain(int value)
         {
             return value * OutputGainNumerator / OutputGainDenominator;
+        }
+
+        private static int ApplyMp3Gain(int value)
+        {
+            return value * Mp3GainNumerator / Mp3GainDenominator;
         }
 
         private int MixChannel(int sampleIndex, int volumeIndex)

@@ -285,6 +285,9 @@ namespace ZXMAK2.Host.WinForms.Views
         private BusManager m_workBus;
         private List<ConfigScreenControl> m_ctlList = new List<ConfigScreenControl>();
         private List<BusDeviceBase> m_devList = new List<BusDeviceBase>();
+        private CtlSettingsPentEvo m_pentEvoControl;
+        private CtlSettingsNeoGsSd m_neoGsSdControl;
+        private ListViewItem m_neoGsSdItem;
 
         #endregion
 
@@ -330,6 +333,28 @@ namespace ZXMAK2.Host.WinForms.Views
             lvi.SubItems.Add(device.Name);
             lvi.ImageIndex = FindImageIndex(device.Category);
             lstNavigation.Items.Insert(index, lvi);
+        }
+
+        private void insertSpecialListViewItem(
+            int index,
+            UserControl control,
+            BusDeviceCategory category,
+            string name)
+        {
+            control.Location = new Point(0, 0);
+            control.Size = pnlSettings.ClientSize;
+            control.Visible = false;
+            pnlSettings.Controls.Add(control);
+            var csc = (ConfigScreenControl)control;
+            m_ctlList.Insert(index, csc);
+            m_devList.Insert(index, null);
+            var lvi = new ListViewItem();
+            lvi.Tag = csc;
+            lvi.Text = category.ToString();
+            lvi.SubItems.Add(name);
+            lvi.ImageIndex = FindImageIndex(category);
+            lstNavigation.Items.Insert(index, lvi);
+            m_neoGsSdItem = lvi;
         }
 
         public static int FindImageIndex(BusDeviceCategory category)
@@ -458,6 +483,14 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private void initWorkBus()
         {
+            if (m_pentEvoControl != null)
+            {
+                m_pentEvoControl.NeoGsAvailabilityChanged -=
+                    PentEvoNeoGsAvailabilityChanged;
+            }
+            m_pentEvoControl = null;
+            m_neoGsSdControl = null;
+            m_neoGsSdItem = null;
             lstNavigation.Items.Clear();
             foreach (var ctl in m_ctlList)
             {
@@ -479,6 +512,8 @@ namespace ZXMAK2.Host.WinForms.Views
                 {
                     var control = ResolveScreenControl(m_workBus, m_host, device);
                     insertListViewItem(lstNavigation.Items.Count, control, device);
+                    if (device is UlaPentEvo)
+                        m_pentEvoControl = control as CtlSettingsPentEvo;
                 }
                 catch (Exception ex)
                 {
@@ -490,8 +525,46 @@ namespace ZXMAK2.Host.WinForms.Views
                 }
             }
 
+            if (isPentEvo && m_pentEvoControl != null)
+            {
+                m_neoGsSdControl = new CtlSettingsNeoGsSd();
+                m_neoGsSdControl.Initialize(m_workBus, m_host);
+                var zControllerIndex = m_devList.FindIndex(
+                    device => device is ZsdPentEvo);
+                var neoGsSdIndex = zControllerIndex >= 0
+                    ? zControllerIndex + 1
+                    : m_devList.Count;
+                insertSpecialListViewItem(
+                    neoGsSdIndex,
+                    m_neoGsSdControl,
+                    BusDeviceCategory.Disk,
+                    "SD NeoGS");
+                m_pentEvoControl.NeoGsAvailabilityChanged +=
+                    PentEvoNeoGsAvailabilityChanged;
+                PentEvoNeoGsAvailabilityChanged(
+                    m_pentEvoControl,
+                    EventArgs.Empty);
+            }
+
             lstNavigation.SelectedItems.Clear();
-            lstNavigation.Items[0].Selected = true;
+            if (lstNavigation.Items.Count > 0)
+                lstNavigation.Items[0].Selected = true;
+        }
+
+        private void PentEvoNeoGsAvailabilityChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (m_pentEvoControl == null || m_neoGsSdControl == null)
+                return;
+            var enabled = m_pentEvoControl.IsNeoGsBoardEnabled;
+            m_neoGsSdControl.SetBoardEnabled(enabled);
+            if (m_neoGsSdItem != null)
+            {
+                m_neoGsSdItem.ForeColor = enabled
+                    ? SystemColors.WindowText
+                    : SystemColors.GrayText;
+            }
         }
 
         private UserControl ResolveScreenControl(BusManager workBus, IHostService host, BusDeviceBase device)
@@ -540,7 +613,9 @@ namespace ZXMAK2.Host.WinForms.Views
 
             bool allowRemove = e.IsSelected &&
                 e.ItemIndex >= 0 &&
-                e.ItemIndex < m_ctlList.Count;
+                e.ItemIndex < m_ctlList.Count &&
+                e.ItemIndex < m_devList.Count &&
+                m_devList[e.ItemIndex] != null;
             btnAdd.Enabled = true;
             btnRemove.Enabled = allowRemove;
             btnUp.Enabled = IsMoveUpAllowed();
@@ -632,6 +707,9 @@ namespace ZXMAK2.Host.WinForms.Views
                 var sdMediaChanged = IsSdMediaChanged(
                     m_vm.Bus.FindDevice<ZsdPentEvo>(),
                     m_workBus.FindDevice<ZsdPentEvo>());
+                var neoGsSdMediaChanged = IsNeoGsSdMediaChanged(
+                    m_vm.Bus.FindDevice<NeoGsDevice>(),
+                    m_workBus.FindDevice<NeoGsDevice>());
 
                 if (!m_workBus.Connect())
                 {
@@ -659,7 +737,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 ula = bmgr.FindDevice<IUlaDevice>();
                 ula.PortFE = (byte)portFE;
                 var memory = bmgr.FindDevice<IMemoryDevice>();
-                if (ideMediaChanged || sdMediaChanged)
+                if (ideMediaChanged || sdMediaChanged || neoGsSdMediaChanged)
                 {
                     // Media replacement is completed by the same cold start
                     // for IDE and SD. The emulated device sees a clean power
@@ -727,6 +805,19 @@ namespace ZXMAK2.Host.WinForms.Views
                 StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsNeoGsSdMediaChanged(
+            NeoGsDevice currentDevice,
+            NeoGsDevice pendingDevice)
+        {
+            if (currentDevice == null || pendingDevice == null)
+                return currentDevice != pendingDevice;
+
+            return !string.Equals(
+                NormalizeMediaPath(currentDevice.ConfiguredSdImageFileName),
+                NormalizeMediaPath(pendingDevice.ConfiguredSdImageFileName),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string NormalizeMediaPath(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -744,7 +835,8 @@ namespace ZXMAK2.Host.WinForms.Views
         private void btnRemove_Click(object sender, EventArgs e)
         {
             int index = getSelectedIndex();
-            if (index >= 0 && index < m_devList.Count)
+            if (index >= 0 && index < m_devList.Count &&
+                m_devList[index] != null)
             {
                 m_workBus.Remove(m_devList[index]);
                 var control = (UserControl)m_ctlList[index];

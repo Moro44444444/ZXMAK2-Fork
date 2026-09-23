@@ -67,6 +67,16 @@ internal static class NeoGsProbe
                     "ApplyOutputGain",
                     -1000) == -1500,
                 "NeoGS output gain is not exactly 150 percent");
+            Assert(
+                (int)InvokeStatic(
+                    typeof(NeoGsDevice),
+                    "ApplyMp3Gain",
+                    1000) == 1400 &&
+                (int)InvokeStatic(
+                    typeof(NeoGsDevice),
+                    "ApplyMp3Gain",
+                    -1000) == -1400,
+                "NeoGS MP3 gain is not exactly 140 percent");
 
             Invoke(card, "ResetCard");
             Invoke(card, "WritePort", (ushort)0x001B, (byte)1);

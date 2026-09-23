@@ -10,13 +10,12 @@ using ZXMAK2.Host.Interfaces;
 namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 {
     /// <summary>
-    /// SD settings intentionally mirror the IDE panel: the path is part of
-    /// the machine profile, Eject clears it, and applying a changed medium is
-    /// completed by FormMachineSettings with the common cold power-cycle.
+    /// Media panel for the microSD socket physically located on NeoGS.
+    /// NeoGS itself remains managed by the PENTEVO ZXBUS slot selectors.
     /// </summary>
-    public class CtlSettingsZsdPentEvo : ConfigScreenControl
+    public sealed class CtlSettingsNeoGsSd : ConfigScreenControl
     {
-        private ZsdPentEvo m_device;
+        private BusManager m_bmgr;
         private readonly GroupBox m_group;
         private readonly CheckBox m_connected;
         private readonly TextBox m_path;
@@ -24,13 +23,14 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private readonly Button m_eject;
         private readonly Label m_status;
         private readonly Label m_hint;
+        private bool m_boardEnabled;
 
-        public CtlSettingsZsdPentEvo()
+        public CtlSettingsNeoGsSd()
         {
             Size = new Size(300, 240);
 
             m_group = new GroupBox();
-            m_group.Text = "Z-controller SD Card Settings:";
+            m_group.Text = "NeoGS microSD Card Settings:";
             m_group.Dock = DockStyle.Fill;
             Controls.Add(m_group);
 
@@ -44,7 +44,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_path = new TextBox();
             m_path.Location = new Point(9, 51);
             m_path.Size = new Size(236, 20);
-            m_path.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            m_path.Anchor = AnchorStyles.Top | AnchorStyles.Left |
+                AnchorStyles.Right;
             m_path.TextChanged += path_TextChanged;
             m_group.Controls.Add(m_path);
 
@@ -67,23 +68,60 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_status = new Label();
             m_status.AutoSize = false;
             m_status.Location = new Point(9, 87);
-            m_status.Size = new Size(195, 24);
-            m_status.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            m_status.Size = new Size(195, 34);
+            m_status.Anchor = AnchorStyles.Top | AnchorStyles.Left |
+                AnchorStyles.Right;
             m_group.Controls.Add(m_status);
 
             m_hint = new Label();
             m_hint.AutoSize = false;
             m_hint.Location = new Point(9, 128);
             m_hint.Size = new Size(282, 58);
-            m_hint.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            m_hint.Text = "The selected IMG, IMA or VHD stays connected after restart until you replace or eject it.";
+            m_hint.Anchor = AnchorStyles.Top | AnchorStyles.Left |
+                AnchorStyles.Right;
+            m_hint.Text = "This socket belongs to NeoGS and is available only " +
+                "while NeoGS is active in a ZXBUS slot.";
             m_group.Controls.Add(m_hint);
         }
 
-        public void Init(BusManager bmgr, IHostService host, ZsdPentEvo device)
+        // Deliberately not named Init: this is a navigation panel for media,
+        // not an independent bus device discovered by the reflection mapper.
+        public void Initialize(BusManager bmgr, IHostService host)
         {
-            m_device = device;
-            SetImagePath(m_device.ConfiguredImageFileName);
+            m_bmgr = bmgr;
+            var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
+            SetImagePath(neoGs == null
+                ? string.Empty
+                : neoGs.ConfiguredSdImageFileName);
+        }
+
+        public void SetBoardEnabled(bool enabled)
+        {
+            m_boardEnabled = enabled;
+            UpdateEnabled();
+            UpdateStatus();
+        }
+
+        public override void Apply()
+        {
+            if (!m_boardEnabled)
+                return;
+
+            var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
+            if (neoGs == null)
+                throw new InvalidOperationException(
+                    "NeoGS must be active in a ZXBUS slot");
+            if (!m_connected.Checked)
+            {
+                neoGs.ConfigureSdCard(string.Empty);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(m_path.Text))
+            {
+                throw new InvalidOperationException(
+                    "Select a NeoGS microSD image or eject the card");
+            }
+            neoGs.ConfigureSdCard(m_path.Text.Trim());
         }
 
         private void SetImagePath(string fileName)
@@ -95,48 +133,27 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             UpdateStatus();
         }
 
-        public override void Apply()
-        {
-            if (!m_connected.Checked)
-            {
-                m_device.ConfigureCard(string.Empty);
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(m_path.Text))
-            {
-                throw new InvalidOperationException("Select an SD card image or eject the SD card");
-            }
-            m_device.ConfigureCard(m_path.Text.Trim());
-        }
-
         private void browse_Click(object sender, EventArgs e)
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "Select PentEvo SD Card image";
-                dialog.Filter = "Disk image file (*.img, *.ima, *.vhd)|*.img;*.ima;*.vhd";
+                dialog.Title = "Select NeoGS microSD image";
+                dialog.Filter =
+                    "Disk image file (*.img, *.ima, *.vhd)|*.img;*.ima;*.vhd";
                 dialog.DefaultExt = "img";
                 dialog.CheckFileExists = true;
                 dialog.Multiselect = false;
                 if (!string.IsNullOrEmpty(m_path.Text))
-                {
                     dialog.FileName = m_path.Text;
-                }
                 if (dialog.ShowDialog() != DialogResult.OK)
-                {
                     return;
-                }
-
-                m_path.Text = dialog.FileName;
-                m_path.SelectionStart = m_path.Text.Length;
-                m_connected.Checked = true;
+                SetImagePath(dialog.FileName);
             }
         }
 
         private void eject_Click(object sender, EventArgs e)
         {
-            m_connected.Checked = false;
-            m_path.Text = string.Empty;
+            SetImagePath(string.Empty);
         }
 
         private void connected_CheckedChanged(object sender, EventArgs e)
@@ -152,14 +169,20 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
         private void UpdateEnabled()
         {
-            var enabled = m_connected.Checked;
-            m_path.Enabled = enabled;
-            m_browse.Enabled = true;
-            m_eject.Enabled = enabled || !string.IsNullOrEmpty(m_path.Text);
+            m_connected.Enabled = m_boardEnabled;
+            m_path.Enabled = m_boardEnabled && m_connected.Checked;
+            m_browse.Enabled = m_boardEnabled;
+            m_eject.Enabled = m_boardEnabled &&
+                (m_connected.Checked || !string.IsNullOrEmpty(m_path.Text));
         }
 
         private void UpdateStatus()
         {
+            if (!m_boardEnabled)
+            {
+                m_status.Text = "NeoGS is not active in ZXBUS";
+                return;
+            }
             if (!m_connected.Checked || string.IsNullOrWhiteSpace(m_path.Text))
             {
                 m_status.Text = "No SD card image selected";
@@ -168,9 +191,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             try
             {
                 var fullPath = Path.GetFullPath(m_path.Text.Trim());
-                m_status.Text = File.Exists(fullPath) ?
-                    "Selected: " + Path.GetFileName(fullPath) :
-                    "Selected image is not available";
+                m_status.Text = File.Exists(fullPath)
+                    ? "Selected: " + Path.GetFileName(fullPath)
+                    : "Selected image is not available";
             }
             catch
             {

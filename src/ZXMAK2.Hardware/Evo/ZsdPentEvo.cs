@@ -34,7 +34,7 @@ namespace ZXMAK2.Hardware.Evo
         public ZsdPentEvo()
         {
             Category = BusDeviceCategory.Disk;
-            Name = "SD PentEvo";
+            Name = "SD Z-controller";
             Description = "PentEvo SD Card\r\nWritten by ZEK";
         }
 

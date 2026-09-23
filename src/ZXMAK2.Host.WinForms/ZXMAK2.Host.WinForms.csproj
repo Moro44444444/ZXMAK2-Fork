@@ -100,6 +100,9 @@
     <Compile Include="Views\Configuration\Devices\CtlSettingsIdePentEvo.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="Views\Configuration\Devices\CtlSettingsNeoGsSd.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Views\Configuration\Devices\CtlSettingsPentEvo.cs">
       <SubType>UserControl</SubType>
     </Compile>

@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.IO;
 using System.Windows.Forms;
 using ZXMAK2.Engine;
 using ZXMAK2.Hardware.Evo;
@@ -24,22 +23,27 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private readonly ComboBox m_slot1Device;
         private readonly CheckBox m_slot2Enabled;
         private readonly ComboBox m_slot2Device;
-        private readonly GroupBox m_neoGsMedia;
-        private readonly CheckBox m_neoGsSdConnected;
-        private readonly TextBox m_neoGsSdPath;
-        private readonly Button m_neoGsSdBrowse;
-        private readonly Button m_neoGsSdEject;
-        private readonly Label m_neoGsSdStatus;
 
         private BusManager m_bmgr;
         private UlaPentEvo m_device;
         private bool m_updatingSlots;
 
+        public event EventHandler NeoGsAvailabilityChanged;
+
+        public bool IsNeoGsBoardEnabled
+        {
+            get
+            {
+                return IsNeoGsSelected(m_slot1Enabled, m_slot1Device) ||
+                    IsNeoGsSelected(m_slot2Enabled, m_slot2Device);
+            }
+        }
+
         public CtlSettingsPentEvo()
         {
             AutoScaleMode = AutoScaleMode.Font;
             AutoScroll = true;
-            Size = new Size(284, 470);
+            Size = new Size(284, 334);
 
             var motherboard = new GroupBox();
             motherboard.Text = "ZX Evolution BaseConf:";
@@ -119,52 +123,6 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 "uses official firmware 1.11 and can occupy either slot.";
             zxBus.Controls.Add(busHint);
 
-            m_neoGsMedia = new GroupBox();
-            m_neoGsMedia.Text = "NeoGS Rev. C-VS microSD:";
-            m_neoGsMedia.Location = new Point(4, 334);
-            m_neoGsMedia.Size = new Size(276, 128);
-            m_neoGsMedia.Anchor = AnchorStyles.Top | AnchorStyles.Left |
-                AnchorStyles.Right;
-            Controls.Add(m_neoGsMedia);
-
-            m_neoGsSdConnected = new CheckBox();
-            m_neoGsSdConnected.Text = "Card connected";
-            m_neoGsSdConnected.AutoSize = true;
-            m_neoGsSdConnected.Location = new Point(10, 23);
-            m_neoGsSdConnected.CheckedChanged += NeoGsSdConnectedChanged;
-            m_neoGsMedia.Controls.Add(m_neoGsSdConnected);
-
-            m_neoGsSdPath = new TextBox();
-            m_neoGsSdPath.Location = new Point(10, 49);
-            m_neoGsSdPath.Size = new Size(205, 20);
-            m_neoGsSdPath.Anchor = AnchorStyles.Top | AnchorStyles.Left |
-                AnchorStyles.Right;
-            m_neoGsSdPath.TextChanged += NeoGsSdPathChanged;
-            m_neoGsMedia.Controls.Add(m_neoGsSdPath);
-
-            m_neoGsSdBrowse = new Button();
-            m_neoGsSdBrowse.Text = "...";
-            m_neoGsSdBrowse.Location = new Point(221, 47);
-            m_neoGsSdBrowse.Size = new Size(45, 23);
-            m_neoGsSdBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            m_neoGsSdBrowse.Click += NeoGsSdBrowseClick;
-            m_neoGsMedia.Controls.Add(m_neoGsSdBrowse);
-
-            m_neoGsSdStatus = new Label();
-            m_neoGsSdStatus.AutoSize = false;
-            m_neoGsSdStatus.Location = new Point(10, 82);
-            m_neoGsSdStatus.Size = new Size(177, 34);
-            m_neoGsSdStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left |
-                AnchorStyles.Right;
-            m_neoGsMedia.Controls.Add(m_neoGsSdStatus);
-
-            m_neoGsSdEject = new Button();
-            m_neoGsSdEject.Text = "Eject";
-            m_neoGsSdEject.Location = new Point(191, 82);
-            m_neoGsSdEject.Size = new Size(75, 23);
-            m_neoGsSdEject.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            m_neoGsSdEject.Click += NeoGsSdEjectClick;
-            m_neoGsMedia.Controls.Add(m_neoGsSdEject);
         }
 
         public void Init(BusManager bmgr, IHostService host, UlaPentEvo device)
@@ -192,9 +150,6 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 m_slot1Enabled.Checked = true;
                 SelectSlotDevice(m_slot1Device, PentEvoZxBusDevice.NeoGS);
             }
-            var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
-            SetNeoGsSdPath(
-                neoGs == null ? string.Empty : neoGs.ConfiguredSdImageFileName);
             UpdateSoundControls();
             UpdateSlotControls();
         }
@@ -242,17 +197,6 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             }
             else if (!neoGsSelected && neoGs != null)
                 m_bmgr.Remove(neoGs);
-            if (neoGsSelected && neoGs != null)
-            {
-                if (m_neoGsSdConnected.Checked &&
-                    string.IsNullOrWhiteSpace(m_neoGsSdPath.Text))
-                    throw new InvalidOperationException(
-                        "Select a NeoGS microSD image or eject the card");
-                neoGs.ConfigureSdCard(m_neoGsSdConnected.Checked
-                    ? m_neoGsSdPath.Text.Trim()
-                    : string.Empty);
-            }
-
             m_device.ZxBusSlot1Enabled = m_slot1Enabled.Checked;
             m_device.ZxBusSlot1Device = slot1Device;
             m_device.ZxBusSlot2Enabled = m_slot2Enabled.Checked;
@@ -379,80 +323,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             m_slot1Device.Enabled = m_slot1Enabled.Checked;
             m_slot2Device.Enabled = m_slot2Enabled.Checked;
-            var enabled = IsNeoGsSelected(m_slot1Enabled, m_slot1Device) ||
-                IsNeoGsSelected(m_slot2Enabled, m_slot2Device);
-            m_neoGsMedia.Enabled = enabled;
-            UpdateNeoGsSdControls();
-        }
-
-        private void SetNeoGsSdPath(string fileName)
-        {
-            m_neoGsSdPath.Text = fileName ?? string.Empty;
-            m_neoGsSdPath.SelectionStart = m_neoGsSdPath.Text.Length;
-            m_neoGsSdConnected.Checked =
-                !string.IsNullOrEmpty(m_neoGsSdPath.Text);
-            UpdateNeoGsSdControls();
-        }
-
-        private void NeoGsSdBrowseClick(object sender, EventArgs e)
-        {
-            using (var dialog = new OpenFileDialog())
-            {
-                dialog.Title = "Select NeoGS microSD image";
-                dialog.Filter =
-                    "Disk image file (*.img, *.ima, *.vhd)|*.img;*.ima;*.vhd";
-                dialog.DefaultExt = "img";
-                dialog.CheckFileExists = true;
-                dialog.Multiselect = false;
-                if (!string.IsNullOrEmpty(m_neoGsSdPath.Text))
-                    dialog.FileName = m_neoGsSdPath.Text;
-                if (dialog.ShowDialog() != DialogResult.OK)
-                    return;
-                SetNeoGsSdPath(dialog.FileName);
-            }
-        }
-
-        private void NeoGsSdEjectClick(object sender, EventArgs e)
-        {
-            SetNeoGsSdPath(string.Empty);
-        }
-
-        private void NeoGsSdConnectedChanged(object sender, EventArgs e)
-        {
-            UpdateNeoGsSdControls();
-        }
-
-        private void NeoGsSdPathChanged(object sender, EventArgs e)
-        {
-            UpdateNeoGsSdControls();
-        }
-
-        private void UpdateNeoGsSdControls()
-        {
-            var connected = m_neoGsMedia.Enabled &&
-                m_neoGsSdConnected.Checked;
-            m_neoGsSdPath.Enabled = connected;
-            m_neoGsSdBrowse.Enabled = m_neoGsMedia.Enabled;
-            m_neoGsSdEject.Enabled = m_neoGsMedia.Enabled &&
-                (m_neoGsSdConnected.Checked ||
-                    !string.IsNullOrEmpty(m_neoGsSdPath.Text));
-            if (!m_neoGsSdConnected.Checked ||
-                string.IsNullOrWhiteSpace(m_neoGsSdPath.Text))
-            {
-                m_neoGsSdStatus.Text = "No card image selected";
-                return;
-            }
-            try
-            {
-                var fullPath = Path.GetFullPath(m_neoGsSdPath.Text.Trim());
-                m_neoGsSdStatus.Text = File.Exists(fullPath)
-                    ? "Selected: " + Path.GetFileName(fullPath)
-                    : "Selected image is not available";
-            }
-            catch
-            {
-                m_neoGsSdStatus.Text = "Selected image path is invalid";
-            }
+            var handler = NeoGsAvailabilityChanged;
+            if (handler != null)
+                handler(this, EventArgs.Empty);
         }
 
         private static bool IsNeoGsSelected(

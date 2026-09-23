@@ -51,6 +51,9 @@ namespace ZXMAK2.Host.WinForms.Views
         private ISuccessCommand _ejectHddCommand;
         private readonly ISuccessCommand[] _openFddCommands = new ISuccessCommand[4];
         private readonly ISuccessCommand[] _ejectFddCommands = new ISuccessCommand[4];
+        private readonly ToolStripMenuItem[] _ejectFddMenuItems =
+            new ToolStripMenuItem[4];
+        private readonly bool?[] _fddMountedStates = new bool?[4];
 
         private IHostService _host;
 
@@ -280,6 +283,8 @@ namespace ZXMAK2.Host.WinForms.Views
             _ejectHddCommand = null;
             Array.Clear(_openFddCommands, 0, _openFddCommands.Length);
             Array.Clear(_ejectFddCommands, 0, _ejectFddCommands.Length);
+            Array.Clear(_ejectFddMenuItems, 0, _ejectFddMenuItems.Length);
+            Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
             _mediaMountedStates.Clear();
             ClearMediaToolbarMenus();
             UpdateMediaToolbarStates();
@@ -392,11 +397,21 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             _mediaItemAdapters.ForEach(adapter => adapter.Dispose());
             _mediaItemAdapters.Clear();
+            foreach (var item in _ejectFddMenuItems)
+            {
+                if (item != null && item.Image != null)
+                {
+                    item.Image.Dispose();
+                    item.Image = null;
+                }
+            }
             foreach (var button in _mediaButtons.Values)
             {
                 button.DropDownItems.Clear();
                 button.Enabled = false;
             }
+            Array.Clear(_ejectFddMenuItems, 0, _ejectFddMenuItems.Length);
+            Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
         }
 
         private void RebuildMediaToolbarMenus()
@@ -413,7 +428,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     string.Format("Load {0}:", (char)('A' + drive)),
                     _openFddCommands[drive],
                     false);
-                AddMediaMenuItem(
+                _ejectFddMenuItems[drive] = AddMediaMenuItem(
                     MediaStatusKind.Floppy,
                     string.Format("Eject {0}:", (char)('A' + drive)),
                     _ejectFddCommands[drive],
@@ -426,7 +441,7 @@ namespace ZXMAK2.Host.WinForms.Views
             UpdateMediaToolbarStates();
         }
 
-        private void AddMediaMenuItem(
+        private ToolStripMenuItem AddMediaMenuItem(
             MediaStatusKind mediaKind,
             string text,
             ISuccessCommand sourceCommand,
@@ -434,7 +449,7 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             if (sourceCommand == null)
             {
-                return;
+                return null;
             }
             var item = new ToolStripMenuItem(text);
             var command = new CommandDelegate(
@@ -446,6 +461,7 @@ namespace ZXMAK2.Host.WinForms.Views
             adapter.Command = command;
             _mediaItemAdapters.Add(adapter);
             _mediaButtons[mediaKind].DropDownItems.Add(item);
+            return item;
         }
 
         private void ExecuteMediaCommand(
@@ -1193,11 +1209,54 @@ namespace ZXMAK2.Host.WinForms.Views
                 _mediaMountedStates[mediaKind] = isMounted;
                 SetMediaToolbarImage(mediaKind, isMounted);
             }
+            UpdateFloppyMenuIndicators(viewModel);
+        }
+
+        private void UpdateFloppyMenuIndicators(IMainViewModel viewModel)
+        {
+            for (var drive = 0; drive < _ejectFddMenuItems.Length; drive++)
+            {
+                var item = _ejectFddMenuItems[drive];
+                if (item == null)
+                    continue;
+                var isMounted = viewModel != null &&
+                    viewModel.IsFloppyMounted(drive);
+                if (_fddMountedStates[drive].HasValue &&
+                    _fddMountedStates[drive].Value == isMounted)
+                    continue;
+                _fddMountedStates[drive] = isMounted;
+                var oldImage = item.Image;
+                item.Image = CreateMediaMenuIndicator(isMounted);
+                if (oldImage != null)
+                    oldImage.Dispose();
+                item.ImageScaling = ToolStripItemImageScaling.None;
+            }
+        }
+
+        private static Bitmap CreateMediaMenuIndicator(bool isMounted)
+        {
+            const int size = 10;
+            var image = new Bitmap(size, size);
+            using (var graphics = Graphics.FromImage(image))
+            {
+                graphics.Clear(Color.Magenta);
+                graphics.SmoothingMode =
+                    System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using (var brush = new SolidBrush(isMounted
+                    ? Color.FromArgb(35, 180, 70)
+                    : Color.FromArgb(215, 55, 50)))
+                {
+                    graphics.FillEllipse(brush, 0, 0, size - 1, size - 1);
+                }
+            }
+            image.MakeTransparent(Color.Magenta);
+            return image;
         }
 
         private void RefreshMediaToolbarStates()
         {
             _mediaMountedStates.Clear();
+            Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
             UpdateMediaToolbarStates();
         }
 

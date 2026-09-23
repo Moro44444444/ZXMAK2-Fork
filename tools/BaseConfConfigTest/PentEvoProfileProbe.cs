@@ -5,7 +5,10 @@ using System.Reflection;
 using System.Windows.Forms;
 using System.Xml;
 using ZXMAK2.Engine;
+using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Hardware.Evo;
+using ZXMAK2.Hardware.General;
+using ZXMAK2.Host.WinForms.Views;
 using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
 
 
@@ -16,6 +19,9 @@ internal static class PentEvoProfileProbe
     {
         try
         {
+            VerifyFloppyIndicators();
+            VerifyMachineSettingsNavigation();
+
             var bus = new BusManager();
             bus.Init(null, true);
             bus.Disconnect();
@@ -27,9 +33,22 @@ internal static class PentEvoProfileProbe
             bus.Add(ay);
 
             var control = new CtlSettingsPentEvo();
-            control.Size = new Size(284, 470);
+            control.Size = new Size(284, 334);
             control.Init(bus, null, ula);
             AssertLayoutFits(control);
+            var neoGsSd = new CtlSettingsNeoGsSd();
+            neoGsSd.Size = new Size(300, 240);
+            neoGsSd.Initialize(bus, null);
+            neoGsSd.SetBoardEnabled(control.IsNeoGsBoardEnabled);
+            AssertLayoutFits(neoGsSd);
+            var neoGsConnected =
+                GetField<CheckBox>(neoGsSd, "m_connected");
+            Assert(!neoGsConnected.Enabled,
+                "NeoGS microSD was enabled without a ZXBUS board");
+            control.NeoGsAvailabilityChanged += delegate
+            {
+                neoGsSd.SetBoardEnabled(control.IsNeoGsBoardEnabled);
+            };
             var sound = GetField<ComboBox>(control, "m_internalSound");
             var slot1 = GetField<CheckBox>(control, "m_slot1Enabled");
             var slot1Device = GetField<ComboBox>(control, "m_slot1Device");
@@ -39,6 +58,8 @@ internal static class PentEvoProfileProbe
             sound.SelectedIndex = 1;
             slot1Device.SelectedIndex = 1;
             slot1.Checked = true;
+            Assert(neoGsConnected.Enabled,
+                "NeoGS microSD was not enabled with the ZXBUS board");
             slot2.Checked = false;
             control.Apply();
             Assert(bus.FindDevice<AYCHRV>() == null, "AY was not removed");
@@ -59,6 +80,8 @@ internal static class PentEvoProfileProbe
             Assert(
                 !slot1.Checked && slot1Device.SelectedIndex == 0,
                 "One NeoGS was allowed in both physical slots");
+            Assert(neoGsConnected.Enabled,
+                "NeoGS microSD was disabled while Slot 2 was active");
             slot1Device.SelectedIndex = 1;
             slot1.Checked = true;
             Assert(
@@ -123,6 +146,92 @@ internal static class PentEvoProfileProbe
             Console.Error.WriteLine("FAIL: " + ex);
             return 1;
         }
+    }
+
+    private static void VerifyFloppyIndicators()
+    {
+        var controller = new FddController();
+        controller.FDD[2].Present = true;
+        Assert(!controller.IsDriveMounted(0),
+            "Empty FDD A is reported as mounted");
+        Assert(controller.IsDriveMounted(2),
+            "Mounted FDD C is reported as empty");
+
+        var factory = typeof(MainView).GetMethod(
+            "CreateMediaMenuIndicator",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert(factory != null, "FDD menu indicator factory is missing");
+        using (var mounted = (Bitmap)factory.Invoke(null, new object[] { true }))
+        using (var empty = (Bitmap)factory.Invoke(null, new object[] { false }))
+        {
+            var green = mounted.GetPixel(4, 4);
+            var red = empty.GetPixel(4, 4);
+            Assert(green.G > green.R,
+                "Mounted FDD indicator is not green");
+            Assert(red.R > red.G,
+                "Empty FDD indicator is not red");
+        }
+    }
+
+    private static void VerifyMachineSettingsNavigation()
+    {
+        var bus = new BusManager();
+        bus.Init(null, true);
+        bus.Disconnect();
+        bus.Clear();
+        var ula = new UlaPentEvo();
+        ula.ZxBusSlot1Enabled = true;
+        ula.ZxBusSlot1Device = PentEvoZxBusDevice.NeoGS;
+        bus.Add(ula);
+        bus.Add(new ZsdPentEvo());
+        bus.Add(new NeoGsDevice());
+
+        using (var form = new FormMachineSettings())
+        using (var machine = new ProbeMachine(bus))
+        {
+            form.Init(null, machine);
+            var navigation = GetField<ListView>(form, "lstNavigation");
+            var zController = -1;
+            var neoGs = -1;
+            for (var i = 0; i < navigation.Items.Count; i++)
+            {
+                if (navigation.Items[i].SubItems.Count < 2)
+                    continue;
+                var name = navigation.Items[i].SubItems[1].Text;
+                if (name == "SD Z-controller")
+                    zController = i;
+                else if (name == "SD NeoGS")
+                    neoGs = i;
+            }
+            Assert(zController >= 0,
+                "SD Z-controller navigation item is missing");
+            Assert(neoGs == zController + 1,
+                "SD NeoGS is not placed after SD Z-controller");
+            Assert(navigation.Items[neoGs].ForeColor != SystemColors.GrayText,
+                "SD NeoGS is disabled with an active ZXBUS board");
+        }
+    }
+
+    private sealed class ProbeMachine : IVirtualMachine
+    {
+        private readonly IBus m_bus;
+
+        public ProbeMachine(IBus bus)
+        {
+            m_bus = bus;
+        }
+
+        public event EventHandler FrameSizeChanged { add { } remove { } }
+        public bool IsRunning { get { return false; } }
+        public IBus Bus { get { return m_bus; } }
+        public Size FrameSize { get { return new Size(320, 240); } }
+        public void DoRun() { }
+        public void DoStop() { }
+        public void DoReset() { }
+        public void DoPowerCycle() { }
+        public void DoNmi() { }
+        public void SaveConfig() { }
+        public void Dispose() { }
     }
 
     private static T GetField<T>(object target, string name)
