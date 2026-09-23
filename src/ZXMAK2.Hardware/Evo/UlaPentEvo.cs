@@ -1,4 +1,6 @@
 using System;
+using System.Xml;
+using ZXMAK2.Engine;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
 using ZXMAK2.Engine.Attributes;
@@ -7,6 +9,17 @@ using ZXMAK2.Hardware.Atm;
 
 namespace ZXMAK2.Hardware.Evo
 {
+    public enum PentEvoInternalSound
+    {
+        None,
+        AY8910CHRV,
+    }
+
+    public enum PentEvoZxBusDevice
+    {
+        Empty,
+    }
+
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming
     {
         private const int FrameInterruptMasterClocks = 256;
@@ -38,6 +51,12 @@ namespace ZXMAK2.Hardware.Evo
         public bool VideoModePending { get { return m_videoController.IsPending; } }
         internal EvoRasterTiming ActiveRaster { get { return EvoRasterTiming.ForMode(m_activeRaster); } }
 
+        public PentEvoInternalSound InternalSound { get; set; }
+        public bool ZxBusSlot1Enabled { get; set; }
+        public PentEvoZxBusDevice ZxBusSlot1Device { get; set; }
+        public bool ZxBusSlot2Enabled { get; set; }
+        public PentEvoZxBusDevice ZxBusSlot2Device { get; set; }
+
         [HardwareValue("INTACK", Description = "BaseConf frame INT released by interrupt acknowledge")]
         public bool FrameInterruptAcknowledged { get { return m_frameInterruptAcknowledged; } }
 
@@ -47,6 +66,12 @@ namespace ZXMAK2.Hardware.Evo
         public override void BusInit(IBusManager bmgr)
         {
             base.BusInit(bmgr);
+            // The device list is the executable configuration. Keep the
+            // descriptive PENTEVO setting synchronized when an older machine
+            // profile does not contain the new XML attribute yet.
+            InternalSound = bmgr.FindDevice<AYCHRV>() != null
+                ? PentEvoInternalSound.AY8910CHRV
+                : PentEvoInternalSound.None;
             bmgr.Events.SubscribeIntAck(BusIntAcknowledge);
         }
 
@@ -252,6 +277,47 @@ namespace ZXMAK2.Hardware.Evo
         public UlaPentEvo()
         {
             Name = "PENTEVO";
+            Description = "ZX Evolution BaseConf motherboard";
+            InternalSound = PentEvoInternalSound.AY8910CHRV;
+            ZxBusSlot1Enabled = false;
+            ZxBusSlot1Device = PentEvoZxBusDevice.Empty;
+            ZxBusSlot2Enabled = false;
+            ZxBusSlot2Device = PentEvoZxBusDevice.Empty;
+        }
+
+        protected override void OnConfigLoad(XmlNode itemNode)
+        {
+            base.OnConfigLoad(itemNode);
+            InternalSound = Utils.GetXmlAttributeAsEnum(
+                itemNode,
+                "internalSound",
+                InternalSound);
+            ZxBusSlot1Enabled = Utils.GetXmlAttributeAsBool(
+                itemNode,
+                "zxBusSlot1Enabled",
+                ZxBusSlot1Enabled);
+            ZxBusSlot1Device = Utils.GetXmlAttributeAsEnum(
+                itemNode,
+                "zxBusSlot1Device",
+                ZxBusSlot1Device);
+            ZxBusSlot2Enabled = Utils.GetXmlAttributeAsBool(
+                itemNode,
+                "zxBusSlot2Enabled",
+                ZxBusSlot2Enabled);
+            ZxBusSlot2Device = Utils.GetXmlAttributeAsEnum(
+                itemNode,
+                "zxBusSlot2Device",
+                ZxBusSlot2Device);
+        }
+
+        protected override void OnConfigSave(XmlNode itemNode)
+        {
+            base.OnConfigSave(itemNode);
+            Utils.SetXmlAttributeAsEnum(itemNode, "internalSound", InternalSound);
+            Utils.SetXmlAttribute(itemNode, "zxBusSlot1Enabled", ZxBusSlot1Enabled);
+            Utils.SetXmlAttributeAsEnum(itemNode, "zxBusSlot1Device", ZxBusSlot1Device);
+            Utils.SetXmlAttribute(itemNode, "zxBusSlot2Enabled", ZxBusSlot2Enabled);
+            Utils.SetXmlAttributeAsEnum(itemNode, "zxBusSlot2Device", ZxBusSlot2Device);
         }
 
         /// <summary>

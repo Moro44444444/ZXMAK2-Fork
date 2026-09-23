@@ -25,6 +25,7 @@ namespace ZXMAK2.Host.WinForms.Views
 
         public BusDeviceBase Device { get; private set; }
         public List<BusDeviceBase> IgnoreList { get; set; }
+        public IEnumerable<Type> AdditionalIgnoreTypes { get; set; }
 
         private void tabControl_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -107,6 +108,12 @@ namespace ZXMAK2.Host.WinForms.Views
         private IEnumerable<Type> GetIgnoreTypes()
         {
             var ignoreTypes = new List<Type>();
+            if (AdditionalIgnoreTypes != null)
+            {
+                ignoreTypes.AddRange(AdditionalIgnoreTypes);
+            }
+            if (IgnoreList == null)
+                return ignoreTypes;
             foreach (var bdd in IgnoreList)
             {
                 ignoreTypes.Add(bdd.GetType());

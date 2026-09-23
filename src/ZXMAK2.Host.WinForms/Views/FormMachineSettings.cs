@@ -466,8 +466,14 @@ namespace ZXMAK2.Host.WinForms.Views
             }
             m_ctlList.Clear();
             m_devList.Clear();
+            var isPentEvo = m_workBus.FindDevice<UlaPentEvo>() != null;
             foreach (var device in m_workBus.FindDevices<BusDeviceBase>())
             {
+                // BaseConf internal music is configured on the PENTEVO page.
+                // Keep it out of the generic device list to prevent two
+                // conflicting configuration surfaces for one onboard chip.
+                if (isPentEvo && device is AYCHRV)
+                    continue;
                 try
                 {
                     var control = ResolveScreenControl(m_workBus, m_host, device);
@@ -765,7 +771,13 @@ namespace ZXMAK2.Host.WinForms.Views
             {
                 using (var wizard = new FormAddDeviceWizard())
                 {
-                    wizard.IgnoreList = m_devList;
+                    wizard.IgnoreList =
+                        m_workBus.FindDevices<BusDeviceBase>();
+                    if (m_workBus.FindDevice<UlaPentEvo>() != null)
+                    {
+                        wizard.AdditionalIgnoreTypes =
+                            new Type[] { typeof(AYCHRV) };
+                    }
                     if (wizard.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                     {
                         return;
