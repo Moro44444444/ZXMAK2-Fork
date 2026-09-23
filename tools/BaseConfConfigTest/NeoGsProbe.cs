@@ -56,6 +56,16 @@ internal static class NeoGsProbe
             var volumes = (byte[])GetField(card, "m_volume");
             Assert(volumes[0] == 0x3F,
                 "Volume register is not limited to six bits");
+            Assert(
+                (int)InvokeStatic(
+                    typeof(NeoGsDevice),
+                    "ApplyOutputGain",
+                    1000) == 1500 &&
+                (int)InvokeStatic(
+                    typeof(NeoGsDevice),
+                    "ApplyOutputGain",
+                    -1000) == -1500,
+                "NeoGS output gain is not exactly 150 percent");
 
             Invoke(card, "ResetCard");
             var irqCpu = (CpuUnit)GetField(card, "m_cpu");
@@ -169,6 +179,25 @@ internal static class NeoGsProbe
         try
         {
             return method.Invoke(target, args);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException ?? ex;
+        }
+    }
+
+    private static object InvokeStatic(
+        Type type,
+        string name,
+        params object[] args)
+    {
+        var method = type.GetMethod(
+            name,
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert(method != null, "Static method not found: " + name);
+        try
+        {
+            return method.Invoke(null, args);
         }
         catch (TargetInvocationException ex)
         {

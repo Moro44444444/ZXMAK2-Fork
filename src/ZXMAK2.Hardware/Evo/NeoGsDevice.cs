@@ -26,6 +26,8 @@ namespace ZXMAK2.Hardware.Evo
         private const long MasterClock = 120000000L;
         private const long MasterTicksPerFrame = MasterClock / 50;
         private const long MasterTicksPerDac = MasterClock / 37500;
+        private const int OutputGainNumerator = 3;
+        private const int OutputGainDenominator = 2;
 
         private readonly byte[] m_rom = new byte[RomSize];
         private readonly byte[] m_ram = new byte[RamSize];
@@ -260,7 +262,15 @@ namespace ZXMAK2.Hardware.Evo
 
             var frameTime = (double)(masterTime - m_frameMasterStart) /
                 (double)MasterTicksPerFrame;
-            UpdateDac(frameTime, Clamp16(left), Clamp16(right));
+            UpdateDac(
+                frameTime,
+                Clamp16(ApplyOutputGain(left)),
+                Clamp16(ApplyOutputGain(right)));
+        }
+
+        private static int ApplyOutputGain(int value)
+        {
+            return value * OutputGainNumerator / OutputGainDenominator;
         }
 
         private int MixChannel(int sampleIndex, int volumeIndex)
