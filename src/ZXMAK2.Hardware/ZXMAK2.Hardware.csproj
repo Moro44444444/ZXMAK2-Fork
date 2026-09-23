@@ -42,6 +42,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="NLayer">
+      <HintPath>..\Libraries\NLayer\NLayer.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Xml.Linq" />
@@ -71,6 +75,7 @@
     <Compile Include="Evo\IdePentEvo.cs" />
     <Compile Include="Evo\MemoryPentEvo.cs" />
     <Compile Include="Evo\NeoGsDevice.cs" />
+    <Compile Include="Evo\NeoGsVs10xx.cs" />
     <Compile Include="Evo\UlaPentEvo.cs" />
     <Compile Include="Evo\ZsdPentEvo.cs" />
     <Compile Include="General\AY8910.cs" />
@@ -148,6 +153,12 @@
     <EmbeddedResource Include="Resources\NeoGS-1.11.rom">
       <LogicalName>ZXMAK2.Hardware.Resources.NeoGS-1.11.rom</LogicalName>
     </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Libraries\NLayer\LICENSE.txt">
+      <Link>NLayer.LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ZipLib\ZipLib.csproj">

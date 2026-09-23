@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Xml;
+using ZXMAK2.Engine;
 using ZXMAK2.Engine.Cpu;
 using ZXMAK2.Engine.Entities;
 using ZXMAK2.Engine.Interfaces;
+using ZXMAK2.Hardware.Circuits.SecureDigital;
 
 
 namespace ZXMAK2.Hardware.Evo
@@ -34,8 +37,17 @@ namespace ZXMAK2.Hardware.Evo
         private readonly byte[] m_page = new byte[4];
         private readonly byte[] m_volume = new byte[8];
         private readonly byte[] m_sample = new byte[8];
+        private readonly uint[] m_dmaAddress = new uint[4];
+        private readonly bool[] m_dmaEnabled = new bool[4];
+        private readonly object m_sdSync = new object();
 
         private CpuUnit m_cpu;
+        private MemoryPentEvo m_hostMemory;
+        private SdCard m_sdCard;
+        private NeoGsVs10xx m_codec;
+        private bool m_sandbox;
+        private string m_sdImageFileName = string.Empty;
+        private byte m_sdReceived;
         private byte m_commandFromHost;
         private byte m_dataFromHost;
         private byte m_dataToHost;
@@ -46,7 +58,11 @@ namespace ZXMAK2.Hardware.Evo
         private byte m_interruptEnable;
         private byte m_interruptRequest;
         private byte m_dmaModule;
-        private readonly byte[] m_dmaRegisters = new byte[4];
+        private bool m_dmaReadPrimed;
+        private byte m_dmaReadLatch;
+        private PeripheralDmaState m_sdDmaState;
+        private int m_sdDmaCount;
+        private int m_mp3DmaCount;
         private bool m_led;
         private bool m_romLoaded;
         private bool m_frameStarted;
@@ -55,13 +71,21 @@ namespace ZXMAK2.Hardware.Evo
         private long m_nextDacMaster;
         private long m_nmiReleaseMaster;
         private long m_dacTickCount;
+        private long m_nextPeripheralDmaMaster;
+        private long m_nextMp3Master;
+        private long m_mp3StepRemainder;
+        private int m_activeMp3SampleRate;
+        private int m_dacLeft;
+        private int m_dacRight;
+        private int m_mp3Left;
+        private int m_mp3Right;
 
         public NeoGsDevice()
         {
             Name = "NeoGS rev.C-VS";
             Description =
                 "NeoGS ZXBUS music card, Rev. C-VS, official ROM 1.11, " +
-                "4 MB RAM and 4/8-channel DAC";
+                "4 MB RAM, 4/8-channel DAC, microSD and VS1011/MP3";
             Category = BusDeviceCategory.Music;
         }
 
@@ -70,14 +94,52 @@ namespace ZXMAK2.Hardware.Evo
             get { return true; }
         }
 
+        public string SdImageFileName
+        {
+            get { return m_sdImageFileName ?? string.Empty; }
+            set
+            {
+                m_sdImageFileName = value ?? string.Empty;
+                if (!m_sandbox && m_sdCard != null)
+                    RestoreConfiguredCard();
+            }
+        }
+
+        public string ConfiguredSdImageFileName
+        {
+            get { return SdImageFileName; }
+        }
+
+        public void ConfigureSdCard(string fileName)
+        {
+            SdImageFileName = fileName;
+        }
+
+        public bool IsSdCardMounted
+        {
+            get
+            {
+                lock (m_sdSync)
+                {
+                    return m_sdCard != null &&
+                        !string.IsNullOrEmpty(m_sdCard.MountedFileName);
+                }
+            }
+        }
+
         public override void BusInit(IBusManager bmgr)
         {
             base.BusInit(bmgr);
+            m_sandbox = bmgr.IsSandbox;
+            m_hostMemory = bmgr.FindDevice<MemoryPentEvo>();
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00BB, HostReadStatus);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00BB, HostWriteCommand);
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00B3, HostReadData);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00B3, HostWriteData);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x0033, HostWriteControl);
+            bmgr.Events.SubscribeRdMem(0xC000, 0x0000, HostReadDma);
+            bmgr.Events.SubscribeRdMemM1(0xC000, 0x0000, HostReadDma);
+            bmgr.Events.SubscribeWrMem(0xC000, 0x0000, HostWriteDma);
         }
 
         public override void BusConnect()
@@ -89,14 +151,57 @@ namespace ZXMAK2.Hardware.Evo
             m_boardMaster = 0;
             m_frameMasterStart = 0;
             m_nextDacMaster = MasterTicksPerDac;
+            m_nextPeripheralDmaMaster = 0;
+            m_nextMp3Master = long.MaxValue;
+            m_mp3StepRemainder = 0;
+            m_activeMp3SampleRate = 0;
             m_dacTickCount = 0;
             m_frameStarted = false;
+            lock (m_sdSync)
+            {
+                if (m_sdCard != null)
+                    m_sdCard.Close();
+                m_sdCard = new SdCard();
+                m_sdReceived = 0xFF;
+            }
+            if (!m_sandbox)
+                RestoreConfiguredCard();
+            if (m_codec != null)
+                m_codec.Dispose();
+            m_codec = new NeoGsVs10xx();
             ResetCard();
         }
 
         public override void BusDisconnect()
         {
+            lock (m_sdSync)
+            {
+                if (m_sdCard != null)
+                {
+                    m_sdCard.Close();
+                    m_sdCard = null;
+                }
+            }
+            if (m_codec != null)
+            {
+                m_codec.Dispose();
+                m_codec = null;
+            }
             base.BusDisconnect();
+        }
+
+        protected override void OnConfigLoad(XmlNode itemNode)
+        {
+            base.OnConfigLoad(itemNode);
+            m_sdImageFileName = Utils.GetXmlAttributeAsString(
+                itemNode, "sdImage", string.Empty);
+        }
+
+        protected override void OnConfigSave(XmlNode itemNode)
+        {
+            base.OnConfigSave(itemNode);
+            Utils.SetXmlAttribute(
+                itemNode, "sdImage", m_sdImageFileName ?? string.Empty);
         }
 
         public override void ResetState()
@@ -185,6 +290,37 @@ namespace ZXMAK2.Hardware.Evo
             handled = true;
         }
 
+        private void HostReadDma(ushort address, ref byte value)
+        {
+            if (!m_dmaEnabled[1] || !IsHostRomMapped())
+                return;
+            SyncToHost();
+            var next = m_ram[(int)(m_dmaAddress[1] & (RamSize - 1))];
+            if (m_dmaReadPrimed)
+                value = m_dmaReadLatch;
+            m_dmaReadLatch = next;
+            m_dmaReadPrimed = true;
+            IncrementDmaAddress(1);
+        }
+
+        private void HostWriteDma(ushort address, byte value)
+        {
+            if (!m_dmaEnabled[1])
+                return;
+            SyncToHost();
+            m_ram[(int)(m_dmaAddress[1] & (RamSize - 1))] = value;
+            IncrementDmaAddress(1);
+        }
+
+        private bool IsHostRomMapped()
+        {
+            if (m_hostMemory == null)
+                return true;
+            return Array.IndexOf(
+                m_hostMemory.RomPages,
+                m_hostMemory.Window0000) >= 0;
+        }
+
         private void SyncToHost()
         {
             var fraction = GetFrameTime();
@@ -199,10 +335,12 @@ namespace ZXMAK2.Hardware.Evo
 
         private void ExecuteTo(long targetMaster)
         {
-            ProcessDacTicks(targetMaster);
+            ProcessTimedAudio(targetMaster);
             while (m_boardMaster < targetMaster)
             {
-                var segmentEnd = Math.Min(targetMaster, m_nextDacMaster);
+                var segmentEnd = Math.Min(
+                    targetMaster,
+                    Math.Min(m_nextDacMaster, m_nextMp3Master));
                 while (m_boardMaster < segmentEnd)
                 {
                     UpdateCpuSignals();
@@ -213,10 +351,17 @@ namespace ZXMAK2.Hardware.Evo
                     if (elapsed < 1)
                         elapsed = 1;
                     m_boardMaster += elapsed * ticksPerTact;
+                    ProcessPeripheralDma();
                 }
-                ProcessDacTicks(targetMaster);
+                ProcessTimedAudio(targetMaster);
             }
             UpdateCpuSignals();
+        }
+
+        private void ProcessTimedAudio(long targetMaster)
+        {
+            ProcessDacTicks(targetMaster);
+            ProcessMp3Ticks(targetMaster);
         }
 
         private void ProcessDacTicks(long targetMaster)
@@ -229,12 +374,52 @@ namespace ZXMAK2.Hardware.Evo
                 if ((m_dacTickCount % divider) == 0)
                     m_interruptRequest |= 0x01;
                 UpdateInterruptLine();
-                OutputDac(m_nextDacMaster);
+                UpdateBoardDac(m_nextDacMaster);
                 m_nextDacMaster += MasterTicksPerDac;
             }
         }
 
-        private void OutputDac(long masterTime)
+        private void ProcessMp3Ticks(long targetMaster)
+        {
+            var sampleRate = m_codec == null ? 0 : m_codec.SampleRate;
+            if (sampleRate != m_activeMp3SampleRate)
+            {
+                m_activeMp3SampleRate = sampleRate;
+                m_mp3StepRemainder = 0;
+                m_nextMp3Master = sampleRate > 0
+                    ? m_boardMaster
+                    : long.MaxValue;
+            }
+            while (m_nextMp3Master <= m_boardMaster &&
+                m_nextMp3Master <= targetMaster &&
+                m_activeMp3SampleRate > 0)
+            {
+                short left;
+                short right;
+                if (m_codec.TryReadSample(out left, out right))
+                {
+                    m_mp3Left = left;
+                    m_mp3Right = right;
+                }
+                else
+                {
+                    m_mp3Left = 0;
+                    m_mp3Right = 0;
+                }
+                OutputMixed(m_nextMp3Master);
+                AdvanceMp3Clock();
+            }
+        }
+
+        private void AdvanceMp3Clock()
+        {
+            m_mp3StepRemainder += MasterClock;
+            var delta = m_mp3StepRemainder / m_activeMp3SampleRate;
+            m_mp3StepRemainder %= m_activeMp3SampleRate;
+            m_nextMp3Master += Math.Max(1, delta);
+        }
+
+        private void UpdateBoardDac(long masterTime)
         {
             int left;
             int right;
@@ -259,13 +444,19 @@ namespace ZXMAK2.Hardware.Evo
                 left = 2 * (MixChannel(0, 0) + MixChannel(1, 1));
                 right = 2 * (MixChannel(2, 2) + MixChannel(3, 3));
             }
+            m_dacLeft = ApplyOutputGain(left);
+            m_dacRight = ApplyOutputGain(right);
+            OutputMixed(masterTime);
+        }
 
+        private void OutputMixed(long masterTime)
+        {
             var frameTime = (double)(masterTime - m_frameMasterStart) /
                 (double)MasterTicksPerFrame;
             UpdateDac(
                 frameTime,
-                Clamp16(ApplyOutputGain(left)),
-                Clamp16(ApplyOutputGain(right)));
+                Clamp16(m_dacLeft + m_mp3Left),
+                Clamp16(m_dacRight + m_mp3Right));
         }
 
         private static int ApplyOutputGain(int value)
@@ -365,19 +556,22 @@ namespace ZXMAK2.Hardware.Evo
                 case 0x11:
                     return m_serialControl;
                 case 0x12:
-                    // No virtual SD/VS10xx medium is installed on the card.
-                    return 0x06;
+                    return GetSerialStatus();
                 case 0x13:
+                    return m_sdReceived;
                 case 0x14:
+                    var received = m_sdReceived;
+                    m_sdReceived = SdTransfer(0xFF);
+                    return received;
                 case 0x15:
-                    return 0xFF;
+                    return m_codec == null ? (byte)0xFF : m_codec.ReadControl();
                 case 0x1B:
                     return m_dmaModule;
                 case 0x1C:
                 case 0x1D:
                 case 0x1E:
                 case 0x1F:
-                    return m_dmaRegisters[(address & 0x3F) - 0x1C];
+                    return ReadDmaRegister((address & 0x3F) - 0x1C);
                 default:
                     return 0xFF;
             }
@@ -442,13 +636,20 @@ namespace ZXMAK2.Hardware.Evo
                         m_page[3] = RotatePage(value);
                     break;
                 case 0x11:
+                    var oldSerialControl = m_serialControl;
                     ApplySetClear(ref m_serialControl, value, 0x3F);
+                    ApplySerialControl(oldSerialControl);
                     break;
                 case 0x13:
+                    m_sdReceived = SdTransfer(value);
+                    break;
                 case 0x14:
+                    if (m_codec != null)
+                        m_codec.WriteData(value);
+                    break;
                 case 0x15:
-                    // SPI register timing is accepted; absent peripherals
-                    // return idle bus data on their following reads.
+                    if (m_codec != null)
+                        m_codec.WriteControl(value);
                     break;
                 case 0x16:
                 case 0x17:
@@ -463,7 +664,7 @@ namespace ZXMAK2.Hardware.Evo
                 case 0x1D:
                 case 0x1E:
                 case 0x1F:
-                    m_dmaRegisters[port - 0x1C] = value;
+                    WriteDmaRegister(port - 0x1C, value);
                     break;
                 case 0x20:
                 case 0x21:
@@ -471,6 +672,211 @@ namespace ZXMAK2.Hardware.Evo
                 case 0x23:
                     m_page[port - 0x20] = value;
                     break;
+            }
+        }
+
+        private byte GetSerialStatus()
+        {
+            var value = 0x0C; // writable SD card, control SPI ready
+            if (!IsSdCardMounted)
+                value |= 0x02;
+            if (m_codec != null && m_codec.DataRequest)
+                value |= 0x01;
+            return (byte)value;
+        }
+
+        private void ApplySerialControl(byte oldValue)
+        {
+            if (m_codec == null)
+                return;
+            var resetReleased = (m_serialControl & 0x04) != 0;
+            if (((oldValue ^ m_serialControl) & 0x04) != 0)
+                m_codec.HardwareReset(resetReleased);
+            m_codec.SetControlSelected((m_serialControl & 0x02) == 0);
+        }
+
+        private byte SdTransfer(byte value)
+        {
+            lock (m_sdSync)
+            {
+                if ((m_serialControl & 0x01) != 0 || m_sdCard == null ||
+                    string.IsNullOrEmpty(m_sdCard.MountedFileName))
+                    return 0xFF;
+                m_sdCard.Wr(value);
+                return m_sdCard.Rd();
+            }
+        }
+
+        private byte ReadDmaRegister(int register)
+        {
+            var module = m_dmaModule & 7;
+            if (module < 1 || module > 3)
+                return 0xFF;
+            switch (register)
+            {
+                case 0:
+                    return (byte)((m_dmaAddress[module] >> 16) & 0x3F);
+                case 1:
+                    return (byte)(m_dmaAddress[module] >> 8);
+                case 2:
+                    return (byte)m_dmaAddress[module];
+                default:
+                    return m_dmaEnabled[module] ? (byte)0x80 : (byte)0x00;
+            }
+        }
+
+        private void WriteDmaRegister(int register, byte value)
+        {
+            var module = m_dmaModule & 7;
+            if (module < 1 || module > 3)
+                return;
+            switch (register)
+            {
+                case 0:
+                    m_dmaAddress[module] =
+                        (m_dmaAddress[module] & 0x00FFFFU) |
+                        ((uint)(value & 0x3F) << 16);
+                    break;
+                case 1:
+                    m_dmaAddress[module] =
+                        (m_dmaAddress[module] & 0x3F00FFU) |
+                        ((uint)value << 8);
+                    break;
+                case 2:
+                    m_dmaAddress[module] =
+                        (m_dmaAddress[module] & 0x3FFF00U) | value;
+                    break;
+                case 3:
+                    SetDmaEnabled(module, (value & 0x80) != 0);
+                    break;
+            }
+        }
+
+        private void SetDmaEnabled(int module, bool enabled)
+        {
+            m_dmaEnabled[module] = enabled;
+            m_nextPeripheralDmaMaster = m_boardMaster;
+            if (module == 1)
+            {
+                m_dmaReadPrimed = false;
+            }
+            else if (module == 2)
+            {
+                m_sdDmaState = enabled
+                    ? PeripheralDmaState.WaitToken
+                    : PeripheralDmaState.Idle;
+                m_sdDmaCount = 0;
+            }
+            else if (module == 3)
+            {
+                m_mp3DmaCount = 0;
+            }
+        }
+
+        private void IncrementDmaAddress(int module)
+        {
+            m_dmaAddress[module] =
+                (m_dmaAddress[module] + 1U) & 0x3FFFFFU;
+        }
+
+        private void ProcessPeripheralDma()
+        {
+            if (m_boardMaster < m_nextPeripheralDmaMaster)
+                return;
+            var processed = false;
+            if (m_dmaEnabled[2])
+            {
+                ProcessSdDmaByte();
+                processed = true;
+            }
+            if (m_dmaEnabled[3] && m_codec != null && m_codec.DataRequest)
+            {
+                var value = m_ram[(int)(m_dmaAddress[3] & (RamSize - 1))];
+                if (m_codec.WriteData(value))
+                {
+                    IncrementDmaAddress(3);
+                    m_mp3DmaCount++;
+                    if (m_mp3DmaCount >= 512)
+                        FinishPeripheralDma(3, 0x04);
+                }
+                processed = true;
+            }
+            if (processed)
+            {
+                var halfSpeed = (m_serialControl & 0x10) != 0;
+                var cpuTacts = halfSpeed && m_dmaEnabled[3] ? 32 : 16;
+                m_nextPeripheralDmaMaster = m_boardMaster +
+                    cpuTacts * GetMasterTicksPerCpuTact();
+            }
+            else
+            {
+                m_nextPeripheralDmaMaster = m_boardMaster;
+            }
+        }
+
+        private void ProcessSdDmaByte()
+        {
+            var value = SdTransfer(0xFF);
+            switch (m_sdDmaState)
+            {
+                case PeripheralDmaState.WaitToken:
+                    if (value == 0xFF)
+                        return;
+                    if (value == 0xFE)
+                    {
+                        m_sdDmaState = PeripheralDmaState.Data;
+                        return;
+                    }
+                    FinishPeripheralDma(2, 0x02);
+                    break;
+                case PeripheralDmaState.Data:
+                    m_ram[(int)(m_dmaAddress[2] & (RamSize - 1))] = value;
+                    IncrementDmaAddress(2);
+                    m_sdDmaCount++;
+                    if (m_sdDmaCount >= 512)
+                        m_sdDmaState = PeripheralDmaState.Crc1;
+                    break;
+                case PeripheralDmaState.Crc1:
+                    m_sdDmaState = PeripheralDmaState.Crc2;
+                    break;
+                case PeripheralDmaState.Crc2:
+                    FinishPeripheralDma(2, 0x02);
+                    break;
+            }
+        }
+
+        private void FinishPeripheralDma(int module, byte interruptMask)
+        {
+            m_dmaEnabled[module] = false;
+            if (module == 2)
+                m_sdDmaState = PeripheralDmaState.Idle;
+            m_interruptRequest |= interruptMask;
+            UpdateInterruptLine();
+        }
+
+        private void RestoreConfiguredCard()
+        {
+            lock (m_sdSync)
+            {
+                if (m_sdCard == null)
+                    return;
+                m_sdCard.Close();
+                m_sdReceived = 0xFF;
+                if (string.IsNullOrEmpty(m_sdImageFileName) ||
+                    !File.Exists(m_sdImageFileName))
+                    return;
+                try
+                {
+                    m_sdCard.Open(m_sdImageFileName);
+                }
+                catch (IOException)
+                {
+                    m_sdCard.Close();
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    m_sdCard.Close();
+                }
             }
         }
 
@@ -487,15 +893,47 @@ namespace ZXMAK2.Hardware.Evo
             m_page[3] = 1;
             Array.Clear(m_volume, 0, m_volume.Length);
             Array.Clear(m_sample, 0, m_sample.Length);
+            // FPGA reset: SD/MP3 deselected, decoder held in reset,
+            // control SPI at Fcpu/4 and MP3 data SPI at Fcpu/2.
             m_serialControl = 0x0B;
             m_timerRate = 0;
             m_interruptEnable = 1;
             m_interruptRequest = 0;
             m_dmaModule = 0;
-            Array.Clear(m_dmaRegisters, 0, m_dmaRegisters.Length);
+            Array.Clear(m_dmaAddress, 0, m_dmaAddress.Length);
+            Array.Clear(m_dmaEnabled, 0, m_dmaEnabled.Length);
+            m_dmaReadPrimed = false;
+            m_dmaReadLatch = 0xFF;
+            m_sdDmaState = PeripheralDmaState.Idle;
+            m_sdDmaCount = 0;
+            m_mp3DmaCount = 0;
+            m_dacLeft = 0;
+            m_dacRight = 0;
+            m_mp3Left = 0;
+            m_mp3Right = 0;
+            m_nextMp3Master = long.MaxValue;
+            m_activeMp3SampleRate = 0;
+            m_mp3StepRemainder = 0;
+            lock (m_sdSync)
+            {
+                if (m_sdCard != null)
+                    m_sdCard.Reset();
+                m_sdReceived = 0xFF;
+            }
+            if (m_codec != null)
+                m_codec.HardwareReset(false);
             m_led = true;
             m_nmiReleaseMaster = 0;
             CreateCpu();
+        }
+
+        private enum PeripheralDmaState
+        {
+            Idle,
+            WaitToken,
+            Data,
+            Crc1,
+            Crc2,
         }
 
         private void CreateCpu()

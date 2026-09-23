@@ -27,7 +27,7 @@ internal static class PentEvoProfileProbe
             bus.Add(ay);
 
             var control = new CtlSettingsPentEvo();
-            control.Size = new Size(284, 332);
+            control.Size = new Size(284, 470);
             control.Init(bus, null, ula);
             AssertLayoutFits(control);
             var sound = GetField<ComboBox>(control, "m_internalSound");
