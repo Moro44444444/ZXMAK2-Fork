@@ -110,6 +110,16 @@ namespace ZXMAK2.Host.Presentation
             return controller != null && controller.IsDriveMounted(driveIndex);
         }
 
+        public bool IsSecureDigitalMounted(int secureDigitalIndex)
+        {
+            return m_vm != null && secureDigitalIndex >= 0 &&
+                m_vm.Bus.FindDevices<IMediaStatusDevice>()
+                    .OfType<ISecureDigitalMediaStatus>()
+                    .Any(device =>
+                        device.SecureDigitalIndex == secureDigitalIndex &&
+                        ((IMediaStatusDevice)device).IsMediaMounted);
+        }
+
         public bool ResetCmosState()
         {
             if (m_vm == null)

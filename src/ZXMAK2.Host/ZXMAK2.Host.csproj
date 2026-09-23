@@ -73,6 +73,7 @@
     <Compile Include="Interfaces\IMouseState.cs" />
     <Compile Include="Interfaces\IOpenFileDialog.cs" />
     <Compile Include="Interfaces\ISaveFileDialog.cs" />
+    <Compile Include="Interfaces\ISecureDigitalMediaStatus.cs" />
     <Compile Include="Interfaces\IFrameSound.cs" />
     <Compile Include="Interfaces\IUserHelp.cs" />
     <Compile Include="Interfaces\IUserMessage.cs" />

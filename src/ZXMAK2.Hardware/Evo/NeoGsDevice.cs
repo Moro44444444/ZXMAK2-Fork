@@ -2,11 +2,15 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Xml;
+using ZXMAK2.Dependency;
 using ZXMAK2.Engine;
 using ZXMAK2.Engine.Cpu;
 using ZXMAK2.Engine.Entities;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Hardware.Circuits.SecureDigital;
+using ZXMAK2.Host.Entities;
+using ZXMAK2.Host.Interfaces;
+using ZXMAK2.Mvvm;
 
 
 namespace ZXMAK2.Hardware.Evo
@@ -17,7 +21,8 @@ namespace ZXMAK2.Hardware.Evo
     /// This keeps command/data handshakes deterministic and avoids the race
     /// conditions of the old, unused background-thread prototype.
     /// </summary>
-    public sealed class NeoGsDevice : SoundDeviceBase, ISoundMixerConfiguration
+    public sealed class NeoGsDevice : SoundDeviceBase, ISoundMixerConfiguration,
+        IMediaStatusDevice, ISecureDigitalMediaStatus
     {
         private const string RomResourceName =
             "ZXMAK2.Hardware.Resources.NeoGS-1.11.rom";
@@ -81,6 +86,8 @@ namespace ZXMAK2.Hardware.Evo
         private int m_dacRight;
         private int m_mp3Left;
         private int m_mp3Right;
+        private NeoGsSdCommand m_openSdCommand;
+        private NeoGsSdCommand m_ejectSdCommand;
 
         public NeoGsDevice()
         {
@@ -129,11 +136,38 @@ namespace ZXMAK2.Hardware.Evo
             }
         }
 
+        public MediaStatusKind MediaStatusKind
+        {
+            get { return MediaStatusKind.SecureDigital; }
+        }
+
+        public bool IsMediaMounted
+        {
+            get { return IsSdCardMounted; }
+        }
+
+        public int SecureDigitalIndex
+        {
+            get { return 1; }
+        }
+
         public override void BusInit(IBusManager bmgr)
         {
             base.BusInit(bmgr);
             m_sandbox = bmgr.IsSandbox;
             m_hostMemory = bmgr.FindDevice<MemoryPentEvo>();
+            m_openSdCommand = new NeoGsSdCommand(
+                OpenSdCommandExecute,
+                SdCommandCanExecute,
+                "Open NeoGS SD image...",
+                MediaCommandAction.Load);
+            m_ejectSdCommand = new NeoGsSdCommand(
+                EjectSdCommandExecute,
+                SdCommandCanExecute,
+                "Eject NeoGS SD",
+                MediaCommandAction.Eject);
+            bmgr.AddCommandUi(m_openSdCommand);
+            bmgr.AddCommandUi(m_ejectSdCommand);
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00BB, HostReadStatus);
             bmgr.Events.SubscribeWrIo(0x00FF, 0x00BB, HostWriteCommand);
             bmgr.Events.SubscribeRdIo(0x00FF, 0x00B3, HostReadData);
@@ -204,6 +238,66 @@ namespace ZXMAK2.Hardware.Evo
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttribute(
                 itemNode, "sdImage", m_sdImageFileName ?? string.Empty);
+        }
+
+        private bool SdCommandCanExecute(object arg)
+        {
+            var viewResolver = Locator.Resolve<IResolver>("View");
+            return viewResolver.CheckAvailable<IOpenFileDialog>();
+        }
+
+        private void OpenSdCommandExecute(object arg)
+        {
+            if (!SdCommandCanExecute(arg))
+                return;
+            try
+            {
+                var viewResolver = Locator.Resolve<IResolver>("View");
+                var dialog = viewResolver.TryResolve<IOpenFileDialog>();
+                if (dialog == null)
+                    return;
+                dialog.CheckFileExists = true;
+                dialog.Filter =
+                    "Disk image file (*.img, *.ima, *.vhd)|*.img;*.ima;*.vhd";
+                dialog.Multiselect = false;
+                if (dialog.ShowDialog(arg) != DlgResult.OK)
+                    return;
+
+                var previous = m_sdImageFileName;
+                m_sdImageFileName = Path.GetFullPath(dialog.FileName);
+                RestoreConfiguredCard();
+                if (!IsSdCardMounted)
+                {
+                    m_sdImageFileName = previous;
+                    RestoreConfiguredCard();
+                    throw new IOException("Cannot mount NeoGS SD card image");
+                }
+                m_openSdCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>().Error(
+                    "Cannot open NeoGS SD Card image!\n\n{0}",
+                    ex.Message);
+            }
+        }
+
+        private void EjectSdCommandExecute(object arg)
+        {
+            try
+            {
+                m_sdImageFileName = string.Empty;
+                RestoreConfiguredCard();
+                m_ejectSdCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>().Error(
+                    "Cannot eject NeoGS SD Card!\n\n{0}",
+                    ex.Message);
+            }
         }
 
         public override void ResetState()
@@ -962,6 +1056,40 @@ namespace ZXMAK2.Hardware.Evo
             m_cpu.RST = true;
             m_cpu.ExecCycle();
             m_cpu.RST = false;
+        }
+
+        private sealed class NeoGsSdCommand : CommandDelegate, IMediaCommand
+        {
+            public NeoGsSdCommand(
+                Action<object> action,
+                Func<object, bool> canExecute,
+                string text,
+                MediaCommandAction mediaAction)
+                : base(action, canExecute, text)
+            {
+                MediaAction = mediaAction;
+            }
+
+            public MediaCommandKind MediaKind
+            {
+                get { return MediaCommandKind.SecureDigital; }
+            }
+
+            public MediaCommandAction MediaAction { get; private set; }
+
+            public int DriveIndex
+            {
+                get { return 1; }
+            }
+
+            public event EventHandler ExecutedSuccessfully;
+
+            public void NotifyExecutedSuccessfully()
+            {
+                var handler = ExecutedSuccessfully;
+                if (handler != null)
+                    handler(this, EventArgs.Empty);
+            }
         }
 
         private void InterruptAcknowledge()

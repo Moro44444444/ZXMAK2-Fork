@@ -14,7 +14,8 @@ using ZXMAK2.Mvvm;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class ZsdPentEvo : BusDeviceBase, IMediaStatusDevice
+    public class ZsdPentEvo : BusDeviceBase, IMediaStatusDevice,
+        ISecureDigitalMediaStatus
     {
         #region Fields
 
@@ -304,6 +305,11 @@ namespace ZXMAK2.Hardware.Evo
             }
         }
 
+        public int SecureDigitalIndex
+        {
+            get { return 0; }
+        }
+
         public string ConfiguredImageFileName
         {
             get { return configuredImageFileName ?? string.Empty; }
@@ -491,7 +497,7 @@ namespace ZXMAK2.Hardware.Evo
 
             public int DriveIndex
             {
-                get { return -1; }
+                get { return 0; }
             }
 
             public event EventHandler ExecutedSuccessfully;

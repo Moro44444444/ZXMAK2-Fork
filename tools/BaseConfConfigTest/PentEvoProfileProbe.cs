@@ -10,6 +10,7 @@ using ZXMAK2.Hardware.Evo;
 using ZXMAK2.Hardware.General;
 using ZXMAK2.Host.WinForms.Views;
 using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
+using ZXMAK2.Mvvm;
 
 
 internal static class PentEvoProfileProbe
@@ -20,6 +21,7 @@ internal static class PentEvoProfileProbe
         try
         {
             VerifyFloppyIndicators();
+            VerifySecureDigitalMenu();
             VerifyMachineSettingsNavigation();
 
             var bus = new BusManager();
@@ -150,6 +152,14 @@ internal static class PentEvoProfileProbe
 
     private static void VerifyFloppyIndicators()
     {
+        var zController = new ZsdPentEvo();
+        var sdStatus = (ZXMAK2.Host.Interfaces.ISecureDigitalMediaStatus)
+            zController;
+        Assert(sdStatus.SecureDigitalIndex == 0,
+            "Z-controller toolbar index is not 0");
+        Assert(!((IMediaStatusDevice)zController).IsMediaMounted,
+            "Empty Z-controller is reported as mounted");
+
         var controller = new FddController();
         controller.FDD[2].Present = true;
         Assert(!controller.IsDriveMounted(0),
@@ -212,6 +222,48 @@ internal static class PentEvoProfileProbe
         }
     }
 
+    private static void VerifySecureDigitalMenu()
+    {
+        using (var view = new MainView(null))
+        {
+            view.Add(new ProbeMediaCommand(
+                MediaCommandAction.Load, 0, "load-z"));
+            view.Add(new ProbeMediaCommand(
+                MediaCommandAction.Eject, 0, "eject-z"));
+            view.Add(new ProbeMediaCommand(
+                MediaCommandAction.Load, 1, "load-neogs"));
+            view.Add(new ProbeMediaCommand(
+                MediaCommandAction.Eject, 1, "eject-neogs"));
+
+            var items = GetField<ToolStripMenuItem[]>(
+                view, "_ejectSdMenuItems");
+            var states = GetField<bool?[]>(view, "_sdMountedStates");
+            Assert(items[0] != null && items[0].Text == "Eject Z-controller",
+                "Z-controller Eject menu item is missing or too long");
+            Assert(items[1] != null && items[1].Text == "Eject NeoGS",
+                "NeoGS Eject menu item is missing");
+            Assert(items[0].Image != null && items[1].Image != null,
+                "SD menu indicators are missing");
+            Assert(((Bitmap)items[0].Image).GetPixel(4, 4).R >
+                ((Bitmap)items[0].Image).GetPixel(4, 4).G,
+                "Empty Z-controller indicator is not red");
+
+            var update = typeof(MainView).GetMethod(
+                "UpdateMediaMenuIndicators",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert(update != null, "Shared media indicator updater is missing");
+            update.Invoke(null, new object[]
+            {
+                items,
+                states,
+                new Func<int, bool>(index => index == 1),
+            });
+            var neoGsGreen = ((Bitmap)items[1].Image).GetPixel(4, 4);
+            Assert(neoGsGreen.G > neoGsGreen.R,
+                "Mounted NeoGS indicator is not green");
+        }
+    }
+
     private sealed class ProbeMachine : IVirtualMachine
     {
         private readonly IBus m_bus;
@@ -232,6 +284,32 @@ internal static class PentEvoProfileProbe
         public void DoNmi() { }
         public void SaveConfig() { }
         public void Dispose() { }
+    }
+
+    private sealed class ProbeMediaCommand : CommandDelegate, IMediaCommand
+    {
+        public ProbeMediaCommand(
+            MediaCommandAction action,
+            int driveIndex,
+            string text)
+            : base(arg => { }, arg => true, text)
+        {
+            MediaAction = action;
+            DriveIndex = driveIndex;
+        }
+
+        public MediaCommandKind MediaKind
+        {
+            get { return MediaCommandKind.SecureDigital; }
+        }
+
+        public MediaCommandAction MediaAction { get; private set; }
+        public int DriveIndex { get; private set; }
+        public event EventHandler ExecutedSuccessfully
+        {
+            add { }
+            remove { }
+        }
     }
 
     private static T GetField<T>(object target, string name)

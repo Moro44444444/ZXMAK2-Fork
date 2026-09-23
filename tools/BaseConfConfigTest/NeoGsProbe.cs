@@ -7,7 +7,9 @@ using System.Threading;
 using System.Xml;
 using ZXMAK2.Engine;
 using ZXMAK2.Engine.Cpu;
+using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Hardware.Evo;
+using ZXMAK2.Host.Interfaces;
 
 
 internal static class NeoGsProbe
@@ -298,6 +300,11 @@ internal static class NeoGsProbe
             Invoke(card, "ResetCard");
             Assert(card.IsSdCardMounted,
                 "NeoGS microSD image did not mount");
+            var mediaStatus = (ISecureDigitalMediaStatus)card;
+            Assert(mediaStatus.SecureDigitalIndex == 1,
+                "NeoGS microSD toolbar index is not 1");
+            Assert(((IMediaStatusDevice)card).IsMediaMounted,
+                "NeoGS microSD toolbar state does not report mounted media");
 
             // Select SD (active low), issue CMD17 for sector zero, then let
             // module 2 consume the FE token, 512 bytes and both CRC bytes.

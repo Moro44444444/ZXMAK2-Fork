@@ -45,8 +45,13 @@ namespace ZXMAK2.Host.WinForms.Views
         private readonly List<ToolStripItemBindingAdapter> _mediaItemAdapters =
             new List<ToolStripItemBindingAdapter>();
         private bool? _quickBootAvailable;
-        private ISuccessCommand _openSdCommand;
-        private ISuccessCommand _ejectSdCommand;
+        private readonly ISuccessCommand[] _openSdCommands =
+            new ISuccessCommand[2];
+        private readonly ISuccessCommand[] _ejectSdCommands =
+            new ISuccessCommand[2];
+        private readonly ToolStripMenuItem[] _ejectSdMenuItems =
+            new ToolStripMenuItem[2];
+        private readonly bool?[] _sdMountedStates = new bool?[2];
         private ISuccessCommand _openHddCommand;
         private ISuccessCommand _ejectHddCommand;
         private readonly ISuccessCommand[] _openFddCommands = new ISuccessCommand[4];
@@ -277,14 +282,12 @@ namespace ZXMAK2.Host.WinForms.Views
                 .ForEach(arg => arg.Dispose());
             _deviceItemAdapters.Clear();
             menuTools.DropDownItems.Clear();
-            _openSdCommand = null;
-            _ejectSdCommand = null;
+            Array.Clear(_openSdCommands, 0, _openSdCommands.Length);
+            Array.Clear(_ejectSdCommands, 0, _ejectSdCommands.Length);
             _openHddCommand = null;
             _ejectHddCommand = null;
             Array.Clear(_openFddCommands, 0, _openFddCommands.Length);
             Array.Clear(_ejectFddCommands, 0, _ejectFddCommands.Length);
-            Array.Clear(_ejectFddMenuItems, 0, _ejectFddMenuItems.Length);
-            Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
             _mediaMountedStates.Clear();
             ClearMediaToolbarMenus();
             UpdateMediaToolbarStates();
@@ -320,13 +323,18 @@ namespace ZXMAK2.Host.WinForms.Views
             switch (mediaCommand.MediaKind)
             {
                 case MediaCommandKind.SecureDigital:
+                    if (mediaCommand.DriveIndex < 0 ||
+                        mediaCommand.DriveIndex >= _openSdCommands.Length)
+                    {
+                        return false;
+                    }
                     if (mediaCommand.MediaAction == MediaCommandAction.Load)
                     {
-                        _openSdCommand = mediaCommand;
+                        _openSdCommands[mediaCommand.DriveIndex] = mediaCommand;
                     }
                     else
                     {
-                        _ejectSdCommand = mediaCommand;
+                        _ejectSdCommands[mediaCommand.DriveIndex] = mediaCommand;
                     }
                     return true;
                 case MediaCommandKind.HardDisk:
@@ -405,6 +413,14 @@ namespace ZXMAK2.Host.WinForms.Views
                     item.Image = null;
                 }
             }
+            foreach (var item in _ejectSdMenuItems)
+            {
+                if (item != null && item.Image != null)
+                {
+                    item.Image.Dispose();
+                    item.Image = null;
+                }
+            }
             foreach (var button in _mediaButtons.Values)
             {
                 button.DropDownItems.Clear();
@@ -412,13 +428,27 @@ namespace ZXMAK2.Host.WinForms.Views
             }
             Array.Clear(_ejectFddMenuItems, 0, _ejectFddMenuItems.Length);
             Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
+            Array.Clear(_ejectSdMenuItems, 0, _ejectSdMenuItems.Length);
+            Array.Clear(_sdMountedStates, 0, _sdMountedStates.Length);
         }
 
         private void RebuildMediaToolbarMenus()
         {
             ClearMediaToolbarMenus();
-            AddMediaMenuItem(MediaStatusKind.SecureDigital, "Load SD", _openSdCommand, true);
-            AddMediaMenuItem(MediaStatusKind.SecureDigital, "Eject SD", _ejectSdCommand, true);
+            var sdNames = new[] { "Z-controller", "NeoGS" };
+            for (var sd = 0; sd < sdNames.Length; sd++)
+            {
+                AddMediaMenuItem(
+                    MediaStatusKind.SecureDigital,
+                    "Load " + sdNames[sd],
+                    _openSdCommands[sd],
+                    true);
+                _ejectSdMenuItems[sd] = AddMediaMenuItem(
+                    MediaStatusKind.SecureDigital,
+                    "Eject " + sdNames[sd],
+                    _ejectSdCommands[sd],
+                    true);
+            }
             AddMediaMenuItem(MediaStatusKind.HardDisk, "Load HDD", _openHddCommand, true);
             AddMediaMenuItem(MediaStatusKind.HardDisk, "Eject HDD", _ejectHddCommand, true);
             for (var drive = 0; drive < 4; drive++)
@@ -1210,21 +1240,42 @@ namespace ZXMAK2.Host.WinForms.Views
                 SetMediaToolbarImage(mediaKind, isMounted);
             }
             UpdateFloppyMenuIndicators(viewModel);
+            UpdateSecureDigitalMenuIndicators(viewModel);
+        }
+
+        private void UpdateSecureDigitalMenuIndicators(
+            IMainViewModel viewModel)
+        {
+            UpdateMediaMenuIndicators(
+                _ejectSdMenuItems,
+                _sdMountedStates,
+                index => viewModel != null &&
+                    viewModel.IsSecureDigitalMounted(index));
         }
 
         private void UpdateFloppyMenuIndicators(IMainViewModel viewModel)
         {
-            for (var drive = 0; drive < _ejectFddMenuItems.Length; drive++)
+            UpdateMediaMenuIndicators(
+                _ejectFddMenuItems,
+                _fddMountedStates,
+                index => viewModel != null && viewModel.IsFloppyMounted(index));
+        }
+
+        private static void UpdateMediaMenuIndicators(
+            ToolStripMenuItem[] menuItems,
+            bool?[] mountedStates,
+            Func<int, bool> getMountedState)
+        {
+            for (var index = 0; index < menuItems.Length; index++)
             {
-                var item = _ejectFddMenuItems[drive];
+                var item = menuItems[index];
                 if (item == null)
                     continue;
-                var isMounted = viewModel != null &&
-                    viewModel.IsFloppyMounted(drive);
-                if (_fddMountedStates[drive].HasValue &&
-                    _fddMountedStates[drive].Value == isMounted)
+                var isMounted = getMountedState(index);
+                if (mountedStates[index].HasValue &&
+                    mountedStates[index].Value == isMounted)
                     continue;
-                _fddMountedStates[drive] = isMounted;
+                mountedStates[index] = isMounted;
                 var oldImage = item.Image;
                 item.Image = CreateMediaMenuIndicator(isMounted);
                 if (oldImage != null)
@@ -1257,6 +1308,7 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             _mediaMountedStates.Clear();
             Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
+            Array.Clear(_sdMountedStates, 0, _sdMountedStates.Length);
             UpdateMediaToolbarStates();
         }
 
