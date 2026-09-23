@@ -70,6 +70,7 @@
     <Compile Include="Evo\FddPentEvo.cs" />
     <Compile Include="Evo\IdePentEvo.cs" />
     <Compile Include="Evo\MemoryPentEvo.cs" />
+    <Compile Include="Evo\NeoGsDevice.cs" />
     <Compile Include="Evo\UlaPentEvo.cs" />
     <Compile Include="Evo\ZsdPentEvo.cs" />
     <Compile Include="General\AY8910.cs" />
@@ -142,6 +143,11 @@
     <Compile Include="ZXBYTE\MemoryByte.cs" />
     <Compile Include="ZXBYTE\MemoryByte128.cs" />
     <Compile Include="ZXBYTE\UlaByte.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\NeoGS-1.11.rom">
+      <LogicalName>ZXMAK2.Hardware.Resources.NeoGS-1.11.rom</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ZipLib\ZipLib.csproj">

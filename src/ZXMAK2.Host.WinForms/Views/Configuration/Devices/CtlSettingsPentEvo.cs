@@ -26,29 +26,30 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
         private BusManager m_bmgr;
         private UlaPentEvo m_device;
+        private bool m_updatingSlots;
 
         public CtlSettingsPentEvo()
         {
             AutoScaleMode = AutoScaleMode.Font;
-            Size = new Size(584, 420);
+            Size = new Size(284, 332);
 
             var motherboard = new GroupBox();
             motherboard.Text = "ZX Evolution BaseConf:";
-            motherboard.Location = new Point(12, 10);
-            motherboard.Size = new Size(548, 150);
+            motherboard.Location = new Point(4, 4);
+            motherboard.Size = new Size(276, 130);
             motherboard.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Controls.Add(motherboard);
 
             var soundLabel = new Label();
             soundLabel.AutoSize = true;
-            soundLabel.Location = new Point(18, 31);
+            soundLabel.Location = new Point(10, 27);
             soundLabel.Text = "Internal sound:";
             motherboard.Controls.Add(soundLabel);
 
             m_internalSound = new ComboBox();
             m_internalSound.DropDownStyle = ComboBoxStyle.DropDownList;
-            m_internalSound.Location = new Point(139, 27);
-            m_internalSound.Size = new Size(265, 24);
+            m_internalSound.Location = new Point(108, 22);
+            m_internalSound.Size = new Size(158, 24);
             m_internalSound.Items.Add(new SoundChoice(
                 PentEvoInternalSound.AY8910CHRV,
                 "AY/YM (AY8910-CHRV)"));
@@ -60,51 +61,54 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
             var volumeLabel = new Label();
             volumeLabel.AutoSize = true;
-            volumeLabel.Location = new Point(18, 73);
+            volumeLabel.Location = new Point(10, 62);
             volumeLabel.Text = "AY/YM volume:";
             motherboard.Controls.Add(volumeLabel);
 
             m_ayVolume = new TrackBar();
             m_ayVolume.AutoSize = false;
-            m_ayVolume.Location = new Point(139, 65);
+            m_ayVolume.Location = new Point(108, 54);
             m_ayVolume.Maximum = 100;
             m_ayVolume.TickFrequency = 10;
-            m_ayVolume.Size = new Size(265, 35);
+            m_ayVolume.Size = new Size(115, 35);
             m_ayVolume.ValueChanged += AyVolume_ValueChanged;
             motherboard.Controls.Add(m_ayVolume);
 
             m_ayVolumeValue = new Label();
             m_ayVolumeValue.AutoSize = true;
-            m_ayVolumeValue.Location = new Point(416, 73);
+            m_ayVolumeValue.Location = new Point(228, 62);
             motherboard.Controls.Add(m_ayVolumeValue);
 
             var soundHint = new Label();
             soundHint.AutoSize = false;
-            soundHint.Location = new Point(18, 111);
-            soundHint.Size = new Size(512, 28);
+            soundHint.Location = new Point(10, 92);
+            soundHint.Size = new Size(256, 30);
             soundHint.Text = "One internal music device is active at a time. " +
                 "Beeper and Covox are separate onboard outputs.";
             motherboard.Controls.Add(soundHint);
 
             var zxBus = new GroupBox();
             zxBus.Text = "ZXBUS expansion slots:";
-            zxBus.Location = new Point(12, 172);
-            zxBus.Size = new Size(548, 184);
+            zxBus.Location = new Point(4, 140);
+            zxBus.Size = new Size(276, 188);
             zxBus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             Controls.Add(zxBus);
 
-            m_slot1Enabled = CreateSlotCheckBox(zxBus, "Slot 1 active", 24);
-            m_slot1Device = CreateSlotComboBox(zxBus, 139, 20);
-            m_slot2Enabled = CreateSlotCheckBox(zxBus, "Slot 2 active", 64);
-            m_slot2Device = CreateSlotComboBox(zxBus, 139, 60);
+            m_slot1Enabled = CreateSlotCheckBox(zxBus, "Slot 1", 24);
+            m_slot1Device = CreateSlotComboBox(zxBus, 86, 20);
+            m_slot2Enabled = CreateSlotCheckBox(zxBus, "Slot 2", 62);
+            m_slot2Device = CreateSlotComboBox(zxBus, 86, 58);
+            m_slot1Enabled.CheckedChanged += Slot1SelectionChanged;
+            m_slot1Device.SelectedIndexChanged += Slot1SelectionChanged;
+            m_slot2Enabled.CheckedChanged += Slot2SelectionChanged;
+            m_slot2Device.SelectedIndexChanged += Slot2SelectionChanged;
 
             var busHint = new Label();
             busHint.AutoSize = false;
-            busHint.Location = new Point(18, 106);
-            busHint.Size = new Size(512, 62);
-            busHint.Text = "The real ZX Evolution has two physical slots on the same " +
-                "ZXBUS. Device choices will appear here as their emulation is " +
-                "completed; currently both slots are empty.";
+            busHint.Location = new Point(10, 101);
+            busHint.Size = new Size(256, 72);
+            busHint.Text = "Both connectors share one ZXBUS. NeoGS Rev. C-VS " +
+                "uses official firmware 1.11 and can occupy either slot.";
             zxBus.Controls.Add(busHint);
         }
 
@@ -126,7 +130,15 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             SelectSlotDevice(m_slot1Device, m_device.ZxBusSlot1Device);
             m_slot2Enabled.Checked = m_device.ZxBusSlot2Enabled;
             SelectSlotDevice(m_slot2Device, m_device.ZxBusSlot2Device);
+            if (m_bmgr.FindDevice<NeoGsDevice>() != null &&
+                !IsNeoGsSelected(m_slot1Enabled, m_slot1Device) &&
+                !IsNeoGsSelected(m_slot2Enabled, m_slot2Device))
+            {
+                m_slot1Enabled.Checked = true;
+                SelectSlotDevice(m_slot1Device, PentEvoZxBusDevice.NeoGS);
+            }
             UpdateSoundControls();
+            UpdateSlotControls();
         }
 
         public override void Apply()
@@ -148,12 +160,32 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             }
 
             m_device.InternalSound = sound;
+            var slot1Device = GetSlotValue(m_slot1Device);
+            var slot2Device = GetSlotValue(m_slot2Device);
+            if (m_slot1Enabled.Checked && m_slot2Enabled.Checked &&
+                slot1Device == PentEvoZxBusDevice.NeoGS &&
+                slot2Device == PentEvoZxBusDevice.NeoGS)
+            {
+                m_slot2Enabled.Checked = false;
+                slot2Device = PentEvoZxBusDevice.Empty;
+                SelectSlotDevice(m_slot2Device, slot2Device);
+            }
+
+            var neoGsSelected =
+                (m_slot1Enabled.Checked &&
+                    slot1Device == PentEvoZxBusDevice.NeoGS) ||
+                (m_slot2Enabled.Checked &&
+                    slot2Device == PentEvoZxBusDevice.NeoGS);
+            var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
+            if (neoGsSelected && neoGs == null)
+                m_bmgr.Add(new NeoGsDevice());
+            else if (!neoGsSelected && neoGs != null)
+                m_bmgr.Remove(neoGs);
+
             m_device.ZxBusSlot1Enabled = m_slot1Enabled.Checked;
-            m_device.ZxBusSlot1Device =
-                ((SlotChoice)m_slot1Device.SelectedItem).Value;
+            m_device.ZxBusSlot1Device = slot1Device;
             m_device.ZxBusSlot2Enabled = m_slot2Enabled.Checked;
-            m_device.ZxBusSlot2Device =
-                ((SlotChoice)m_slot2Device.SelectedItem).Value;
+            m_device.ZxBusSlot2Device = slot2Device;
         }
 
         private static CheckBox CreateSlotCheckBox(
@@ -163,7 +195,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             var checkBox = new CheckBox();
             checkBox.AutoSize = true;
-            checkBox.Location = new Point(18, top);
+            checkBox.Location = new Point(10, top);
             checkBox.Text = text;
             parent.Controls.Add(checkBox);
             return checkBox;
@@ -177,10 +209,13 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             var comboBox = new ComboBox();
             comboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             comboBox.Location = new Point(left, top);
-            comboBox.Size = new Size(265, 24);
+            comboBox.Size = new Size(180, 24);
             comboBox.Items.Add(new SlotChoice(
                 PentEvoZxBusDevice.Empty,
                 "Empty"));
+            comboBox.Items.Add(new SlotChoice(
+                PentEvoZxBusDevice.NeoGS,
+                "NeoGS Rev. C-VS (ROM 1.11)"));
             comboBox.SelectedIndex = 0;
             parent.Controls.Add(comboBox);
             return comboBox;
@@ -224,6 +259,71 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private void AyVolume_ValueChanged(object sender, EventArgs e)
         {
             m_ayVolumeValue.Text = m_ayVolume.Value + "%";
+        }
+
+        private void Slot1SelectionChanged(object sender, EventArgs e)
+        {
+            NormalizeSlots(1);
+        }
+
+        private void Slot2SelectionChanged(object sender, EventArgs e)
+        {
+            NormalizeSlots(2);
+        }
+
+        private void NormalizeSlots(int changedSlot)
+        {
+            if (m_updatingSlots)
+                return;
+            m_updatingSlots = true;
+            try
+            {
+                if (IsNeoGsSelected(m_slot1Enabled, m_slot1Device) &&
+                    IsNeoGsSelected(m_slot2Enabled, m_slot2Device))
+                {
+                    if (changedSlot == 1)
+                    {
+                        m_slot2Enabled.Checked = false;
+                        SelectSlotDevice(
+                            m_slot2Device,
+                            PentEvoZxBusDevice.Empty);
+                    }
+                    else
+                    {
+                        m_slot1Enabled.Checked = false;
+                        SelectSlotDevice(
+                            m_slot1Device,
+                            PentEvoZxBusDevice.Empty);
+                    }
+                }
+                UpdateSlotControls();
+            }
+            finally
+            {
+                m_updatingSlots = false;
+            }
+        }
+
+        private void UpdateSlotControls()
+        {
+            m_slot1Device.Enabled = m_slot1Enabled.Checked;
+            m_slot2Device.Enabled = m_slot2Enabled.Checked;
+        }
+
+        private static bool IsNeoGsSelected(
+            CheckBox enabled,
+            ComboBox device)
+        {
+            return enabled.Checked &&
+                GetSlotValue(device) == PentEvoZxBusDevice.NeoGS;
+        }
+
+        private static PentEvoZxBusDevice GetSlotValue(ComboBox comboBox)
+        {
+            var choice = comboBox.SelectedItem as SlotChoice;
+            return choice != null
+                ? choice.Value
+                : PentEvoZxBusDevice.Empty;
         }
 
         private void UpdateSoundControls()

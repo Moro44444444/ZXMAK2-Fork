@@ -472,7 +472,8 @@ namespace ZXMAK2.Host.WinForms.Views
                 // BaseConf internal music is configured on the PENTEVO page.
                 // Keep it out of the generic device list to prevent two
                 // conflicting configuration surfaces for one onboard chip.
-                if (isPentEvo && device is AYCHRV)
+                if (isPentEvo &&
+                    (device is AYCHRV || device is NeoGsDevice))
                     continue;
                 try
                 {
@@ -776,7 +777,11 @@ namespace ZXMAK2.Host.WinForms.Views
                     if (m_workBus.FindDevice<UlaPentEvo>() != null)
                     {
                         wizard.AdditionalIgnoreTypes =
-                            new Type[] { typeof(AYCHRV) };
+                            new Type[]
+                            {
+                                typeof(AYCHRV),
+                                typeof(NeoGsDevice),
+                            };
                     }
                     if (wizard.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                     {

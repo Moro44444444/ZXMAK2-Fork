@@ -27,14 +27,17 @@ internal static class PentEvoProfileProbe
             bus.Add(ay);
 
             var control = new CtlSettingsPentEvo();
-            control.Size = new Size(584, 420);
+            control.Size = new Size(284, 332);
             control.Init(bus, null, ula);
             AssertLayoutFits(control);
             var sound = GetField<ComboBox>(control, "m_internalSound");
             var slot1 = GetField<CheckBox>(control, "m_slot1Enabled");
+            var slot1Device = GetField<ComboBox>(control, "m_slot1Device");
             var slot2 = GetField<CheckBox>(control, "m_slot2Enabled");
+            var slot2Device = GetField<ComboBox>(control, "m_slot2Device");
 
             sound.SelectedIndex = 1;
+            slot1Device.SelectedIndex = 1;
             slot1.Checked = true;
             slot2.Checked = false;
             control.Apply();
@@ -44,6 +47,23 @@ internal static class PentEvoProfileProbe
                 "None selection was not stored");
             Assert(ula.ZxBusSlot1Enabled, "Slot 1 state was not stored");
             Assert(!ula.ZxBusSlot2Enabled, "Slot 2 state was not stored");
+            Assert(
+                ula.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS,
+                "NeoGS slot choice was not stored");
+            Assert(
+                bus.FindDevice<NeoGsDevice>() != null,
+                "NeoGS was not added to the bus");
+
+            slot2Device.SelectedIndex = 1;
+            slot2.Checked = true;
+            Assert(
+                !slot1.Checked && slot1Device.SelectedIndex == 0,
+                "One NeoGS was allowed in both physical slots");
+            slot1Device.SelectedIndex = 1;
+            slot1.Checked = true;
+            Assert(
+                !slot2.Checked && slot2Device.SelectedIndex == 0,
+                "Moving NeoGS back to slot 1 did not clear slot 2");
 
             sound.SelectedIndex = 0;
             control.Apply();
@@ -62,14 +82,14 @@ internal static class PentEvoProfileProbe
                 node.Attributes["zxBusSlot1Enabled"].Value == "True",
                 "Slot 1 XML mismatch");
             Assert(
-                node.Attributes["zxBusSlot1Device"].Value == "Empty",
+                node.Attributes["zxBusSlot1Device"].Value == "NeoGS",
                 "Slot 1 device XML mismatch");
 
             var restored = new UlaPentEvo();
             restored.LoadConfigXml(node);
             Assert(restored.ZxBusSlot1Enabled, "Slot 1 XML did not reload");
             Assert(
-                restored.ZxBusSlot1Device == PentEvoZxBusDevice.Empty,
+                restored.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS,
                 "Slot 1 device XML did not reload");
 
             var init = typeof(CtlSettingsPentEvo).GetMethod(

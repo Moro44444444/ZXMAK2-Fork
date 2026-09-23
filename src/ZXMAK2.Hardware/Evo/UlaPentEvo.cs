@@ -18,6 +18,7 @@ namespace ZXMAK2.Hardware.Evo
     public enum PentEvoZxBusDevice
     {
         Empty,
+        NeoGS,
     }
 
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming
