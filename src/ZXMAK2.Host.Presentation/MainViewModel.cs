@@ -21,6 +21,11 @@ namespace ZXMAK2.Host.Presentation
 {
     public class MainViewModel : BaseViewModel, IMainViewModel
     {
+        private const int DefaultWindowWidth = 640;
+        private const int DefaultWindowHeight = 512;
+        private const int MinimumWindowWidth = 256;
+        private const int MinimumWindowHeight = 192;
+
         private readonly IResolver m_resolver;
         private readonly ISettingService m_settingService;
         private readonly IUserMessage m_userMessage;
@@ -55,7 +60,16 @@ namespace ZXMAK2.Host.Presentation
             _renderScaleMode = m_settingService.RenderScaleMode;
             _renderNoBorder = m_settingService.RenderNoBorder;
             _renderVideoFilter = m_settingService.RenderVideoFilter;
-            _renderSize = new Size(m_settingService.WindowWidth, m_settingService.WindowHeight);
+            var windowSize = NormalizeWindowSize(
+                m_settingService.WindowWidth,
+                m_settingService.WindowHeight);
+            if (windowSize.Width != m_settingService.WindowWidth ||
+                windowSize.Height != m_settingService.WindowHeight)
+            {
+                m_settingService.WindowWidth = windowSize.Width;
+                m_settingService.WindowHeight = windowSize.Height;
+            }
+            _renderSize = windowSize;
             CommandViewToolBar.Checked = m_settingService.IsToolBarVisible;
             CommandViewStatusBar.Checked = m_settingService.IsStatusBarVisible;
             CommandViewSmooth.Checked = m_settingService.RenderSmooth;
@@ -63,6 +77,15 @@ namespace ZXMAK2.Host.Presentation
             CommandViewDisplayIcon.Checked = m_settingService.RenderDisplayIcon;
             CommandViewDebugInfo.Checked = m_settingService.RenderDebugInfo;
             CommandViewNoBorder.Checked = _renderNoBorder;
+        }
+
+        private static Size NormalizeWindowSize(int width, int height)
+        {
+            if (width < MinimumWindowWidth || height < MinimumWindowHeight)
+            {
+                return new Size(DefaultWindowWidth, DefaultWindowHeight);
+            }
+            return new Size(width, height);
         }
 
         public void Dispose()

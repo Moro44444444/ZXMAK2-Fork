@@ -19,6 +19,8 @@ Changes:
 - CD/DVD button is the rightmost toolbar item and connects a Windows optical
   drive as BaseConf IDE Slave; Eject disconnects and clears it;
 - FDD, HDD, both SD cards, tape and optical media use matching indicators.
+- invalid saved window sizes are repaired to 640x512 on startup, preventing
+  the main window from collapsing after a hidden or interrupted launch.
 
 Проверки:
 - полная Release-пересборка;
