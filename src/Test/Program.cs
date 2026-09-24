@@ -506,11 +506,33 @@ namespace Test
             AddPortWrite(program, 0x00FF, 0x01);
 
             // Rev.A2 uses partial YM decoding. These aliases deliberately are
-            // not the canonical #FFFD/#BFFD pair. #F6 also starts the SAA
-            // clock only after the register preload above has completed.
+            // not the canonical #FFFD/#BFFD pair. Configure both physical
+            // YM2203 SSG sections with independent tones; a register-only
+            // check used by the older probe could pass with one silent chip.
             AddPortWrite(program, 0xD00D, 0xF6);
             AddPortWrite(program, 0xD00D, 0x00);
             AddPortWrite(program, 0x900D, 0x34);
+            AddPortWrite(program, 0xD00D, 0x01);
+            AddPortWrite(program, 0x900D, 0x01);
+            AddPortWrite(program, 0xD00D, 0x07);
+            AddPortWrite(program, 0x900D, 0x3E);
+            AddPortWrite(program, 0xD00D, 0x08);
+            AddPortWrite(program, 0x900D, 0x0F);
+
+            AddPortWrite(program, 0xD00D, 0xF7);
+            AddPortWrite(program, 0xD00D, 0x00);
+            AddPortWrite(program, 0x900D, 0x62);
+            AddPortWrite(program, 0xD00D, 0x01);
+            AddPortWrite(program, 0x900D, 0x02);
+            AddPortWrite(program, 0xD00D, 0x07);
+            AddPortWrite(program, 0x900D, 0x3E);
+            AddPortWrite(program, 0xD00D, 0x08);
+            AddPortWrite(program, 0x900D, 0x0F);
+
+            // Return to D1 with the SAA clock enabled, then select register 0
+            // and verify the D1 value through another partial port alias.
+            AddPortWrite(program, 0xD00D, 0xF6);
+            AddPortWrite(program, 0xD00D, 0x00);
             AddPortReadAndStore(program, 0xE00D, ymReadAddress);
 
             // Four physical DAC aliases and a GS command/status handshake.
@@ -534,7 +556,12 @@ namespace Test
             var ym = memory.RDMEM_DBG(ymReadAddress);
             var gsStatus = memory.RDMEM_DBG(gsStatusAddress);
             var saaAudio = false;
-            foreach (var renderer in board.SoundRenderers)
+            var soundRenderers = new System.Collections.Generic.List<ISoundRenderer>(board.SoundRenderers);
+            var ymD1Audio = soundRenderers.Count > 0 &&
+                GetStereoPeak(soundRenderers[0].AudioBuffer) > 0;
+            var ymD2Audio = soundRenderers.Count > 1 &&
+                GetStereoPeak(soundRenderers[1].AudioBuffer) > 0;
+            foreach (var renderer in soundRenderers)
             {
                 if (renderer.GetType().Name.IndexOf("Saa1099",
                     StringComparison.OrdinalIgnoreCase) < 0)
@@ -617,7 +644,8 @@ namespace Test
 
             machine.BusManager.Disconnect();
             machine.Dispose();
-            var passed = ym == 0x34 && (gsStatus & 1) != 0 &&
+            var passed = ym == 0x34 && ymD1Audio && ymD2Audio &&
+                (gsStatus & 1) != 0 &&
                 (gsReadyStatus & 1) == 0 &&
                 saaAudio && dacAudio && romLockPassed &&
                 autoPolicy && manualRejected && gsDacTimeline &&
@@ -625,11 +653,11 @@ namespace Test
             Console.ForegroundColor = passed
                 ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
-                "ZX-MultiSound A2: YM=#{0:X2}, GSSTAT=#{1:X2}->#{2:X2}, " +
-                "SAA-PRELOAD={3}, DAC={4}, ROM-LOCK={5}, AUTO={6}, " +
-                "MANUAL-GUARD={7}: {8}",
-                ym, gsStatus, gsReadyStatus, saaAudio, dacAudio,
-                romLockPassed, autoPolicy, manualRejected,
+                "ZX-MultiSound A2: YM=#{0:X2}, D1={1}, D2={2}, " +
+                "GSSTAT=#{3:X2}->#{4:X2}, SAA-PRELOAD={5}, DAC={6}, " +
+                "ROM-LOCK={7}, AUTO={8}, MANUAL-GUARD={9}: {10}",
+                ym, ymD1Audio, ymD2Audio, gsStatus, gsReadyStatus,
+                saaAudio, dacAudio, romLockPassed, autoPolicy, manualRejected,
                 passed ? "PASS" : "FAIL");
             Console.WriteLine(
                 "GS DAC timeline transitions={0}: {1}; " +

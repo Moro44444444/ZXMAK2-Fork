@@ -87,6 +87,29 @@ now preloads a complete voice before enabling the clock.  This exact sequence
 fails with the v44 adapter and passes with the correction.  The accepted TSFM
 port path, GS, SounDrive, NeoGS and UI are not changed.
 
+## v46 runtime-audio correction
+
+Real-composition acceptance after v45 disproved an important assumption in
+v44: passing isolated tone, noise and envelope vectors does not prove correct
+musical playback.  The large SAASound-inspired renderer rewrite introduced in
+v44 was therefore removed.  `TsFmSaa1099Renderer` is restored byte-for-byte
+to the user-accepted v42 implementation, with only the small external-clock
+gate required by the verified Rev.A2 bus behaviour retained.
+
+This deliberately separates two changes that v44/v45 had mixed together:
+
+- the v42 generator/mixer is the accepted audio baseline;
+- the v45 adapter rule remains authoritative: register writes work while the
+  external clock is stopped, but oscillator state does not advance.
+
+The MultiSound regression now writes different audible tone configurations to
+both physical YM2203 SSGs, D1 and D2, through the CPLD's partial port aliases
+and requires non-zero output from each renderer independently.  This closes a
+gap in the earlier probe, which could pass even if one half of TurboSound was
+silent.  Musical richness and SAA timbre still require runtime acceptance with
+known software; automated vectors are treated as regression guards, not as a
+quality oracle.
+
 The external SAM2695 MIDI synthesizer is a separate proprietary sound IC.
 The public board sources document its clock and its connection to a YM2203
 I/O port, but do not provide a synthesizer core, firmware or sample ROM that

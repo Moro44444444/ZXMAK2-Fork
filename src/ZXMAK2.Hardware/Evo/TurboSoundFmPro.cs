@@ -419,40 +419,20 @@ namespace ZXMAK2.Hardware.Evo
     {
         private const int ChannelCount = 6;
         private const double InternalClock = 8000000D / 256D;
-        // SAASound 3.5 uses 64x oversampling by default.  Keeping the same
-        // internal cadence avoids aliasing high SAA tones and preserves the
-        // measured noise/envelope behaviour before the 44.1-kHz output stage.
-        private const int Oversample = 64;
-        private static readonly int[,] EnvelopePdm =
-        {
-            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-            {0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8},
-            {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15},
-            {0,2,3,5,6,8,9,11,12,14,15,17,18,20,21,23},
-            {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30},
-            {0,3,5,8,10,13,15,18,20,23,25,28,30,33,35,38},
-            {0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45},
-            {0,4,7,11,14,18,21,25,28,32,35,39,42,46,49,53},
-        };
 
         private readonly byte[] m_registers = new byte[0x20];
         private readonly double[] m_toneCounter = new double[ChannelCount];
+        private readonly double[] m_toneFrequency = new double[ChannelCount];
         private readonly int[] m_toneLevel = new int[ChannelCount];
-        private readonly byte[] m_toneOffset = new byte[ChannelCount];
-        private readonly byte[] m_toneOctave = new byte[ChannelCount];
-        private readonly bool[] m_toneDataPending = new bool[ChannelCount];
-        private readonly bool[] m_toneIgnoreOffset = new bool[ChannelCount];
         private readonly double[] m_noiseCounter = new double[2];
-        private readonly uint[] m_noiseLfsr = { 1U, 1U };
-        private readonly int[] m_envelopePhase = new int[2];
-        private readonly int[] m_envelopePosition = new int[2];
-        private readonly int[] m_envelopeResolution = { 1, 1 };
+        private readonly int[] m_noiseLfsr = { 0x3FFFF, 0x3FFFF };
+        private readonly int[] m_envelopeStep = new int[2];
         private readonly int[] m_envelopeMode = new int[2];
+        private readonly int[] m_envelopeModePending = new int[2];
         private readonly bool[] m_envelopeReverse = new bool[2];
+        private readonly bool[] m_envelopeReversePending = new bool[2];
         private readonly bool[] m_envelopeExternal = new bool[2];
-        private readonly bool[] m_envelopeEnabled = new bool[2];
-        private readonly bool[] m_envelopeEnded = { true, true };
-        private readonly byte[] m_envelopePendingData = new byte[2];
+        private readonly bool[] m_envelopeExternalPending = new bool[2];
         private readonly bool[] m_envelopePending = new bool[2];
         private readonly int[,] m_envelopeValue = new int[2, 2];
 
@@ -460,7 +440,6 @@ namespace ZXMAK2.Hardware.Evo
         private int m_frameSamples;
         private int m_renderSample;
         private bool m_rendering;
-        private bool m_sync;
         private bool m_clockEnabled = true;
 
         public TsFmSaa1099Renderer()
@@ -477,17 +456,19 @@ namespace ZXMAK2.Hardware.Evo
             {
                 RenderToCurrentTime();
                 m_register = (byte)(value & 0x1F);
-                if (m_register == 0x18 && m_envelopeExternal[0])
-                    ClockEnvelope(0);
-                else if (m_register == 0x19 && m_envelopeExternal[1])
-                    ClockEnvelope(1);
+                if (m_register == 0x18 || m_register == 0x19)
+                {
+                    if (m_envelopeExternal[0])
+                        ClockEnvelope(0);
+                    if (m_envelopeExternal[1])
+                        ClockEnvelope(1);
+                }
             }
         }
 
         /// <summary>
-        /// Controls the external 8 MHz clock without disconnecting the SAA
-        /// register bus.  ZX-MultiSound can preload SAA registers while this
-        /// clock is stopped and start the generators afterwards with #F7.
+        /// Controls only the external 8 MHz clock.  The physical SAA register
+        /// bus remains writable while the clock is stopped on ZX-MultiSound.
         /// </summary>
         public bool ClockEnabled
         {
@@ -512,29 +493,22 @@ namespace ZXMAK2.Hardware.Evo
             RenderToCurrentTime();
             Array.Clear(m_registers, 0, m_registers.Length);
             Array.Clear(m_toneCounter, 0, m_toneCounter.Length);
-            for (var i = 0; i < m_toneLevel.Length; i++)
-                m_toneLevel[i] = 1;
-            Array.Clear(m_toneOffset, 0, m_toneOffset.Length);
-            Array.Clear(m_toneOctave, 0, m_toneOctave.Length);
-            Array.Clear(m_toneDataPending, 0, m_toneDataPending.Length);
-            Array.Clear(m_toneIgnoreOffset, 0, m_toneIgnoreOffset.Length);
+            Array.Clear(m_toneFrequency, 0, m_toneFrequency.Length);
+            Array.Clear(m_toneLevel, 0, m_toneLevel.Length);
             Array.Clear(m_noiseCounter, 0, m_noiseCounter.Length);
-            Array.Clear(m_envelopePhase, 0, m_envelopePhase.Length);
-            Array.Clear(m_envelopePosition, 0, m_envelopePosition.Length);
-            m_envelopeResolution[0] = m_envelopeResolution[1] = 1;
+            Array.Clear(m_envelopeStep, 0, m_envelopeStep.Length);
             Array.Clear(m_envelopeMode, 0, m_envelopeMode.Length);
+            Array.Clear(m_envelopeModePending, 0, m_envelopeModePending.Length);
             Array.Clear(m_envelopeReverse, 0, m_envelopeReverse.Length);
+            Array.Clear(m_envelopeReversePending, 0, m_envelopeReversePending.Length);
             Array.Clear(m_envelopeExternal, 0, m_envelopeExternal.Length);
-            Array.Clear(m_envelopeEnabled, 0, m_envelopeEnabled.Length);
-            m_envelopeEnded[0] = m_envelopeEnded[1] = true;
-            Array.Clear(m_envelopePendingData, 0, m_envelopePendingData.Length);
+            Array.Clear(m_envelopeExternalPending, 0, m_envelopeExternalPending.Length);
             Array.Clear(m_envelopePending, 0, m_envelopePending.Length);
-            m_noiseLfsr[0] = 1U;
-            m_noiseLfsr[1] = 1U;
+            m_noiseLfsr[0] = 0x3FFFF;
+            m_noiseLfsr[1] = 0x3FFFF;
             m_envelopeValue[0, 0] = m_envelopeValue[0, 1] = 16;
             m_envelopeValue[1, 0] = m_envelopeValue[1, 1] = 16;
             m_register = 0;
-            m_sync = false;
         }
 
         public override void BusConnect()
@@ -587,152 +561,111 @@ namespace ZXMAK2.Hardware.Evo
         {
             left = 0;
             right = 0;
-            if (!m_clockEnabled || m_sync ||
-                (m_registers[0x1C] & 1) == 0)
+            if (!m_clockEnabled)
                 return;
-
-            long accumulatedLeft = 0;
-            long accumulatedRight = 0;
-            double internalSampleRate =
-                Math.Max(1, SampleRate) * (double)Oversample;
-            for (int step = 0; step < Oversample; step++)
-            {
-                int subLeft;
-                int subRight;
-                RenderSubSample(
-                    internalSampleRate, out subLeft, out subRight);
-                accumulatedLeft += subLeft;
-                accumulatedRight += subRight;
-            }
-
-            int volume = Volume;
-            left = (int)(accumulatedLeft * 11.3D /
-                Oversample) * volume / 100;
-            right = (int)(accumulatedRight * 11.3D /
-                Oversample) * volume / 100;
-        }
-
-        private void RenderSubSample(
-            double sampleRate,
-            out int left,
-            out int right)
-        {
-            left = 0;
-            right = 0;
+            double sampleRate = Math.Max(1, SampleRate);
 
             for (int channel = 0; channel < ChannelCount; channel++)
             {
                 double frequency = GetToneFrequency(channel);
+                if (m_toneFrequency[channel] != frequency)
+                    m_toneFrequency[channel] = frequency;
                 m_toneCounter[channel] -= frequency;
                 while (m_toneCounter[channel] < 0D)
                 {
                     m_toneCounter[channel] += sampleRate;
                     m_toneLevel[channel] ^= 1;
-                    if (channel == 0)
-                        ClockNoiseFromTone(0);
-                    else if (channel == 3)
-                        ClockNoiseFromTone(1);
                     if (channel == 1 && !m_envelopeExternal[0])
                         ClockEnvelope(0);
                     if (channel == 4 && !m_envelopeExternal[1])
                         ClockEnvelope(1);
-                    ApplyPendingToneData(channel);
-                    frequency = GetToneFrequency(channel);
                 }
             }
 
-            ClockNoise(0, sampleRate);
-            ClockNoise(1, sampleRate);
+            double noise0 = GetNoiseFrequency(0);
+            double noise1 = GetNoiseFrequency(1);
+            ClockNoise(0, noise0, sampleRate);
+            ClockNoise(1, noise1, sampleRate);
+
+            if ((m_registers[0x1C] & 1) == 0)
+                return;
 
             for (int channel = 0; channel < ChannelCount; channel++)
             {
                 int group = channel / 3;
                 bool channelUsesEnvelope = (channel % 3) == 2 &&
                     IsEnvelopeEnabled(group);
+                int envelopeLeft = channelUsesEnvelope
+                    ? m_envelopeValue[group, 0]
+                    : 16;
+                int envelopeRight = channelUsesEnvelope
+                    ? m_envelopeValue[group, 1]
+                    : 16;
                 int amplitudeLeftNibble = m_registers[channel] & 0x0F;
                 int amplitudeRightNibble = (m_registers[channel] >> 4) & 0x0F;
-                bool toneEnabled = (m_registers[0x14] & (1 << channel)) != 0;
-                bool noiseEnabled = (m_registers[0x15] & (1 << channel)) != 0;
-                int tone = m_toneLevel[channel] & 1;
-                int noise = (int)(m_noiseLfsr[group] & 1U);
-                int intermediate;
-                if (toneEnabled && noiseEnabled)
-                    intermediate = tone * (2 - noise);
-                else if (toneEnabled)
-                    intermediate = tone * 2;
-                else if (noiseEnabled)
-                    intermediate = noise * 2;
-                else
-                    intermediate = 0;
-
-                if (channelUsesEnvelope)
+                if (channelUsesEnvelope &&
+                    (m_registers[0x18 + group] & 0x10) != 0)
                 {
-                    int envelopeLeft = m_envelopeValue[group, 0];
-                    int envelopeRight = m_envelopeValue[group, 1];
-                    left += EffectiveEnvelopeAmplitude(
-                        amplitudeLeftNibble >> 1, envelopeLeft) *
-                        (2 - intermediate);
-                    right += EffectiveEnvelopeAmplitude(
-                        amplitudeRightNibble >> 1, envelopeRight) *
-                        (2 - intermediate);
+                    amplitudeLeftNibble &= 0x0E;
+                    amplitudeRightNibble &= 0x0E;
                 }
-                else
+                int amplitudeLeft = amplitudeLeftNibble * 32767 / 16;
+                int amplitudeRight = amplitudeRightNibble * 32767 / 16;
+
+                bool noiseEnabled = (m_registers[0x15] & (1 << channel)) != 0;
+                if (noiseEnabled && (m_noiseLfsr[group] & 1) != 0)
                 {
-                    left += amplitudeLeftNibble * intermediate * 16;
-                    right += amplitudeRightNibble * intermediate * 16;
+                    left -= amplitudeLeft * envelopeLeft / 16 / 2;
+                    right -= amplitudeRight * envelopeRight / 16 / 2;
+                }
+
+                bool toneEnabled = (m_registers[0x14] & (1 << channel)) != 0;
+                if (toneEnabled && m_toneLevel[channel] != 0)
+                {
+                    left += amplitudeLeft * envelopeLeft / 16;
+                    right += amplitudeRight * envelopeRight / 16;
+                }
+                else if (!toneEnabled &&
+                    (channel == 2 || channel == 5) &&
+                    channelUsesEnvelope)
+                {
+                    left += amplitudeLeft * envelopeLeft / 16;
+                    right += amplitudeRight * envelopeRight / 16;
                 }
             }
 
+            int volume = Volume;
+            left = left / ChannelCount * volume / 100;
+            right = right / ChannelCount * volume / 100;
         }
 
-        private void ClockNoise(int generator, double sampleRate)
+        private void ClockNoise(int generator, double frequency, double sampleRate)
         {
-            int parameter = (m_registers[0x16] >> (generator * 4)) & 3;
-            if (parameter == 3)
-                return;
-            double frequency = InternalClock / (1 << parameter);
             m_noiseCounter[generator] -= frequency;
             while (m_noiseCounter[generator] < 0D)
             {
                 m_noiseCounter[generator] += sampleRate;
-                AdvanceNoise(generator);
+                int lfsr = m_noiseLfsr[generator];
+                bool same = ((lfsr & 0x4000) == 0) == ((lfsr & 0x0040) == 0);
+                m_noiseLfsr[generator] = ((lfsr << 1) | (same ? 1 : 0)) & 0x3FFFF;
             }
-        }
-
-        private void ClockNoiseFromTone(int generator)
-        {
-            int parameter = (m_registers[0x16] >> (generator * 4)) & 3;
-            if (parameter == 3)
-                AdvanceNoise(generator);
-        }
-
-        private void AdvanceNoise(int generator)
-        {
-            uint value = m_noiseLfsr[generator];
-            m_noiseLfsr[generator] = (value & 1U) != 0
-                ? (value >> 1) ^ 0x20400U
-                : value >> 1;
         }
 
         private double GetToneFrequency(int channel)
         {
-            return (InternalClock * (1 << m_toneOctave[channel])) /
-                (511D - m_toneOffset[channel]);
+            int octaveRegister = 0x10 + channel / 2;
+            int shift = (channel & 1) * 4;
+            int octave = (m_registers[octaveRegister] >> shift) & 7;
+            return (InternalClock * (1 << octave)) /
+                (511D - m_registers[0x08 + channel]);
         }
 
-        private void ApplyPendingToneData(int channel)
+        private double GetNoiseFrequency(int generator)
         {
-            if (!m_toneDataPending[channel])
-                return;
-            int shift = (channel & 1) * 4;
-            m_toneOctave[channel] = (byte)
-                ((m_registers[0x10 + channel / 2] >> shift) & 7);
-            if (!m_toneIgnoreOffset[channel])
-            {
-                m_toneOffset[channel] = m_registers[0x08 + channel];
-                m_toneDataPending[channel] = false;
-            }
-            m_toneIgnoreOffset[channel] = false;
+            int parameter = (m_registers[0x16] >> (generator * 4)) & 3;
+            if (parameter == 3)
+                return GetToneFrequency(generator * 3);
+            return InternalClock * 2D / (1 << parameter);
         }
 
         private void WriteRegister(int index, byte value)
@@ -741,229 +674,92 @@ namespace ZXMAK2.Hardware.Evo
                 return;
             m_registers[index] = value;
 
-            if (index >= 0x08 && index <= 0x0D)
-            {
-                int channel = index - 0x08;
-                if (m_sync)
-                {
-                    m_toneOffset[channel] = value;
-                    int shift = (channel & 1) * 4;
-                    m_toneOctave[channel] = (byte)
-                        ((m_registers[0x10 + channel / 2] >> shift) & 7);
-                    m_toneDataPending[channel] = false;
-                    m_toneIgnoreOffset[channel] = false;
-                }
-                else
-                {
-                    m_toneDataPending[channel] = true;
-                    int shift = (channel & 1) * 4;
-                    int nextOctave =
-                        (m_registers[0x10 + channel / 2] >> shift) & 7;
-                    if (nextOctave == m_toneOctave[channel])
-                        m_toneIgnoreOffset[channel] = true;
-                }
-            }
-            else if (index >= 0x10 && index <= 0x12)
-            {
-                int first = (index - 0x10) * 2;
-                SetToneOctave(first, value & 7);
-                SetToneOctave(first + 1, (value >> 4) & 7);
-            }
-            else if (index == 0x18 || index == 0x19)
+            if (index == 0x18 || index == 0x19)
             {
                 int envelope = index - 0x18;
-                SetEnvelopeControl(envelope, value);
-            }
-            else if (index == 0x1C)
-            {
-                bool sync = (value & 2) != 0;
-                if (sync != m_sync)
+                if ((value & 0x80) == 0)
+                    m_envelopeStep[envelope] = 0;
+                m_envelopeReversePending[envelope] = (value & 1) != 0;
+                m_envelopeModePending[envelope] = (value >> 1) & 7;
+                m_envelopeExternalPending[envelope] = (value & 0x20) != 0;
+                m_envelopePending[envelope] = true;
+                if ((value & 0x80) == 0)
                 {
-                    m_sync = sync;
-                    if (sync)
-                    {
-                        Array.Clear(m_toneCounter, 0, m_toneCounter.Length);
-                        Array.Clear(m_noiseCounter, 0, m_noiseCounter.Length);
-                        for (int channel = 0; channel < ChannelCount; channel++)
-                        {
-                            m_toneLevel[channel] = 1;
-                            int shift = (channel & 1) * 4;
-                            m_toneOctave[channel] = (byte)
-                                ((m_registers[0x10 + channel / 2] >> shift) & 7);
-                            m_toneOffset[channel] =
-                                m_registers[0x08 + channel];
-                            m_toneDataPending[channel] = false;
-                            m_toneIgnoreOffset[channel] = false;
-                        }
-                    }
+                    m_envelopeValue[envelope, 0] = 16;
+                    m_envelopeValue[envelope, 1] = 16;
                 }
             }
-        }
-
-        private void SetToneOctave(int channel, int octave)
-        {
-            if (m_sync)
+            else if (index == 0x1C && (value & 2) != 0)
             {
-                m_toneOctave[channel] = (byte)octave;
-                m_toneOffset[channel] = m_registers[0x08 + channel];
-                m_toneDataPending[channel] = false;
-                m_toneIgnoreOffset[channel] = false;
-            }
-            else
-            {
-                m_toneDataPending[channel] = true;
-                m_toneIgnoreOffset[channel] = false;
+                Array.Clear(m_toneCounter, 0, m_toneCounter.Length);
+                Array.Clear(m_toneLevel, 0, m_toneLevel.Length);
             }
         }
 
         private bool IsEnvelopeEnabled(int generator)
         {
-            return m_envelopeEnabled[generator];
+            return (m_registers[0x18 + generator] & 0x80) != 0;
         }
 
         private void ClockEnvelope(int generator)
         {
-            if (!m_envelopeEnabled[generator])
+            if (!IsEnvelopeEnabled(generator))
             {
-                m_envelopeEnded[generator] = true;
-                m_envelopePhase[generator] = 0;
-                m_envelopePosition[generator] = 0;
-                return;
-            }
-
-            if (m_envelopeEnded[generator])
-                return;
-
-            m_envelopePosition[generator] += m_envelopeResolution[generator];
-            bool acceptPending = false;
-            if (m_envelopePosition[generator] >= 16)
-            {
-                m_envelopePhase[generator]++;
-                int phases = IsTwoPhaseEnvelope(m_envelopeMode[generator]) ? 2 : 1;
-                if (m_envelopePhase[generator] >= phases)
-                {
-                    acceptPending = true;
-                    if (IsLoopingEnvelope(m_envelopeMode[generator]))
-                    {
-                        m_envelopePhase[generator] = 0;
-                        m_envelopePosition[generator] -= 16;
-                    }
-                    else
-                    {
-                        m_envelopeEnded[generator] = true;
-                    }
-                }
-                else
-                {
-                    m_envelopePosition[generator] -= 16;
-                }
-            }
-
-            if (acceptPending && m_envelopePending[generator])
-            {
-                ApplyEnvelopeData(
-                    generator, m_envelopePendingData[generator]);
-                m_envelopePending[generator] = false;
-            }
-            else
-            {
-                UpdateEnvelopeLevels(generator);
-            }
-        }
-
-        private void SetEnvelopeControl(int generator, byte data)
-        {
-            bool enabled = (data & 0x80) != 0;
-            if (!enabled && !m_envelopeEnabled[generator])
-                return;
-            m_envelopeEnabled[generator] = enabled;
-            if (!enabled)
-            {
-                m_envelopeEnded[generator] = true;
                 m_envelopeValue[generator, 0] = 16;
                 m_envelopeValue[generator, 1] = 16;
                 return;
             }
 
-            int resolution = (data & 0x10) != 0 ? 2 : 1;
-            if (m_envelopeResolution[generator] == 1 && resolution == 2)
-                m_envelopePosition[generator] &= 0x0E;
-            else if (m_envelopeResolution[generator] == 2 && resolution == 1)
-                m_envelopePosition[generator] |= 1;
-            m_envelopeResolution[generator] = resolution;
+            int step = ((m_envelopeStep[generator] + 1) & 0x3F) |
+                (m_envelopeStep[generator] & 0x20);
+            m_envelopeStep[generator] = step;
 
-            if (m_envelopeEnded[generator])
+            if (m_envelopePending[generator] && EnvelopeBoundary(m_envelopeMode[generator], step))
             {
-                ApplyEnvelopeData(generator, data);
+                m_envelopeMode[generator] = m_envelopeModePending[generator];
+                m_envelopeReverse[generator] = m_envelopeReversePending[generator];
+                m_envelopeExternal[generator] = m_envelopeExternalPending[generator];
                 m_envelopePending[generator] = false;
+                step = 1;
+                m_envelopeStep[generator] = step;
             }
-            else
-            {
-                m_envelopePending[generator] = true;
-                m_envelopePendingData[generator] = data;
-                UpdateEnvelopeLevels(generator);
-            }
-        }
 
-        private void ApplyEnvelopeData(int generator, byte data)
-        {
-            m_envelopePhase[generator] = 0;
-            m_envelopePosition[generator] = 0;
-            m_envelopeMode[generator] = (data >> 1) & 7;
-            m_envelopeReverse[generator] = (data & 1) != 0;
-            m_envelopeExternal[generator] = (data & 0x20) != 0;
-            m_envelopeResolution[generator] = (data & 0x10) != 0 ? 2 : 1;
-            m_envelopeEnabled[generator] = (data & 0x80) != 0;
-            m_envelopeEnded[generator] = !m_envelopeEnabled[generator];
-            UpdateEnvelopeLevels(generator);
-        }
-
-        private void UpdateEnvelopeLevels(int generator)
-        {
-            int maximum = m_envelopeResolution[generator] == 2 ? 14 : 15;
-            int value;
-            if (m_envelopeEnded[generator] &&
-                !IsLoopingEnvelope(m_envelopeMode[generator]))
-            {
-                value = 0;
-            }
-            else
-            {
-                int position = m_envelopePosition[generator] & 15;
-                switch (m_envelopeMode[generator])
-                {
-                    case 0: value = 0; break;
-                    case 1: value = maximum; break;
-                    case 2:
-                    case 3: value = 15 - position; break;
-                    case 4:
-                    case 5:
-                        value = m_envelopePhase[generator] == 0
-                            ? position : 15 - position;
-                        break;
-                    default: value = position; break;
-                }
-                if (m_envelopeResolution[generator] == 2)
-                    value &= 0x0E;
-            }
+            int value = EnvelopeValue(m_envelopeMode[generator], step);
+            if ((m_registers[0x18 + generator] & 0x10) != 0)
+                value &= 0x0E;
             m_envelopeValue[generator, 0] = value;
             m_envelopeValue[generator, 1] = m_envelopeReverse[generator]
-                ? maximum - value : value;
+                ? (15 - value) & 0x0F
+                : value;
         }
 
-        private static bool IsTwoPhaseEnvelope(int mode)
+        private static bool EnvelopeBoundary(int mode, int step)
         {
-            return mode == 4 || mode == 5;
+            if ((mode == 1 || mode == 3 || mode == 7) &&
+                step != 0 && (step & 0x0F) == 0)
+                return true;
+            if (mode == 5 && step != 0 && (step & 0x1F) == 0)
+                return true;
+            if ((mode == 0 || mode == 2 || mode == 6) && step > 0x0F)
+                return true;
+            return mode == 4 && step > 0x1F;
         }
 
-        private static bool IsLoopingEnvelope(int mode)
+        private static int EnvelopeValue(int mode, int step)
         {
-            return mode == 1 || mode == 3 || mode == 5 || mode == 7;
-        }
-
-        private static int EffectiveEnvelopeAmplitude(int ampDiv2, int envelope)
-        {
-            return EnvelopePdm[ampDiv2 & 7, envelope & 15] * 4;
+            switch (mode & 7)
+            {
+                case 0: return 0;
+                case 1: return 15;
+                case 2: return step < 16 ? 15 - step : 0;
+                case 3: return 15 - (step & 15);
+                case 4:
+                    return step < 16 ? step : step < 32 ? 31 - step : 0;
+                case 5:
+                    return (step & 31) < 16 ? step & 15 : 15 - (step & 15);
+                case 6: return step < 16 ? step : 0;
+                default: return step & 15;
+            }
         }
 
         private static short Clamp16(int value)
