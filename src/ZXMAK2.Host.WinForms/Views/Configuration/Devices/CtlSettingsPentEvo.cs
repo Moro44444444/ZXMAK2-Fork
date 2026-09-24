@@ -68,13 +68,16 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_internalSound.Items.Add(new SoundChoice(
                 PentEvoInternalSound.None,
                 "None"));
+            m_internalSound.Items.Add(new SoundChoice(
+                PentEvoInternalSound.TurboSoundFmPro,
+                "TSFM Pro Rev. C"));
             m_internalSound.SelectedIndexChanged += InternalSound_SelectedIndexChanged;
             motherboard.Controls.Add(m_internalSound);
 
             var volumeLabel = new Label();
             volumeLabel.AutoSize = true;
             volumeLabel.Location = new Point(10, 62);
-            volumeLabel.Text = "AY/YM volume:";
+            volumeLabel.Text = "Music volume:";
             motherboard.Controls.Add(volumeLabel);
 
             m_ayVolume = new TrackBar();
@@ -131,14 +134,18 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_device = device;
 
             var ay = m_bmgr.FindDevice<AYCHRV>();
-            var actualSound = ay != null
-                ? PentEvoInternalSound.AY8910CHRV
-                : PentEvoInternalSound.None;
+            var tsfm = m_bmgr.FindDevice<TurboSoundFmPro>();
+            var actualSound = tsfm != null
+                ? PentEvoInternalSound.TurboSoundFmPro
+                : ay != null
+                    ? PentEvoInternalSound.AY8910CHRV
+                    : PentEvoInternalSound.None;
             SelectSound(actualSound);
 
             m_ayVolume.Value = Math.Max(
                 0,
-                Math.Min(100, ay != null ? ay.Volume : 100));
+                Math.Min(100,
+                    tsfm != null ? tsfm.Volume : ay != null ? ay.Volume : 100));
             m_slot1Enabled.Checked = m_device.ZxBusSlot1Enabled;
             SelectSlotDevice(m_slot1Device, m_device.ZxBusSlot1Device);
             m_slot2Enabled.Checked = m_device.ZxBusSlot2Enabled;
@@ -158,8 +165,14 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             var sound = ((SoundChoice)m_internalSound.SelectedItem).Value;
             var ay = m_bmgr.FindDevice<AYCHRV>();
+            var tsfm = m_bmgr.FindDevice<TurboSoundFmPro>();
             if (sound == PentEvoInternalSound.AY8910CHRV)
             {
+                if (tsfm != null)
+                {
+                    m_bmgr.Remove(tsfm);
+                    tsfm = null;
+                }
                 if (ay == null)
                 {
                     ay = new AYCHRV();
@@ -167,9 +180,26 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 }
                 ay.Volume = m_ayVolume.Value;
             }
-            else if (ay != null)
+            else if (sound == PentEvoInternalSound.TurboSoundFmPro)
             {
-                m_bmgr.Remove(ay);
+                if (ay != null)
+                {
+                    m_bmgr.Remove(ay);
+                    ay = null;
+                }
+                if (tsfm == null)
+                {
+                    tsfm = new TurboSoundFmPro();
+                    m_bmgr.Add(tsfm);
+                }
+                tsfm.Volume = m_ayVolume.Value;
+            }
+            else
+            {
+                if (ay != null)
+                    m_bmgr.Remove(ay);
+                if (tsfm != null)
+                    m_bmgr.Remove(tsfm);
             }
 
             m_device.InternalSound = sound;
@@ -348,7 +378,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             var choice = m_internalSound.SelectedItem as SoundChoice;
             var enabled = choice != null &&
-                choice.Value == PentEvoInternalSound.AY8910CHRV;
+                choice.Value != PentEvoInternalSound.None;
             m_ayVolume.Enabled = enabled;
             m_ayVolumeValue.Enabled = enabled;
             AyVolume_ValueChanged(this, EventArgs.Empty);

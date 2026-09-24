@@ -86,6 +86,7 @@
     <Compile Include="Interfaces\IRzxState.cs" />
     <Compile Include="Interfaces\ISerializeManager.cs" />
     <Compile Include="Interfaces\ISoundRenderer.cs" />
+    <Compile Include="Interfaces\IAdditionalSoundRenderers.cs" />
     <Compile Include="Interfaces\ITapeDevice.cs" />
     <Compile Include="Interfaces\IUlaDevice.cs" />
     <Compile Include="Interfaces\IUlaRenderer.cs" />

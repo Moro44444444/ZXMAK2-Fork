@@ -257,7 +257,12 @@ namespace ZXMAK2.Engine
             {
                 m_deviceList[i].BusOrder = i;
             }
-            var soundRenderers = m_deviceList.OfType<ISoundRenderer>();
+            var soundRenderers = m_deviceList
+                .OfType<ISoundRenderer>()
+                .Concat(m_deviceList
+                    .OfType<IAdditionalSoundRenderers>()
+                    .SelectMany(device => device.SoundRenderers))
+                .ToArray();
             foreach (var soundRenderer in soundRenderers)
             {
                 soundRenderer.SampleRate = SampleRate;

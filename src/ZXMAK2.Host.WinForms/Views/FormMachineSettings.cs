@@ -506,7 +506,9 @@ namespace ZXMAK2.Host.WinForms.Views
                 // Keep it out of the generic device list to prevent two
                 // conflicting configuration surfaces for one onboard chip.
                 if (isPentEvo &&
-                    (device is AYCHRV || device is NeoGsDevice))
+                    (device is AYCHRV ||
+                        device is TurboSoundFmPro ||
+                        device is NeoGsDevice))
                     continue;
                 try
                 {
@@ -872,6 +874,7 @@ namespace ZXMAK2.Host.WinForms.Views
                             new Type[]
                             {
                                 typeof(AYCHRV),
+                                typeof(TurboSoundFmPro),
                                 typeof(NeoGsDevice),
                             };
                     }

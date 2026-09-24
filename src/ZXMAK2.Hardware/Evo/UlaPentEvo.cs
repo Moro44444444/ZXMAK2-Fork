@@ -13,6 +13,7 @@ namespace ZXMAK2.Hardware.Evo
     {
         None,
         AY8910CHRV,
+        TurboSoundFmPro,
     }
 
     public enum PentEvoZxBusDevice
@@ -70,9 +71,12 @@ namespace ZXMAK2.Hardware.Evo
             // The device list is the executable configuration. Keep the
             // descriptive PENTEVO setting synchronized when an older machine
             // profile does not contain the new XML attribute yet.
-            InternalSound = bmgr.FindDevice<AYCHRV>() != null
-                ? PentEvoInternalSound.AY8910CHRV
-                : PentEvoInternalSound.None;
+            if (bmgr.FindDevice<TurboSoundFmPro>() != null)
+                InternalSound = PentEvoInternalSound.TurboSoundFmPro;
+            else if (bmgr.FindDevice<AYCHRV>() != null)
+                InternalSound = PentEvoInternalSound.AY8910CHRV;
+            else
+                InternalSound = PentEvoInternalSound.None;
             bmgr.Events.SubscribeIntAck(BusIntAcknowledge);
         }
 

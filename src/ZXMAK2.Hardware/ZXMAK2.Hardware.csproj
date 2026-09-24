@@ -69,6 +69,7 @@
     <Compile Include="Clone\ZebestUla.cs" />
     <Compile Include="DeviceExample.cs" />
     <Compile Include="Evo\AYCHRV.cs" />
+    <Compile Include="Evo\TurboSoundFmPro.cs" />
     <Compile Include="Evo\BeeperPentEvo.cs" />
     <Compile Include="Evo\CmosPentEvo.cs" />
     <Compile Include="Evo\FddPentEvo.cs" />

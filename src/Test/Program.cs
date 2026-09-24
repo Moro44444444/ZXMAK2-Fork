@@ -33,6 +33,11 @@ namespace Test
                 runCpu();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/tsfm")
+            {
+                TestTurboSoundFmPro();
+                return;
+            }
 
 			SanityUla("NOP        ", new ZXMAK2.Hardware.Spectrum.UlaSpectrum48_Early(), new byte[] { 0x00 }, s_patternUla48_Early_NOP);
 			SanityUla("DJNZ       ", new ZXMAK2.Hardware.Spectrum.UlaSpectrum48_Early(), new byte[] { 0x10, 0x00 }, s_patternUla48_Early_DJNZ);
@@ -191,6 +196,163 @@ namespace Test
                 machine.Dispose();
                 throw;
             }
+        }
+
+        private static void TestTurboSoundFmPro()
+        {
+            IMemoryDevice memory = new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.TurboSoundFmPro();
+            var machine = GetTestMachine(Resources.machines_test);
+
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            machine.BusManager.Connect();
+
+            const ushort programAddress = 0x4000;
+            const ushort chip0ReadAddress = 0x4300;
+            const ushort chip1ReadAddress = 0x4301;
+            const ushort statusAddress = 0x4302;
+            var program = new System.Collections.Generic.List<byte>();
+
+            // D1 and D2 are selected by the low bit of the official
+            // 1111xxxx CPLD configuration byte.
+            AddPortWrite(program, 0xFFFD, 0xFE);
+            AddAyWrite(program, 0x00, 0x20);
+            AddPortWrite(program, 0xFFFD, 0x00);
+            AddPortReadAndStore(program, 0xFFFD, chip0ReadAddress);
+
+            AddPortWrite(program, 0xFFFD, 0xFF);
+            AddAyWrite(program, 0x00, 0x40);
+            AddPortWrite(program, 0xFFFD, 0x00);
+            AddPortReadAndStore(program, 0xFFFD, chip1ReadAddress);
+
+            // FM enabled, register read disabled: #FFFD returns YM status.
+            AddPortWrite(program, 0xFFFD, 0xF9);
+            AddAyWrite(program, 0xA0, 0x69);
+            AddAyWrite(program, 0xA4, 0x22);
+            AddAyWrite(program, 0xB0, 0x07);
+            AddAyWrite(program, 0x30, 0x01);
+            AddAyWrite(program, 0x34, 0x01);
+            AddAyWrite(program, 0x38, 0x01);
+            AddAyWrite(program, 0x3C, 0x01);
+            AddAyWrite(program, 0x50, 0x1F);
+            AddAyWrite(program, 0x54, 0x1F);
+            AddAyWrite(program, 0x58, 0x1F);
+            AddAyWrite(program, 0x5C, 0x1F);
+            AddAyWrite(program, 0x28, 0xF0);
+            AddPortReadAndStore(program, 0xFFFD, statusAddress);
+
+            // SAA is selected by bit 3=0.  Its register and data cycles must
+            // use the same #FFFD/#BFFD pair, not the unrelated #1FF/#FF pair.
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0xFF);
+            AddAyWrite(program, 0x08, 0x80);
+            AddAyWrite(program, 0x10, 0x03);
+            AddAyWrite(program, 0x14, 0x01);
+            AddAyWrite(program, 0x1C, 0x01);
+
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(programAddress + i), program[i]);
+
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = programAddress;
+            while (machine.CPU.regs.PC < programAddress + program.Count)
+                machine.DebugStepInto();
+            machine.ExecuteFrame();
+
+            bool hasAudio = false;
+            foreach (uint sample in machine.BusManager.SoundFrame.GetBuffer())
+            {
+                if (sample != 0)
+                {
+                    hasAudio = true;
+                    break;
+                }
+            }
+
+            var sourceAudio = new System.Collections.Generic.List<bool>();
+            foreach (var renderer in board.SoundRenderers)
+            {
+                bool sourceHasAudio = false;
+                foreach (uint sample in renderer.AudioBuffer)
+                {
+                    if (sample != 0)
+                    {
+                        sourceHasAudio = true;
+                        break;
+                    }
+                }
+                sourceAudio.Add(sourceHasAudio);
+            }
+
+            byte chip0 = memory.RDMEM_DBG(chip0ReadAddress);
+            byte chip1 = memory.RDMEM_DBG(chip1ReadAddress);
+            byte status = memory.RDMEM_DBG(statusAddress);
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+
+            bool passed = chip0 == 0x20 && chip1 == 0x40 &&
+                status == 0x00 && hasAudio;
+            Console.ForegroundColor = passed ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.WriteLine(
+                "TSFM Rev. C: D1=#{0:X2}, D2=#{1:X2}, status=#{2:X2}, audio={3}: {4}",
+                chip0,
+                chip1,
+                status,
+                hasAudio,
+                passed ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "Sources: D1={0}, D2={1}, FM={2}, SAA={3}",
+                sourceAudio[0],
+                sourceAudio[1],
+                sourceAudio[2],
+                sourceAudio[3]);
+            Console.ResetColor();
+            if (!passed)
+                Environment.ExitCode = 1;
+        }
+
+        private static void AddAyWrite(
+            System.Collections.Generic.List<byte> program,
+            byte register,
+            byte value)
+        {
+            AddPortWrite(program, 0xFFFD, register);
+            AddPortWrite(program, 0xBFFD, value);
+        }
+
+        private static void AddPortWrite(
+            System.Collections.Generic.List<byte> program,
+            ushort port,
+            byte value)
+        {
+            program.Add(0x01);
+            program.Add((byte)port);
+            program.Add((byte)(port >> 8));
+            program.Add(0x3E);
+            program.Add(value);
+            program.Add(0xED);
+            program.Add(0x79);
+        }
+
+        private static void AddPortReadAndStore(
+            System.Collections.Generic.List<byte> program,
+            ushort port,
+            ushort destination)
+        {
+            program.Add(0x01);
+            program.Add((byte)port);
+            program.Add((byte)(port >> 8));
+            program.Add(0xED);
+            program.Add(0x78);
+            program.Add(0x32);
+            program.Add((byte)destination);
+            program.Add((byte)(destination >> 8));
         }
 
 		#region ULA PATTERNS
