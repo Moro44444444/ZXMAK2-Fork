@@ -401,7 +401,12 @@ namespace ZXMAK2.Hardware.Evo
             if (m_lastTime >= 1D)
                 m_lastTime -= Math.Floor(m_lastTime);
             base.OnEndFrame();
-            TurboSoundFmPro.ApplyOutputGain(AudioBuffer);
+            // Keep the YM2203 SSG (AY-compatible) path at its native level.
+            // Its logarithmic AY/YM table already reaches the full signed
+            // range.  Applying the board-wide post gain here clipped peaks
+            // independently in every PSG renderer and made ordinary AY music
+            // sound as if channels or notes were being dropped.  SAA and FM
+            // retain the accepted +50% board gain below.
         }
     }
 

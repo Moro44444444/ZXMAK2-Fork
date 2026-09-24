@@ -222,11 +222,17 @@ namespace Test
             // 1111xxxx CPLD configuration byte.
             AddPortWrite(program, 0xFFFD, 0xFE);
             AddAyWrite(program, 0x00, 0x20);
+            AddAyWrite(program, 0x01, 0x01);
+            AddAyWrite(program, 0x07, 0x3E);
+            AddAyWrite(program, 0x08, 0x04);
             AddPortWrite(program, 0xFFFD, 0x00);
             AddPortReadAndStore(program, 0xFFFD, chip0ReadAddress);
 
             AddPortWrite(program, 0xFFFD, 0xFF);
             AddAyWrite(program, 0x00, 0x40);
+            AddAyWrite(program, 0x01, 0x01);
+            AddAyWrite(program, 0x07, 0x3E);
+            AddAyWrite(program, 0x08, 0x08);
             AddPortWrite(program, 0xFFFD, 0x00);
             AddPortReadAndStore(program, 0xFFFD, chip1ReadAddress);
 
@@ -276,18 +282,32 @@ namespace Test
             }
 
             var sourceAudio = new System.Collections.Generic.List<bool>();
+            var sourceClipped = new System.Collections.Generic.List<int>();
+            var sourcePeaks = new System.Collections.Generic.List<int>();
+            var sourceLengths = new System.Collections.Generic.List<int>();
             foreach (var renderer in board.SoundRenderers)
             {
                 bool sourceHasAudio = false;
+                int clipped = 0;
+                int peak = 0;
                 foreach (uint sample in renderer.AudioBuffer)
                 {
-                    if (sample != 0)
-                    {
+                    short left = GetLeft(sample);
+                    short right = GetRight(sample);
+                    int absLeft = Math.Abs((int)left);
+                    int absRight = Math.Abs((int)right);
+                    if (left != 0 || right != 0)
                         sourceHasAudio = true;
-                        break;
-                    }
+                    if (left == short.MinValue || left == short.MaxValue)
+                        clipped++;
+                    if (right == short.MinValue || right == short.MaxValue)
+                        clipped++;
+                    peak = Math.Max(peak, Math.Max(absLeft, absRight));
                 }
                 sourceAudio.Add(sourceHasAudio);
+                sourceClipped.Add(clipped);
+                sourcePeaks.Add(peak);
+                sourceLengths.Add(renderer.AudioBuffer.Length);
             }
 
             var gainMethod = typeof(ZXMAK2.Hardware.Evo.TurboSoundFmPro)
@@ -312,11 +332,14 @@ namespace Test
             byte chip0 = memory.RDMEM_DBG(chip0ReadAddress);
             byte chip1 = memory.RDMEM_DBG(chip1ReadAddress);
             byte status = memory.RDMEM_DBG(statusAddress);
+            var psgHeadroomPassed =
+                sourceClipped[0] < sourceLengths[0] * 2 &&
+                sourceClipped[1] < sourceLengths[1] * 2;
             machine.BusManager.Disconnect();
             machine.Dispose();
 
             bool passed = chip0 == 0x20 && chip1 == 0x40 &&
-                status == 0x00 && hasAudio && gainPassed;
+                status == 0x00 && hasAudio && gainPassed && psgHeadroomPassed;
             Console.ForegroundColor = passed ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
                 "TSFM Rev. C: D1=#{0:X2}, D2=#{1:X2}, status=#{2:X2}, audio={3}: {4}",
@@ -331,8 +354,16 @@ namespace Test
                 sourceAudio[1],
                 sourceAudio[2],
                 sourceAudio[3]);
+            Console.WriteLine(
+                "Source peaks/clipped: D1={0}/{1}, D2={2}/{3}, FM={4}/{5}, SAA={6}/{7}",
+                sourcePeaks[0], sourceClipped[0],
+                sourcePeaks[1], sourceClipped[1],
+                sourcePeaks[2], sourceClipped[2],
+                sourcePeaks[3], sourceClipped[3]);
             Console.WriteLine("Output gain +50% with saturation: {0}",
                 gainPassed ? "PASS" : "FAIL");
+            Console.WriteLine("AY/YM SSG native headroom: {0}",
+                psgHeadroomPassed ? "PASS" : "FAIL");
             Console.ResetColor();
             if (!passed)
                 Environment.ExitCode = 1;
