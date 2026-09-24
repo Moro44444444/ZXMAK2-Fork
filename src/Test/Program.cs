@@ -343,12 +343,15 @@ namespace Test
             int[] saaCoveragePeaks;
             var saaCoveragePassed = TestSaa1099Coverage(
                 board, machine, out saaCoveragePeaks);
+            var multiSoundPortCompatibility =
+                TestTurboSoundMultiSoundSaaCompatibility();
             machine.BusManager.Disconnect();
             machine.Dispose();
 
             bool passed = chip0 == 0x20 && chip1 == 0x40 &&
                 status == 0x00 && hasAudio && gainPassed &&
-                psgHeadroomPassed && saaCoveragePassed;
+                psgHeadroomPassed && saaCoveragePassed &&
+                multiSoundPortCompatibility;
             Console.ForegroundColor = passed ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
                 "TSFM Rev. C: D1=#{0:X2}, D2=#{1:X2}, status=#{2:X2}, audio={3}: {4}",
@@ -377,9 +380,71 @@ namespace Test
                 "SAA1099 six tones/noise/envelope peaks: {0}: {1}",
                 string.Join(",", saaCoveragePeaks),
                 saaCoveragePassed ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "Optional MultiSound #01FF/#00FF SAA ports: {0}",
+                multiSoundPortCompatibility ? "PASS" : "FAIL");
             Console.ResetColor();
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static bool TestTurboSoundMultiSoundSaaCompatibility()
+        {
+            var nativeDefault =
+                !new ZXMAK2.Hardware.Evo.TurboSoundFmPro()
+                    .MultiSoundSaaPortCompatibility;
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.TurboSoundFmPro
+            {
+                MultiSoundSaaPortCompatibility = true,
+            };
+            var config = new XmlDocument();
+            var configNode = config.AppendChild(config.CreateElement("Device"));
+            board.SaveConfigXml(configNode);
+            var loadedBoard = new ZXMAK2.Hardware.Evo.TurboSoundFmPro();
+            loadedBoard.LoadConfigXml(configNode);
+            var configRoundTrip =
+                loadedBoard.MultiSoundSaaPortCompatibility;
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            machine.BusManager.Connect();
+
+            const ushort programAddress = 0x4000;
+            var program = new System.Collections.Generic.List<byte>();
+            AddPortWrite(program, 0x01FF, 0x00);
+            AddPortWrite(program, 0x00FF, 0xFF);
+            AddPortWrite(program, 0x01FF, 0x08);
+            AddPortWrite(program, 0x00FF, 0x80);
+            AddPortWrite(program, 0x01FF, 0x10);
+            AddPortWrite(program, 0x00FF, 0x03);
+            AddPortWrite(program, 0x01FF, 0x14);
+            AddPortWrite(program, 0x00FF, 0x01);
+            AddPortWrite(program, 0x01FF, 0x1C);
+            AddPortWrite(program, 0x00FF, 0x01);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(programAddress + i), program[i]);
+
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = programAddress;
+            while (machine.CPU.regs.PC < programAddress + program.Count)
+                machine.DebugStepInto();
+            machine.ExecuteFrame();
+
+            var renderers =
+                new System.Collections.Generic.List<ISoundRenderer>(
+                    board.SoundRenderers);
+            var audible = renderers.Count > 3 &&
+                GetStereoPeak(renderers[3].AudioBuffer) > 256;
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            return nativeDefault && configRoundTrip && audible;
         }
 
         private static bool TestSaa1099Coverage(
@@ -641,6 +706,8 @@ namespace Test
                 out gsDacTransitions);
             var soundDriveTimeline = TestMultiSoundSoundDriveTimeline(
                 out soundDriveTransitions);
+            var tsFmPortCompatibility =
+                TestMultiSoundTsFmSaaCompatibility();
 
             machine.BusManager.Disconnect();
             machine.Dispose();
@@ -649,7 +716,7 @@ namespace Test
                 (gsReadyStatus & 1) == 0 &&
                 saaAudio && dacAudio && romLockPassed &&
                 autoPolicy && manualRejected && gsDacTimeline &&
-                soundDriveTimeline;
+                soundDriveTimeline && tsFmPortCompatibility;
             Console.ForegroundColor = passed
                 ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
@@ -665,9 +732,71 @@ namespace Test
                 gsDacTransitions, gsDacTimeline ? "PASS" : "FAIL",
                 soundDriveTransitions,
                 soundDriveTimeline ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "Optional TSFM #FFFD/#BFFD SAA ports: {0}",
+                tsFmPortCompatibility ? "PASS" : "FAIL");
             Console.ResetColor();
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static bool TestMultiSoundTsFmSaaCompatibility()
+        {
+            var nativeDefault =
+                !new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice()
+                    .TsFmSaaPortCompatibility;
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice
+            {
+                AutomaticConfiguration = false,
+                YmEnabled = false,
+                SaaEnabled = true,
+                GeneralSoundEnabled = false,
+                SoundDriveEnabled = false,
+                TsFmSaaPortCompatibility = true,
+            };
+            var config = new XmlDocument();
+            var configNode = config.AppendChild(config.CreateElement("Device"));
+            board.SaveConfigXml(configNode);
+            var loadedBoard = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice();
+            loadedBoard.LoadConfigXml(configNode);
+            var configRoundTrip = loadedBoard.TsFmSaaPortCompatibility;
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            machine.BusManager.Connect();
+
+            const ushort programAddress = 0x4000;
+            var program = new System.Collections.Generic.List<byte>();
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0xFF);
+            AddAyWrite(program, 0x08, 0x80);
+            AddAyWrite(program, 0x10, 0x03);
+            AddAyWrite(program, 0x14, 0x01);
+            AddAyWrite(program, 0x1C, 0x01);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(programAddress + i), program[i]);
+
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = programAddress;
+            while (machine.CPU.regs.PC < programAddress + program.Count)
+                machine.DebugStepInto();
+            machine.ExecuteFrame();
+
+            var renderers =
+                new System.Collections.Generic.List<ISoundRenderer>(
+                    board.SoundRenderers);
+            var audible = renderers.Count > 3 &&
+                GetStereoPeak(renderers[3].AudioBuffer) > 256;
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            return nativeDefault && configRoundTrip && audible;
         }
 
         private static bool TestMultiSoundGsDacTimeline(out int transitions)

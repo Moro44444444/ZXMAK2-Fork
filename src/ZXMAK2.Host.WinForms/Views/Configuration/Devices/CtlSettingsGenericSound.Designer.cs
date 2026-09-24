@@ -31,6 +31,7 @@
 			this.groupBox = new System.Windows.Forms.GroupBox();
 			this.lblVolume = new System.Windows.Forms.Label();
 			this.trkVolume = new System.Windows.Forms.TrackBar();
+			this.chkPentEvoSaaCompatibility = new System.Windows.Forms.CheckBox();
 			this.cbxPentEvoDevice = new System.Windows.Forms.ComboBox();
 			this.txtDevice = new System.Windows.Forms.TextBox();
 			this.lblDevice = new System.Windows.Forms.Label();
@@ -44,6 +45,7 @@
 			// 
 			this.groupBox.Controls.Add(this.lblVolume);
 			this.groupBox.Controls.Add(this.trkVolume);
+			this.groupBox.Controls.Add(this.chkPentEvoSaaCompatibility);
 			this.groupBox.Controls.Add(this.cbxPentEvoDevice);
 			this.groupBox.Controls.Add(this.txtDevice);
 			this.groupBox.Controls.Add(this.lblDevice);
@@ -52,7 +54,7 @@
 			this.groupBox.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.groupBox.Location = new System.Drawing.Point(0, 0);
 			this.groupBox.Name = "groupBox";
-			this.groupBox.Size = new System.Drawing.Size(300, 240);
+			this.groupBox.Size = new System.Drawing.Size(300, 270);
 			this.groupBox.TabIndex = 3;
 			this.groupBox.TabStop = false;
 			this.groupBox.Text = "Generic Sound Device:";
@@ -76,6 +78,17 @@
 			this.trkVolume.Size = new System.Drawing.Size(288, 50);
 			this.trkVolume.TabIndex = 6;
 			this.trkVolume.TickFrequency = 2;
+			//
+			// chkPentEvoSaaCompatibility
+			//
+			this.chkPentEvoSaaCompatibility.AutoSize = true;
+			this.chkPentEvoSaaCompatibility.Location = new System.Drawing.Point(9, 119);
+			this.chkPentEvoSaaCompatibility.Name = "chkPentEvoSaaCompatibility";
+			this.chkPentEvoSaaCompatibility.Size = new System.Drawing.Size(204, 17);
+			this.chkPentEvoSaaCompatibility.TabIndex = 9;
+			this.chkPentEvoSaaCompatibility.Text = "MultiSound SAA port compatibility";
+			this.chkPentEvoSaaCompatibility.UseVisualStyleBackColor = true;
+			this.chkPentEvoSaaCompatibility.Visible = false;
 			//
 			// cbxPentEvoDevice
 			//
@@ -116,18 +129,18 @@
 			this.txtDescription.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
 						| System.Windows.Forms.AnchorStyles.Left)
 						| System.Windows.Forms.AnchorStyles.Right)));
-			this.txtDescription.Location = new System.Drawing.Point(6, 139);
+			this.txtDescription.Location = new System.Drawing.Point(6, 165);
 			this.txtDescription.Multiline = true;
 			this.txtDescription.Name = "txtDescription";
 			this.txtDescription.ReadOnly = true;
 			this.txtDescription.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-			this.txtDescription.Size = new System.Drawing.Size(288, 95);
+			this.txtDescription.Size = new System.Drawing.Size(288, 99);
 			this.txtDescription.TabIndex = 2;
 			// 
 			// lblDescription
 			// 
 			this.lblDescription.AutoSize = true;
-			this.lblDescription.Location = new System.Drawing.Point(6, 123);
+			this.lblDescription.Location = new System.Drawing.Point(6, 149);
 			this.lblDescription.Name = "lblDescription";
 			this.lblDescription.Size = new System.Drawing.Size(63, 13);
 			this.lblDescription.TabIndex = 1;
@@ -139,7 +152,7 @@
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.Controls.Add(this.groupBox);
 			this.Name = "CtlSettingsGenericSound";
-			this.Size = new System.Drawing.Size(300, 240);
+			this.Size = new System.Drawing.Size(300, 270);
 			this.groupBox.ResumeLayout(false);
 			this.groupBox.PerformLayout();
 			((System.ComponentModel.ISupportInitialize)(this.trkVolume)).EndInit();
@@ -157,5 +170,6 @@
 		private System.Windows.Forms.TrackBar trkVolume;
 		private System.Windows.Forms.Label lblVolume;
 		private System.Windows.Forms.ComboBox cbxPentEvoDevice;
+		private System.Windows.Forms.CheckBox chkPentEvoSaaCompatibility;
 	}
 }

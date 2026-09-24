@@ -79,6 +79,13 @@ namespace ZXMAK2.Hardware.Evo
             get { return m_renderers; }
         }
 
+        /// <summary>
+        /// Optional emulator extension.  When enabled, the TSFM SAA1099 also
+        /// accepts the ZX-MultiSound direct #01FF address / #00FF data pair.
+        /// Native Rev.C behaviour remains the default.
+        /// </summary>
+        public bool MultiSoundSaaPortCompatibility { get; set; }
+
         public bool RejectDc
         {
             get { return true; }
@@ -154,6 +161,8 @@ namespace ZXMAK2.Hardware.Evo
             bmgr.Events.SubscribeWrIo(AyMask, AyAddressPort, WriteAddressPort);
             bmgr.Events.SubscribeRdIo(AyMask, AyAddressPort, ReadPort);
             bmgr.Events.SubscribeWrIo(AyMask, AyDataPort, WriteDataPort);
+            if (MultiSoundSaaPortCompatibility)
+                bmgr.Events.SubscribeWrIo(0x00FF, 0x00FF, WriteMultiSoundSaa);
             bmgr.Events.SubscribeReset(ResetBoard);
         }
 
@@ -175,12 +184,17 @@ namespace ZXMAK2.Hardware.Evo
         {
             base.OnConfigLoad(node);
             Volume = Utils.GetXmlAttributeAsInt32(node, "volume", Volume);
+            MultiSoundSaaPortCompatibility = Utils.GetXmlAttributeAsBool(
+                node, "multiSoundSaaPortCompatibility",
+                MultiSoundSaaPortCompatibility);
         }
 
         protected override void OnConfigSave(XmlNode node)
         {
             base.OnConfigSave(node);
             Utils.SetXmlAttribute(node, "volume", Volume);
+            Utils.SetXmlAttribute(node, "multiSoundSaaPortCompatibility",
+                MultiSoundSaaPortCompatibility);
         }
 
         private void ResetBoard()
@@ -238,6 +252,17 @@ namespace ZXMAK2.Hardware.Evo
             {
                 m_fm.SetRegister(chip, register, value);
             }
+        }
+
+        private void WriteMultiSoundSaa(
+            ushort address,
+            byte value,
+            ref bool handled)
+        {
+            if ((address & 0x0100) != 0)
+                m_saa.RegAddr = value;
+            else
+                m_saa.SetReg(m_saa.RegAddr, value);
         }
 
         private void ReadPort(ushort addr, ref byte value, ref bool handled)

@@ -72,6 +72,7 @@ namespace ZXMAK2.Hardware.Evo
         private byte m_ymChip;
         private bool m_ymReadRegister;
         private bool m_fmEnabled;
+        private bool m_tsFmSaaSelected;
         private byte m_gsPage;
         private byte m_gsCommand;
         private byte m_gsHostData;
@@ -116,6 +117,12 @@ namespace ZXMAK2.Hardware.Evo
         public bool SaaEnabled { get; set; }
         public bool GeneralSoundEnabled { get; set; }
         public bool SoundDriveEnabled { get; set; }
+        /// <summary>
+        /// Optional emulator extension.  When enabled, SAA1099 accepts the
+        /// TSFM Rev.C selector and subsequent #FFFD/#BFFD register cycles.
+        /// Native Rev.A2 direct ports remain the default.
+        /// </summary>
+        public bool TsFmSaaPortCompatibility { get; set; }
 
         public bool EffectiveYmEnabled { get { return m_effectiveYm; } }
         public bool EffectiveSaaEnabled { get { return m_effectiveSaa; } }
@@ -213,8 +220,10 @@ namespace ZXMAK2.Hardware.Evo
             if (m_effectiveYm || m_effectiveSaa)
                 bmgr.Events.SubscribeWrIo(0xC00F, 0xC00D, WriteYmAddress);
             if (m_effectiveYm)
-            {
                 bmgr.Events.SubscribeRdIo(0xC00F, 0xC00D, ReadYmAddress);
+            if (m_effectiveYm ||
+                (m_effectiveSaa && TsFmSaaPortCompatibility))
+            {
                 bmgr.Events.SubscribeWrIo(0xC00F, 0x800D, WriteYmData);
             }
             if (m_effectiveSaa)
@@ -272,6 +281,9 @@ namespace ZXMAK2.Hardware.Evo
                 node, "gs", GeneralSoundEnabled);
             SoundDriveEnabled = Utils.GetXmlAttributeAsBool(
                 node, "soundDrive", SoundDriveEnabled);
+            TsFmSaaPortCompatibility = Utils.GetXmlAttributeAsBool(
+                node, "tsFmSaaPortCompatibility",
+                TsFmSaaPortCompatibility);
             Volume = Utils.GetXmlAttributeAsInt32(node, "volume", Volume);
         }
 
@@ -283,6 +295,8 @@ namespace ZXMAK2.Hardware.Evo
             Utils.SetXmlAttribute(node, "saa", SaaEnabled);
             Utils.SetXmlAttribute(node, "gs", GeneralSoundEnabled);
             Utils.SetXmlAttribute(node, "soundDrive", SoundDriveEnabled);
+            Utils.SetXmlAttribute(node, "tsFmSaaPortCompatibility",
+                TsFmSaaPortCompatibility);
             Utils.SetXmlAttribute(node, "volume", Volume);
         }
 
@@ -307,6 +321,7 @@ namespace ZXMAK2.Hardware.Evo
             m_ymChip = 0;
             m_ymReadRegister = false;
             m_fmEnabled = false;
+            m_tsFmSaaSelected = false;
             m_hostRomM1Access = false;
             Array.Clear(m_ymRegister, 0, m_ymRegister.Length);
             m_psg[0].ResetChip();
@@ -338,6 +353,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             if ((value & 0xF0) == 0xF0)
             {
+                if (m_effectiveSaa && TsFmSaaPortCompatibility)
+                    m_tsFmSaaSelected = (value & 8) == 0;
                 if (m_effectiveYm)
                 {
                     m_ymChip = (byte)(value & 1);
@@ -349,6 +366,12 @@ namespace ZXMAK2.Hardware.Evo
                     m_saa.ClockEnabled = (value & 8) == 0;
                 return;
             }
+            if (m_effectiveSaa && TsFmSaaPortCompatibility &&
+                m_tsFmSaaSelected)
+            {
+                m_saa.RegAddr = value;
+                return;
+            }
             if (!m_effectiveYm)
                 return;
             m_ymRegister[m_ymChip] = value;
@@ -357,6 +380,14 @@ namespace ZXMAK2.Hardware.Evo
 
         private void WriteYmData(ushort address, byte value, ref bool handled)
         {
+            if (m_effectiveSaa && TsFmSaaPortCompatibility &&
+                m_tsFmSaaSelected)
+            {
+                m_saa.SetReg(m_saa.RegAddr, value);
+                return;
+            }
+            if (!m_effectiveYm)
+                return;
             var chip = m_ymChip;
             var register = m_ymRegister[chip];
             if (register < 0x10)

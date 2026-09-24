@@ -117,6 +117,36 @@ can be executed by this emulator.  This first candidate therefore does not
 claim SAM2695 audio emulation; YM/TSFM, SAA1099, GS 1.05b and SounDrive are
 the implemented digital blocks.
 
+## v47 optional SAA port compatibility
+
+Runtime comparison of two known SAA1099 disks established that they target
+different *board interfaces*, even though both boards contain the same sound
+chip.  `arcane2.trd` selects the TSFM SAA through `#FFFD` and then writes its
+register/data stream through `#FFFD/#BFFD`.  `1099test.trd` instead contains
+direct ZX-MultiSound writes to `#01FF/#00FF`.  Neither program is therefore a
+universal SAA1099 test merely because the synthesizer itself is identical.
+
+Two explicit, disabled-by-default compatibility extensions are provided:
+
+- ZX-MultiSound in either ZXBUS connector can accept the TSFM SAA selector and
+  `#FFFD/#BFFD` cycles when **TSFM SAA port compatibility** is checked beside
+  the occupied slot.  The switch is enabled only while the board's SAA switch
+  is on.
+- The internal TurboSound FM Pro selected on the Music page can accept direct
+  ZX-MultiSound `#01FF/#00FF` SAA writes when **MultiSound SAA port
+  compatibility** is checked.
+
+Native decoding remains the default, and the options are stored independently
+in the machine XML configuration.  There is deliberately no automatic
+protocol guessing: writes alone do not reliably identify the intended board,
+and silently enabling both aliases would make hardware-compatibility tests
+less meaningful.  The MultiSound option follows the card rather than the
+physical connector, so Slot 1 and Slot 2 remain electrically equivalent.
+
+Regression tests verify the default-off state, XML save/load, and audible SAA
+output through each foreign port protocol.  The native TSFM and MultiSound
+tests continue to run in the same invocations.
+
 ## ZXBUS and conflict policy
 
 Both ZX Evolution ZXBUS connectors are electrically equivalent.  Either one

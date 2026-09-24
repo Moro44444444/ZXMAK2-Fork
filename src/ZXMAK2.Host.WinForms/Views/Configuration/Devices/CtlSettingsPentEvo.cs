@@ -24,6 +24,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private readonly CheckBox m_saa;
         private readonly CheckBox m_gs;
         private readonly CheckBox m_soundDrive;
+        private readonly CheckBox m_tsFmSaaCompatibility;
         private readonly Label m_effective;
         private BusManager m_bmgr;
         private UlaPentEvo m_device;
@@ -66,12 +67,12 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             AutoScaleMode = AutoScaleMode.Font;
             AutoScroll = true;
-            Size = new Size(300, 410);
+            Size = new Size(300, 430);
 
             var slots = new GroupBox();
             slots.Text = "ZXBUS expansion slots:";
             slots.Location = new Point(4, 4);
-            slots.Size = new Size(292, 146);
+            slots.Size = new Size(292, 160);
             slots.Anchor = AnchorStyles.Top | AnchorStyles.Left |
                 AnchorStyles.Right;
             Controls.Add(slots);
@@ -80,9 +81,12 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_slot1Device = CreateSlotComboBox(slots, 112, 24);
             m_slot2Enabled = CreateSlotCheckBox(slots, "Slot 2 active", 70);
             m_slot2Device = CreateSlotComboBox(slots, 112, 66);
+            m_tsFmSaaCompatibility = CreateSwitch(slots,
+                "TSFM SAA port compatibility", 92);
+            m_tsFmSaaCompatibility.Visible = false;
             var slotHint = new Label();
             slotHint.AutoSize = false;
-            slotHint.Location = new Point(10, 103);
+            slotHint.Location = new Point(10, 119);
             slotHint.Size = new Size(272, 34);
             slotHint.Text = "Both connectors are equivalent. One board of " +
                 "each type may be installed.";
@@ -90,7 +94,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
             var switches = new GroupBox();
             switches.Text = "ZX-MultiSound Rev.A2 switches:";
-            switches.Location = new Point(4, 156);
+            switches.Location = new Point(4, 170);
             switches.Size = new Size(292, 244);
             switches.Anchor = AnchorStyles.Top | AnchorStyles.Left |
                 AnchorStyles.Right;
@@ -117,6 +121,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_saa.CheckedChanged += SwitchChanged;
             m_gs.CheckedChanged += SwitchChanged;
             m_soundDrive.CheckedChanged += SwitchChanged;
+            m_tsFmSaaCompatibility.CheckedChanged += SwitchChanged;
         }
 
         public void Initialize(BusManager bmgr, IHostService host,
@@ -163,6 +168,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                     multiSound.GeneralSoundEnabled;
                 m_soundDrive.Checked = multiSound == null ||
                     multiSound.SoundDriveEnabled;
+                m_tsFmSaaCompatibility.Checked = multiSound != null &&
+                    multiSound.TsFmSaaPortCompatibility;
             }
             finally
             {
@@ -224,6 +231,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 multiSound.SaaEnabled = m_saa.Checked;
                 multiSound.GeneralSoundEnabled = m_gs.Checked;
                 multiSound.SoundDriveEnabled = m_soundDrive.Checked;
+                multiSound.TsFmSaaPortCompatibility =
+                    m_tsFmSaaCompatibility.Checked;
 
                 if (multiSound.AutomaticConfiguration && multiSound.YmEnabled)
                 {
@@ -344,6 +353,14 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_slot1Device.Enabled = m_slot1Enabled.Checked;
             m_slot2Device.Enabled = m_slot2Enabled.Checked;
             var multiSound = IsMultiSoundBoardEnabled;
+            var multiSoundInSlot1 = IsSelected(
+                PentEvoZxBusDevice.MultiSound,
+                m_slot1Enabled,
+                m_slot1Device);
+            m_tsFmSaaCompatibility.Visible = multiSound;
+            m_tsFmSaaCompatibility.Location = new Point(
+                30, multiSoundInSlot1 ? 49 : 91);
+            m_tsFmSaaCompatibility.Enabled = multiSound && m_saa.Checked;
             m_automatic.Enabled = multiSound;
             m_ym.Enabled = multiSound;
             m_saa.Enabled = multiSound;

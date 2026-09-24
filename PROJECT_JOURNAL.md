@@ -2967,3 +2967,65 @@ SAA; исправление шины и остановки такта Rev.A2 с�
 
 Подробности продолжены в `docs/ZX-MULTISOUND-A2-IMPLEMENTATION.md`; памятка
 сборки — `docs/releases/README-B46.txt`.
+
+## SAA1099 cross-board port compatibility — v47 test — 2026-09-24
+
+Статус: **реализованы два явных режима совместимости портов, Release-сборка и
+автоматические тесты проходят; требуется пользовательская проверка обоих
+предоставленных TRD.** Принятая v46 и её portable-папка не изменяются.
+
+### Что установлено по реальному программному материалу
+
+- `arcane2.trd` (SHA-256
+  `4B85BE42814F872F46B936EA04F307692373D8E82A21CDC78A648E5F59B12798`)
+  содержит TSFM-последовательности: выбор SAA через `#FFFD` и дальнейшие
+  записи регистр/данные через `#FFFD/#BFFD`.
+- `1099test.trd` (SHA-256
+  `D0D1F0D06C9F6434B5A90E7057A9296986F4614A54C19F8E5E269E2168ACDB0D`)
+  содержит прямые обращения MultiSound: 79 загрузок порта `#01FF` и 53
+  загрузки `#00FF` в исполняемой части.
+- Поэтому противоположные результаты двух дисков не означают две разные
+  микросхемы SAA1099: различаются протоколы плат вокруг неё.
+
+### Реализация
+
+- У ZX-MultiSound добавлен выключенный по умолчанию флаг
+  `TSFM SAA port compatibility`. Он находится возле MultiSound именно в том
+  ZXBUS-слоте, куда поставлена карта, и работает одинаково для Slot 1/Slot 2.
+  Доступен только при включённом аппаратном переключателе SAA1099.
+- У TurboSound FM Pro в его Music-настройках добавлен выключенный по умолчанию
+  флаг `MultiSound SAA port compatibility`.
+- Оба флага сохраняются в XML машины. Автоопределения намеренно нет: оно
+  делало бы аппаратный режим неоднозначным и могло бы маскировать ошибки ПО.
+- Штатные декодеры портов не переписаны: совместимые адреса подписываются
+  только при установленной галочке.
+
+### Проверка перед упаковкой
+
+- Полная Release-пересборка: 0 ошибок, два прежних warning `.ruleset`.
+- `Test.exe /tsfm`: штатные D1/D2/FM/SAA и все SAA-векторы PASS; новый тракт
+  `#01FF/#00FF` PASS; проверены default-off и XML round-trip.
+- `Test.exe /multisound`: штатные D1/D2/SAA/GS/SounDrive/ROM/policy PASS;
+  новый тракт `#FFFD/#BFFD` PASS; проверены default-off и XML round-trip.
+- Полный `Test.exe`: все ULA sanity PASS; 500 кадров выполняются примерно за
+  244–400 мс, многосекундного замедления нет.
+
+Подробности продолжены в `docs/ZX-MULTISOUND-A2-IMPLEMENTATION.md`; памятка
+сборки — `docs/releases/README-B47.txt`.
+
+### Отдельная portable-сборка v47
+
+- Папка:
+  `L:\Work_two\ZX\ZXMAK2-v47-ZXEVO-BC-Alpha8-SAA-Port-Compatibility-Test-20260924\release`.
+  Она создана из принятой структуры v46; изменены только
+  `ZXMAK2.Hardware.dll`, `ZXMAK2.Host.WinForms.dll`, `Test.exe` и README.
+- 51 файл, 9564631 байт. Пользовательских `.cmos`, `.nvram`,
+  `.vmide`/`.vide`, `.vmz`, PDB, образов и логов нет.
+- Непосредственно из portable-папки прошли `Test.exe /multisound`,
+  `Test.exe /tsfm` и полный `Test.exe`.
+- SHA-256: `ZXMAK2.Hardware.dll` —
+  `6858A53C78438E4493F2D89DFE73D223A3574870BA33D115DB75043DEF61DA10`;
+  `ZXMAK2.Host.WinForms.dll` —
+  `F6CF700B438EB6907155AFF660D44A214E3AF7F41EA22416640B4A01BC83A3B1`;
+  `Test.exe` —
+  `9A05CA0C814C874E98BC777295B55CE98816458D63C665746D9EFD0D92404BE8`.

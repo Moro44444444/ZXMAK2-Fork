@@ -65,6 +65,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             cbxPentEvoDevice.SelectedIndex = device == null
                 ? 0
                 : device is TurboSoundFmPro ? 2 : 1;
+            var turboSound = device as TurboSoundFmPro;
+            chkPentEvoSaaCompatibility.Checked = turboSound != null &&
+                turboSound.MultiSoundSaaPortCompatibility;
             cbxPentEvoDevice.Visible = true;
             UpdatePentEvoDescription();
         }
@@ -77,6 +80,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 cbxPentEvoDevice.SelectedIndex = 0;
             cbxPentEvoDevice.Enabled = !enabled;
             trkVolume.Enabled = !enabled;
+            chkPentEvoSaaCompatibility.Enabled = !enabled;
             UpdatePentEvoDescription();
         }
 
@@ -97,7 +101,15 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 (oldDevice != null && selectedType == oldDevice.GetType()))
             {
                 if (oldDevice != null)
+                {
                     SetPentEvoVolume(oldDevice, trkVolume.Value);
+                    var oldTurboSound = oldDevice as TurboSoundFmPro;
+                    if (oldTurboSound != null)
+                    {
+                        oldTurboSound.MultiSoundSaaPortCompatibility =
+                            chkPentEvoSaaCompatibility.Checked;
+                    }
+                }
                 SynchronizePentEvoSetting(selection);
                 return;
             }
@@ -111,6 +123,12 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             if (newBusDevice != null)
             {
                 SetPentEvoVolume(newBusDevice, trkVolume.Value);
+                var newTurboSound = newBusDevice as TurboSoundFmPro;
+                if (newTurboSound != null)
+                {
+                    newTurboSound.MultiSoundSaaPortCompatibility =
+                        chkPentEvoSaaCompatibility.Checked;
+                }
                 m_bmgr.Add(newBusDevice);
                 if (oldBusOrder >= 0)
                     newBusDevice.BusOrder = oldBusOrder;
@@ -172,6 +190,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             if (!m_isPentEvoSelector)
                 return;
+            chkPentEvoSaaCompatibility.Visible =
+                cbxPentEvoDevice.SelectedIndex == 2;
+            chkPentEvoSaaCompatibility.Enabled = cbxPentEvoDevice.Enabled;
             if (!cbxPentEvoDevice.Enabled)
             {
                 txtDescription.Text =
