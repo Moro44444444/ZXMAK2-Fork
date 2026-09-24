@@ -36,7 +36,7 @@ internal static class PentEvoProfileProbe
             bus.Add(ay);
 
             var control = new CtlSettingsPentEvoZxBus();
-            control.Size = new Size(284, 334);
+            control.Size = new Size(300, 410);
             control.Initialize(bus, null, ula);
             AssertLayoutFits(control);
             var neoGsSd = new CtlSettingsNeoGsSd();
@@ -48,7 +48,7 @@ internal static class PentEvoProfileProbe
                 GetField<CheckBox>(neoGsSd, "m_connected");
             Assert(!neoGsConnected.Enabled,
                 "NeoGS microSD was enabled without a ZXBUS board");
-            control.NeoGsAvailabilityChanged += delegate
+            control.ConfigurationChanged += delegate
             {
                 neoGsSd.SetBoardEnabled(control.IsNeoGsBoardEnabled);
             };
@@ -91,6 +91,85 @@ internal static class PentEvoProfileProbe
             Assert(bus.FindDevice<AYCHRV>() != null,
                 "ZXBUS settings removed the Music device");
 
+            // NeoGS and MultiSound may occupy either physical connector at
+            // the same time. Automatic mode disables only colliding blocks.
+            slot2Device.SelectedIndex = 2;
+            slot2.Checked = true;
+            control.Apply();
+            var multiSound = bus.FindDevice<ZxMultiSoundDevice>();
+            Assert(bus.FindDevice<NeoGsDevice>() != null && multiSound != null,
+                "NeoGS and MultiSound did not coexist in separate slots");
+            Assert(bus.FindDevice<AYCHRV>() == null &&
+                ula.InternalSound == PentEvoInternalSound.None,
+                "Automatic MultiSound YM did not disable internal AY");
+            Assert(multiSound.EffectiveYmEnabled &&
+                !multiSound.EffectiveGeneralSoundEnabled,
+                "Automatic conflict policy did not preserve YM/disable GS");
+
+            // The connectors are physically equivalent: swap the two boards
+            // and verify that no hidden "preferred slot" exists in the UI or
+            // the stored PentEvo profile.
+            slot1Device.SelectedIndex = 2;
+            slot1.Checked = true;
+            slot2Device.SelectedIndex = 1;
+            slot2.Checked = true;
+            control.Apply();
+            multiSound = bus.FindDevice<ZxMultiSoundDevice>();
+            Assert(ula.ZxBusSlot1Enabled && ula.ZxBusSlot2Enabled &&
+                ula.ZxBusSlot1Device == PentEvoZxBusDevice.MultiSound &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.NeoGS,
+                "NeoGS/MultiSound could not be swapped between ZXBUS slots");
+            Assert(bus.FindDevice<NeoGsDevice>() != null && multiSound != null &&
+                multiSound.EffectiveYmEnabled &&
+                !multiSound.EffectiveGeneralSoundEnabled,
+                "Swapping ZXBUS slots changed the automatic conflict policy");
+
+            var automaticSwitch = GetField<CheckBox>(control, "m_automatic");
+            var ymSwitch = GetField<CheckBox>(control, "m_ym");
+            var gsSwitch = GetField<CheckBox>(control, "m_gs");
+            automaticSwitch.Checked = false;
+            ymSwitch.Checked = false;
+            gsSwitch.Checked = true;
+            var rejectedBeforeMutation = false;
+            try
+            {
+                control.Apply();
+            }
+            catch (InvalidOperationException)
+            {
+                rejectedBeforeMutation = true;
+            }
+            Assert(rejectedBeforeMutation &&
+                multiSound.AutomaticConfiguration &&
+                bus.FindDevice<NeoGsDevice>() != null,
+                "Manual GS/NeoGS conflict changed the bus before rejection");
+            automaticSwitch.Checked = true;
+            ymSwitch.Checked = true;
+
+            multiSound.AutomaticConfiguration = false;
+            multiSound.YmEnabled = false;
+            multiSound.SaaEnabled = true;
+            multiSound.GeneralSoundEnabled = false;
+            multiSound.SoundDriveEnabled = true;
+            multiSound.Volume = 79;
+            var boardXml = new XmlDocument();
+            var boardNode = boardXml.AppendChild(
+                boardXml.CreateElement("Device"));
+            multiSound.SaveConfigXml(boardNode);
+            var restoredBoard = new ZxMultiSoundDevice();
+            restoredBoard.LoadConfigXml(boardNode);
+            Assert(!restoredBoard.AutomaticConfiguration &&
+                !restoredBoard.YmEnabled && restoredBoard.SaaEnabled &&
+                !restoredBoard.GeneralSoundEnabled &&
+                restoredBoard.SoundDriveEnabled && restoredBoard.Volume == 79,
+                "MultiSound switches/volume did not survive XML round-trip");
+
+            // Restore automatic mode for the rest of the profile checks.
+            multiSound.AutomaticConfiguration = true;
+            multiSound.YmEnabled = true;
+            multiSound.GeneralSoundEnabled = true;
+            multiSound.Volume = 100;
+
             var xml = new XmlDocument();
             var node = xml.AppendChild(xml.CreateElement("Device"));
             ula.SaveConfigXml(node);
@@ -98,15 +177,18 @@ internal static class PentEvoProfileProbe
                 node.Attributes["zxBusSlot1Enabled"].Value == "True",
                 "Slot 1 XML mismatch");
             Assert(
-                node.Attributes["zxBusSlot1Device"].Value == "NeoGS",
+                node.Attributes["zxBusSlot1Device"].Value == "MultiSound",
                 "Slot 1 device XML mismatch");
 
             var restored = new UlaPentEvo();
             restored.LoadConfigXml(node);
             Assert(restored.ZxBusSlot1Enabled, "Slot 1 XML did not reload");
             Assert(
-                restored.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS,
+                restored.ZxBusSlot1Device == PentEvoZxBusDevice.MultiSound,
                 "Slot 1 device XML did not reload");
+            Assert(restored.ZxBusSlot2Enabled &&
+                restored.ZxBusSlot2Device == PentEvoZxBusDevice.NeoGS,
+                "Slot 2 device XML did not reload");
 
             var init = typeof(CtlSettingsUla).GetMethod(
                 "Init",
@@ -205,7 +287,7 @@ internal static class PentEvoProfileProbe
             var zController = -1;
             var neoGs = -1;
             var zxBus = -1;
-            var ay = -1;
+            var music = -1;
             var ide = -1;
             for (var i = 0; i < navigation.Items.Count; i++)
             {
@@ -218,8 +300,8 @@ internal static class PentEvoProfileProbe
                     neoGs = i;
                 else if (name == "ZXBUS PentEvo")
                     zxBus = i;
-                else if (name == "AY8910-CHRV")
-                    ay = i;
+                else if (name == "Internal PentEvo")
+                    music = i;
                 else if (name == "IDE PentEvo")
                     ide = i;
             }
@@ -230,8 +312,9 @@ internal static class PentEvoProfileProbe
             Assert(navigation.Items[neoGs].ForeColor != SystemColors.GrayText,
                 "SD NeoGS is disabled with an active ZXBUS board");
             Assert(zxBus >= 0, "Separate ZXBUS navigation item is missing");
-            Assert(ay >= 0, "AY/YM is not exposed as a normal Music device");
-            Assert(navigation.Items[ay].Tag is CtlSettingsGenericSound,
+            Assert(music >= 0,
+                "PentEvo internal Music selector is missing");
+            Assert(navigation.Items[music].Tag is CtlSettingsGenericSound,
                 "PentEvo Music does not use the AY/TSFM selector");
 
             form.SelectDevice("IDE PentEvo");
@@ -261,11 +344,11 @@ internal static class PentEvoProfileProbe
                 control,
                 "cbxPentEvoDevice");
             var volume = GetField<TrackBar>(control, "trkVolume");
-            Assert(selector.Items.Count == 2,
-                "PentEvo AY/TSFM selector was not initialized");
-            Assert(selector.SelectedIndex == 0,
+            Assert(selector.Items.Count == 3,
+                "PentEvo None/AY/TSFM selector was not initialized");
+            Assert(selector.SelectedIndex == 1,
                 "PentEvo AY was not selected initially");
-            selector.SelectedIndex = 1;
+            selector.SelectedIndex = 2;
             volume.Value = 67;
             control.Apply();
             var tsfm = bus.FindDevice<TurboSoundFmPro>();
@@ -277,7 +360,7 @@ internal static class PentEvoProfileProbe
                 ula.InternalSound == PentEvoInternalSound.TurboSoundFmPro,
                 "PentEvo internal sound was not synchronized to TSFM");
 
-            selector.SelectedIndex = 0;
+            selector.SelectedIndex = 1;
             control.Apply();
             var restoredAy = bus.FindDevice<AYCHRV>();
             Assert(restoredAy != null &&
@@ -286,6 +369,13 @@ internal static class PentEvoProfileProbe
             Assert(restoredAy.Volume == 67 &&
                 restoredAy.BusOrder == musicBusOrder,
                 "TSFM to AY did not preserve volume/order");
+
+            selector.SelectedIndex = 0;
+            control.Apply();
+            Assert(bus.FindDevice<AYCHRV>() == null &&
+                bus.FindDevice<TurboSoundFmPro>() == null &&
+                ula.InternalSound == PentEvoInternalSound.None,
+                "PentEvo Music: None did not remove the internal device");
         }
     }
 

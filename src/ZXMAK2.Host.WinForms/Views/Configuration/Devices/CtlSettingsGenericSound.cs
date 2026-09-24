@@ -46,11 +46,11 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_bmgr = bmgr;
             m_busDevice = device;
             m_device = device as ISoundRenderer;
-            txtDevice.Text = device.Name;
-            txtDescription.Text = device.Description.Replace(
-                "\n",
-                Environment.NewLine);
-            var value = GetPentEvoVolume(device);
+            var ula = m_bmgr.FindDevice<UlaPentEvo>();
+            txtDevice.Text = "Internal music";
+            var value = device != null
+                ? GetPentEvoVolume(device)
+                : ula != null ? ula.InternalSoundVolume : 100;
             if (value < trkVolume.Minimum)
                 value = trkVolume.Minimum;
             if (value > trkVolume.Maximum)
@@ -59,11 +59,25 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_isPentEvoSelector = true;
             txtDevice.Visible = false;
             cbxPentEvoDevice.Items.Clear();
+            cbxPentEvoDevice.Items.Add("None (ZXBUS music device)");
             cbxPentEvoDevice.Items.Add("AY/YM (AY8910-CHRV)");
             cbxPentEvoDevice.Items.Add("TurboSound FM Pro Rev. C");
-            cbxPentEvoDevice.SelectedIndex =
-                device is TurboSoundFmPro ? 1 : 0;
+            cbxPentEvoDevice.SelectedIndex = device == null
+                ? 0
+                : device is TurboSoundFmPro ? 2 : 1;
             cbxPentEvoDevice.Visible = true;
+            UpdatePentEvoDescription();
+        }
+
+        public void SetMultiSoundYmOverride(bool enabled)
+        {
+            if (!m_isPentEvoSelector)
+                return;
+            if (enabled)
+                cbxPentEvoDevice.SelectedIndex = 0;
+            cbxPentEvoDevice.Enabled = !enabled;
+            trkVolume.Enabled = !enabled;
+            UpdatePentEvoDescription();
         }
 
         public override void Apply()
@@ -74,29 +88,37 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 return;
             }
 
-            var useTurboSound = cbxPentEvoDevice.SelectedIndex == 1;
+            var selection = cbxPentEvoDevice.SelectedIndex;
             var oldDevice = m_busDevice;
-            if (useTurboSound == (oldDevice is TurboSoundFmPro))
+            var selectedType = selection == 2
+                ? typeof(TurboSoundFmPro)
+                : selection == 1 ? typeof(AYCHRV) : null;
+            if ((selectedType == null && oldDevice == null) ||
+                (oldDevice != null && selectedType == oldDevice.GetType()))
             {
-                SetPentEvoVolume(oldDevice, trkVolume.Value);
-                SynchronizePentEvoSetting(useTurboSound);
+                if (oldDevice != null)
+                    SetPentEvoVolume(oldDevice, trkVolume.Value);
+                SynchronizePentEvoSetting(selection);
                 return;
             }
 
-            BusDeviceBase newBusDevice = useTurboSound
+            var oldBusOrder = oldDevice != null ? oldDevice.BusOrder : -1;
+            if (oldDevice != null)
+                m_bmgr.Remove(oldDevice);
+            BusDeviceBase newBusDevice = selection == 2
                 ? (BusDeviceBase)new TurboSoundFmPro()
-                : new AYCHRV();
-            var oldBusOrder = oldDevice.BusOrder;
-            SetPentEvoVolume(newBusDevice, trkVolume.Value);
-            m_bmgr.Remove(oldDevice);
-            m_bmgr.Add(newBusDevice);
-            // BusManager.Add assigns a temporary tail position. Restore the
-            // replaced socket's position before normalizing the device list.
-            newBusDevice.BusOrder = oldBusOrder;
-            m_bmgr.Sort();
+                : selection == 1 ? (BusDeviceBase)new AYCHRV() : null;
+            if (newBusDevice != null)
+            {
+                SetPentEvoVolume(newBusDevice, trkVolume.Value);
+                m_bmgr.Add(newBusDevice);
+                if (oldBusOrder >= 0)
+                    newBusDevice.BusOrder = oldBusOrder;
+                m_bmgr.Sort();
+            }
             m_busDevice = newBusDevice;
             m_device = newBusDevice as ISoundRenderer;
-            SynchronizePentEvoSetting(useTurboSound);
+            SynchronizePentEvoSetting(selection);
         }
 
         private static int GetPentEvoVolume(BusDeviceBase device)
@@ -123,14 +145,17 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 renderer.Volume = volume;
         }
 
-        private void SynchronizePentEvoSetting(bool useTurboSound)
+        private void SynchronizePentEvoSetting(int selection)
         {
             var ula = m_bmgr.FindDevice<UlaPentEvo>();
             if (ula != null)
             {
-                ula.InternalSound = useTurboSound
+                ula.InternalSound = selection == 2
                     ? PentEvoInternalSound.TurboSoundFmPro
-                    : PentEvoInternalSound.AY8910CHRV;
+                    : selection == 1
+                        ? PentEvoInternalSound.AY8910CHRV
+                        : PentEvoInternalSound.None;
+                ula.InternalSoundVolume = trkVolume.Value;
             }
         }
 
@@ -140,11 +165,35 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             if (!m_isPentEvoSelector)
                 return;
-            txtDescription.Text = cbxPentEvoDevice.SelectedIndex == 1
-                ? "NedoPC TurboSound FM Pro Rev. C" + Environment.NewLine +
-                    "2 x YM2203 and SAA1099."
-                : "AY8910 with #FE value on IRB input " +
+            UpdatePentEvoDescription();
+        }
+
+        private void UpdatePentEvoDescription()
+        {
+            if (!m_isPentEvoSelector)
+                return;
+            if (!cbxPentEvoDevice.Enabled)
+            {
+                txtDescription.Text =
+                    "Internal music is disabled automatically because " +
+                    "ZX-MultiSound YM/TSFM is active on ZXBUS.";
+            }
+            else if (cbxPentEvoDevice.SelectedIndex == 2)
+            {
+                txtDescription.Text = "NedoPC TurboSound FM Pro Rev. C" +
+                    Environment.NewLine + "2 x YM2203 and SAA1099.";
+            }
+            else if (cbxPentEvoDevice.SelectedIndex == 1)
+            {
+                txtDescription.Text = "AY8910 with #FE value on IRB input " +
                     "(required for PentEvo)";
+            }
+            else
+            {
+                txtDescription.Text =
+                    "No internal music chip. Use this when a ZXBUS card " +
+                    "provides AY/YM-compatible ports.";
+            }
         }
     }
 }

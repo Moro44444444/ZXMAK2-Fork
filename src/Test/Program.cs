@@ -38,6 +38,11 @@ namespace Test
                 TestTurboSoundFmPro();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/multisound")
+            {
+                TestZxMultiSound();
+                return;
+            }
 
 			SanityUla("NOP        ", new ZXMAK2.Hardware.Spectrum.UlaSpectrum48_Early(), new byte[] { 0x00 }, s_patternUla48_Early_NOP);
 			SanityUla("DJNZ       ", new ZXMAK2.Hardware.Spectrum.UlaSpectrum48_Early(), new byte[] { 0x10, 0x00 }, s_patternUla48_Early_DJNZ);
@@ -335,11 +340,15 @@ namespace Test
             var psgHeadroomPassed =
                 sourceClipped[0] < sourceLengths[0] * 2 &&
                 sourceClipped[1] < sourceLengths[1] * 2;
+            int[] saaCoveragePeaks;
+            var saaCoveragePassed = TestSaa1099Coverage(
+                board, machine, out saaCoveragePeaks);
             machine.BusManager.Disconnect();
             machine.Dispose();
 
             bool passed = chip0 == 0x20 && chip1 == 0x40 &&
-                status == 0x00 && hasAudio && gainPassed && psgHeadroomPassed;
+                status == 0x00 && hasAudio && gainPassed &&
+                psgHeadroomPassed && saaCoveragePassed;
             Console.ForegroundColor = passed ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
                 "TSFM Rev. C: D1=#{0:X2}, D2=#{1:X2}, status=#{2:X2}, audio={3}: {4}",
@@ -364,9 +373,399 @@ namespace Test
                 gainPassed ? "PASS" : "FAIL");
             Console.WriteLine("AY/YM SSG native headroom: {0}",
                 psgHeadroomPassed ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "SAA1099 six tones/noise/envelope peaks: {0}: {1}",
+                string.Join(",", saaCoveragePeaks),
+                saaCoveragePassed ? "PASS" : "FAIL");
             Console.ResetColor();
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static bool TestSaa1099Coverage(
+            ZXMAK2.Hardware.Evo.TurboSoundFmPro board,
+            Spectrum machine,
+            out int[] peaks)
+        {
+            ISoundRenderer saa = null;
+            foreach (var renderer in board.SoundRenderers)
+            {
+                if (renderer.GetType().Name.IndexOf(
+                    "Saa1099", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    saa = renderer;
+                    break;
+                }
+            }
+            if (saa == null)
+            {
+                peaks = new int[0];
+                return false;
+            }
+
+            var type = saa.GetType();
+            var reset = type.GetMethod("ResetChip");
+            var setReg = type.GetMethod("SetReg");
+            peaks = new int[8];
+
+            for (int channel = 0; channel < 6; channel++)
+            {
+                reset.Invoke(saa, null);
+                setReg.Invoke(saa, new object[] { channel, (byte)0xFF });
+                setReg.Invoke(saa, new object[] { 0x08 + channel, (byte)0x80 });
+                int octave = (channel & 1) == 0 ? 0x03 : 0x30;
+                setReg.Invoke(saa, new object[]
+                {
+                    0x10 + channel / 2, (byte)octave,
+                });
+                setReg.Invoke(saa, new object[]
+                {
+                    0x14, (byte)(1 << channel),
+                });
+                setReg.Invoke(saa, new object[] { 0x1C, (byte)0x01 });
+                machine.ExecuteFrame();
+                peaks[channel] = GetStereoPeak(saa.AudioBuffer);
+            }
+
+            // Independent noise clock and an internally-clocked repetitive
+            // envelope exercise the two paths that old SAA cores most often
+            // approximate incorrectly.
+            reset.Invoke(saa, null);
+            setReg.Invoke(saa, new object[] { 0x00, (byte)0xFF });
+            setReg.Invoke(saa, new object[] { 0x16, (byte)0x02 });
+            setReg.Invoke(saa, new object[] { 0x15, (byte)0x01 });
+            setReg.Invoke(saa, new object[] { 0x1C, (byte)0x01 });
+            machine.ExecuteFrame();
+            peaks[6] = GetStereoPeak(saa.AudioBuffer);
+
+            reset.Invoke(saa, null);
+            setReg.Invoke(saa, new object[] { 0x02, (byte)0xFF });
+            setReg.Invoke(saa, new object[] { 0x09, (byte)0xF0 });
+            setReg.Invoke(saa, new object[] { 0x10, (byte)0x70 });
+            setReg.Invoke(saa, new object[] { 0x0A, (byte)0x80 });
+            setReg.Invoke(saa, new object[] { 0x11, (byte)0x03 });
+            setReg.Invoke(saa, new object[] { 0x14, (byte)0x04 });
+            setReg.Invoke(saa, new object[] { 0x18, (byte)0x86 });
+            setReg.Invoke(saa, new object[] { 0x1C, (byte)0x01 });
+            machine.ExecuteFrame();
+            peaks[7] = GetStereoPeak(saa.AudioBuffer);
+
+            foreach (var peak in peaks)
+                if (peak < 256)
+                    return false;
+            return true;
+        }
+
+        private static int GetStereoPeak(uint[] samples)
+        {
+            var peak = 0;
+            foreach (var sample in samples)
+            {
+                peak = Math.Max(peak, Math.Abs((int)GetLeft(sample)));
+                peak = Math.Max(peak, Math.Abs((int)GetRight(sample)));
+            }
+            return peak;
+        }
+
+        private static void TestZxMultiSound()
+        {
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice();
+            var machine = GetTestMachine(Resources.machines_test);
+
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            if (!machine.BusManager.Connect())
+                throw new InvalidOperationException("MultiSound bus connect failed");
+
+            const ushort programAddress = 0x4000;
+            const ushort ymReadAddress = 0x4300;
+            const ushort gsStatusAddress = 0x4301;
+            const ushort gsReadyStatusAddress = 0x4302;
+            const ushort gsReadyProgramAddress = 0x4400;
+            var program = new System.Collections.Generic.List<byte>();
+
+            // Rev.A2 uses partial YM decoding. These aliases deliberately are
+            // not the canonical #FFFD/#BFFD pair.
+            AddPortWrite(program, 0xD00D, 0xF6);
+            AddPortWrite(program, 0xD00D, 0x00);
+            AddPortWrite(program, 0x900D, 0x34);
+            AddPortReadAndStore(program, 0xE00D, ymReadAddress);
+
+            // SAA address/data are #1FF/#FF, unlike the socket TSFM board.
+            AddPortWrite(program, 0x01FF, 0x00);
+            AddPortWrite(program, 0x00FF, 0xFF);
+            AddPortWrite(program, 0x01FF, 0x08);
+            AddPortWrite(program, 0x00FF, 0x80);
+            AddPortWrite(program, 0x01FF, 0x10);
+            AddPortWrite(program, 0x00FF, 0x03);
+            AddPortWrite(program, 0x01FF, 0x14);
+            AddPortWrite(program, 0x00FF, 0x01);
+            AddPortWrite(program, 0x01FF, 0x1C);
+            AddPortWrite(program, 0x00FF, 0x01);
+
+            // Four physical DAC aliases and a GS command/status handshake.
+            AddPortWrite(program, 0x000F, 0x20);
+            AddPortWrite(program, 0x001F, 0x60);
+            AddPortWrite(program, 0x004F, 0xA0);
+            AddPortWrite(program, 0x005F, 0xE0);
+            AddPortWrite(program, 0x00BB, 0x00);
+            AddPortReadAndStore(program, 0x00BB, gsStatusAddress);
+
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(programAddress + i), program[i]);
+
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = programAddress;
+            while (machine.CPU.regs.PC < programAddress + program.Count)
+                machine.DebugStepInto();
+            machine.ExecuteFrame();
+
+            var ym = memory.RDMEM_DBG(ymReadAddress);
+            var gsStatus = memory.RDMEM_DBG(gsStatusAddress);
+            var saaAudio = false;
+            foreach (var renderer in board.SoundRenderers)
+            {
+                if (renderer.GetType().Name.IndexOf("Saa1099",
+                    StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                foreach (var sample in renderer.AudioBuffer)
+                    saaAudio |= sample != 0;
+            }
+            var dacAudio = false;
+            foreach (var sample in board.AudioBuffer)
+                dacAudio |= sample != 0;
+
+            // Rev.A2 remembers whether the last host opcode fetch was in the
+            // lower 16K and locks SAA/SounDrive in that state.  Exercise the
+            // write guard directly so this CPLD quirk cannot regress silently.
+            var boardType = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundDevice);
+            var romLockField = boardType.GetField(
+                "m_hostRomM1Access",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var dacSampleField = boardType.GetField(
+                "m_dacSample",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var writeSoundDrive = boardType.GetMethod(
+                "WriteSoundDrive",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var beforeLockedWrite = ((byte[])dacSampleField.GetValue(board))[0];
+            romLockField.SetValue(board, true);
+            var lockedWriteArgs = new object[]
+            {
+                (ushort)0x000F, (byte)(beforeLockedWrite ^ 0xFF), false,
+            };
+            writeSoundDrive.Invoke(board, lockedWriteArgs);
+            var romLockPassed =
+                ((byte[])dacSampleField.GetValue(board))[0] == beforeLockedWrite;
+            romLockField.SetValue(board, false);
+
+            // Keep the host Z80 in a harmless loop while the independent GS
+            // Z80 completes the official ROM RAM test and consumes command 0.
+            memory.WRMEM_DBG(0x4500, 0x18);
+            memory.WRMEM_DBG(0x4501, 0xFE);
+            machine.CPU.regs.PC = 0x4500;
+            for (var frame = 1; frame < 200; frame++)
+                machine.ExecuteFrame();
+
+            var readyProgram = new System.Collections.Generic.List<byte>();
+            AddPortReadAndStore(
+                readyProgram, 0x00BB, gsReadyStatusAddress);
+            for (var i = 0; i < readyProgram.Count; i++)
+                memory.WRMEM_DBG(
+                    (ushort)(gsReadyProgramAddress + i), readyProgram[i]);
+            machine.CPU.regs.PC = gsReadyProgramAddress;
+            while (machine.CPU.regs.PC <
+                gsReadyProgramAddress + readyProgram.Count)
+                machine.DebugStepInto();
+
+            var gsReadyStatus = memory.RDMEM_DBG(gsReadyStatusAddress);
+
+            var auto = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice();
+            auto.ResolveConfiguration(true, true);
+            var autoPolicy = !auto.EffectiveGeneralSoundEnabled &&
+                !auto.EffectiveYmEnabled && auto.EffectiveSaaEnabled &&
+                auto.EffectiveSoundDriveEnabled;
+            var manualRejected = false;
+            var manual = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice();
+            manual.AutomaticConfiguration = false;
+            try
+            {
+                manual.ResolveConfiguration(true, false);
+            }
+            catch (InvalidOperationException)
+            {
+                manualRejected = true;
+            }
+
+            int gsDacTransitions;
+            int soundDriveTransitions;
+            var gsDacTimeline = TestMultiSoundGsDacTimeline(
+                out gsDacTransitions);
+            var soundDriveTimeline = TestMultiSoundSoundDriveTimeline(
+                out soundDriveTransitions);
+
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            var passed = ym == 0x34 && (gsStatus & 1) != 0 &&
+                (gsReadyStatus & 1) == 0 &&
+                saaAudio && dacAudio && romLockPassed &&
+                autoPolicy && manualRejected && gsDacTimeline &&
+                soundDriveTimeline;
+            Console.ForegroundColor = passed
+                ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.WriteLine(
+                "ZX-MultiSound A2: YM=#{0:X2}, GSSTAT=#{1:X2}->#{2:X2}, " +
+                "SAA={3}, DAC={4}, ROM-LOCK={5}, AUTO={6}, " +
+                "MANUAL-GUARD={7}: {8}",
+                ym, gsStatus, gsReadyStatus, saaAudio, dacAudio,
+                romLockPassed, autoPolicy, manualRejected,
+                passed ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "GS DAC timeline transitions={0}: {1}; " +
+                "SounDrive transitions={2}: {3}",
+                gsDacTransitions, gsDacTimeline ? "PASS" : "FAIL",
+                soundDriveTransitions,
+                soundDriveTimeline ? "PASS" : "FAIL");
+            Console.ResetColor();
+            if (!passed)
+                Environment.ExitCode = 1;
+        }
+
+        private static bool TestMultiSoundGsDacTimeline(out int transitions)
+        {
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice
+            {
+                YmEnabled = false,
+                SaaEnabled = false,
+                SoundDriveEnabled = false,
+                GeneralSoundEnabled = true,
+            };
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            if (!machine.BusManager.Connect())
+                throw new InvalidOperationException("GS DAC test connect failed");
+
+            machine.IsRunning = false;
+            machine.DebugReset();
+            memory.WRMEM_DBG(0x4000, 0x18); // JR $ keeps the host alive
+            memory.WRMEM_DBG(0x4001, 0xFE);
+            machine.CPU.regs.PC = 0x4000;
+
+            var boardType = board.GetType();
+            var gsRam = (byte[])boardType.GetField(
+                "m_gsRam", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(board);
+            var gsCpu = (CpuUnit)boardType.GetField(
+                "m_gsCpu", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(board);
+
+            // Fixed GS RAM page: #4000 -> physical #C000, #6000 -> #E000.
+            // This tiny private-Z80 loop alternates two PCM values on DAC 0.
+            byte[] program =
+            {
+                0x3E, 0x3F,       // LD A,#3F
+                0xD3, 0x06,       // OUT (#06),A: channel 0 volume
+                0x3A, 0x00, 0x60, // LD A,(#6000): DAC sample #10
+                0x06, 0x50,       // LD B,#50: audible-rate hold
+                0x10, 0xFE,       // DJNZ $
+                0x3A, 0x01, 0x60, // LD A,(#6001): DAC sample #F0
+                0x06, 0x50,       // LD B,#50: audible-rate hold
+                0x10, 0xFE,       // DJNZ $
+                0xC3, 0x04, 0x40, // JP #4004
+            };
+            Array.Copy(program, 0, gsRam, 0xC000, program.Length);
+            gsRam[0xE000] = 0x10;
+            gsRam[0xE001] = 0xF0;
+            gsCpu.regs.PC = 0x4000;
+            machine.ExecuteFrame();
+
+            transitions = CountLeftSignTransitions(board.AudioBuffer);
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            return transitions > 20;
+        }
+
+        private static bool TestMultiSoundSoundDriveTimeline(
+            out int transitions)
+        {
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice
+            {
+                YmEnabled = false,
+                SaaEnabled = false,
+                GeneralSoundEnabled = false,
+                SoundDriveEnabled = true,
+            };
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            if (!machine.BusManager.Connect())
+                throw new InvalidOperationException(
+                    "SounDrive DAC test connect failed");
+
+            const ushort start = 0x4000;
+            byte[] program =
+            {
+                0x01, 0x0F, 0x00, // LD BC,#000F
+                0x3E, 0x10,       // LD A,#10
+                0xED, 0x79,       // OUT (C),A
+                0x06, 0x28,       // LD B,#28: audible-rate hold
+                0x10, 0xFE,       // DJNZ $
+                0x3E, 0xF0,       // LD A,#F0
+                0xED, 0x79,       // OUT (C),A
+                0x06, 0x28,       // LD B,#28: audible-rate hold
+                0x10, 0xFE,       // DJNZ $
+                0xC3, 0x03, 0x40, // JP #4003
+            };
+            for (var i = 0; i < program.Length; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+
+            transitions = CountLeftSignTransitions(board.AudioBuffer);
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            return transitions > 20;
+        }
+
+        private static int CountLeftSignTransitions(uint[] samples)
+        {
+            var transitions = 0;
+            var previous = 0;
+            var hasPrevious = false;
+            foreach (var sample in samples)
+            {
+                var value = GetLeft(sample);
+                var sign = value < 0 ? -1 : value > 0 ? 1 : 0;
+                if (sign == 0)
+                    continue;
+                if (hasPrevious && sign != previous)
+                    transitions++;
+                previous = sign;
+                hasPrevious = true;
+            }
+            return transitions;
         }
 
         private static uint PackStereo(short left, short right)

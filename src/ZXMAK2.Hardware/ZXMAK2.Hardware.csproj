@@ -70,6 +70,7 @@
     <Compile Include="DeviceExample.cs" />
     <Compile Include="Evo\AYCHRV.cs" />
     <Compile Include="Evo\TurboSoundFmPro.cs" />
+    <Compile Include="Evo\ZxMultiSoundDevice.cs" />
     <Compile Include="Evo\BeeperPentEvo.cs" />
     <Compile Include="Evo\CmosPentEvo.cs" />
     <Compile Include="Evo\FddPentEvo.cs" />
@@ -153,6 +154,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\NeoGS-1.11.rom">
       <LogicalName>ZXMAK2.Hardware.Resources.NeoGS-1.11.rom</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\ZX-MultiSound-GS-1.05b.rom">
+      <LogicalName>ZXMAK2.Hardware.Resources.ZX-MultiSound-GS-1.05b.rom</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

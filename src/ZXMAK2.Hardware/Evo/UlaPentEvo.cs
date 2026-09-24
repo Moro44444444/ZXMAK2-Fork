@@ -20,6 +20,7 @@ namespace ZXMAK2.Hardware.Evo
     {
         Empty,
         NeoGS,
+        MultiSound,
     }
 
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming
@@ -54,6 +55,7 @@ namespace ZXMAK2.Hardware.Evo
         internal EvoRasterTiming ActiveRaster { get { return EvoRasterTiming.ForMode(m_activeRaster); } }
 
         public PentEvoInternalSound InternalSound { get; set; }
+        public int InternalSoundVolume { get; set; }
         public bool ZxBusSlot1Enabled { get; set; }
         public PentEvoZxBusDevice ZxBusSlot1Device { get; set; }
         public bool ZxBusSlot2Enabled { get; set; }
@@ -284,6 +286,7 @@ namespace ZXMAK2.Hardware.Evo
             Name = "PENTEVO";
             Description = "ZX Evolution BaseConf motherboard";
             InternalSound = PentEvoInternalSound.AY8910CHRV;
+            InternalSoundVolume = 100;
             ZxBusSlot1Enabled = false;
             ZxBusSlot1Device = PentEvoZxBusDevice.Empty;
             ZxBusSlot2Enabled = false;
@@ -297,6 +300,10 @@ namespace ZXMAK2.Hardware.Evo
                 itemNode,
                 "internalSound",
                 InternalSound);
+            InternalSoundVolume = Utils.GetXmlAttributeAsInt32(
+                itemNode,
+                "internalSoundVolume",
+                InternalSoundVolume);
             ZxBusSlot1Enabled = Utils.GetXmlAttributeAsBool(
                 itemNode,
                 "zxBusSlot1Enabled",
@@ -319,6 +326,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttributeAsEnum(itemNode, "internalSound", InternalSound);
+            Utils.SetXmlAttribute(
+                itemNode, "internalSoundVolume", InternalSoundVolume);
             Utils.SetXmlAttribute(itemNode, "zxBusSlot1Enabled", ZxBusSlot1Enabled);
             Utils.SetXmlAttributeAsEnum(itemNode, "zxBusSlot1Device", ZxBusSlot1Device);
             Utils.SetXmlAttribute(itemNode, "zxBusSlot2Enabled", ZxBusSlot2Enabled);

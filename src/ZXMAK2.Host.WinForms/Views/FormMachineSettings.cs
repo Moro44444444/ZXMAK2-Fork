@@ -287,6 +287,7 @@ namespace ZXMAK2.Host.WinForms.Views
         private List<ConfigScreenControl> m_ctlList = new List<ConfigScreenControl>();
         private List<BusDeviceBase> m_devList = new List<BusDeviceBase>();
         private CtlSettingsPentEvoZxBus m_pentEvoZxBusControl;
+        private CtlSettingsGenericSound m_pentEvoMusicControl;
         private CtlSettingsNeoGsSd m_neoGsSdControl;
         private ListViewItem m_neoGsSdItem;
 
@@ -355,7 +356,6 @@ namespace ZXMAK2.Host.WinForms.Views
             lvi.SubItems.Add(name);
             lvi.ImageIndex = FindImageIndex(category);
             lstNavigation.Items.Insert(index, lvi);
-            m_neoGsSdItem = lvi;
         }
 
         public static int FindImageIndex(BusDeviceCategory category)
@@ -509,10 +509,11 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             if (m_pentEvoZxBusControl != null)
             {
-                m_pentEvoZxBusControl.NeoGsAvailabilityChanged -=
-                    PentEvoNeoGsAvailabilityChanged;
+                m_pentEvoZxBusControl.ConfigurationChanged -=
+                    PentEvoZxBusConfigurationChanged;
             }
             m_pentEvoZxBusControl = null;
+            m_pentEvoMusicControl = null;
             m_neoGsSdControl = null;
             m_neoGsSdItem = null;
             lstNavigation.Items.Clear();
@@ -526,31 +527,20 @@ namespace ZXMAK2.Host.WinForms.Views
             var isPentEvo = m_workBus.FindDevice<UlaPentEvo>() != null;
             foreach (var device in m_workBus.FindDevices<BusDeviceBase>())
             {
-                // NeoGS is owned by the physical ZXBUS slot selector. Music
-                // devices use the normal list and can be replaced just like
-                // AY/YM on the other machine profiles.
-                if (isPentEvo && device is NeoGsDevice)
+                // Physical ZXBUS boards and the internal music socket are
+                // represented by dedicated PentEvo pages below.
+                if (isPentEvo &&
+                    (device is NeoGsDevice ||
+                     device is ZxMultiSoundDevice ||
+                     device is AYCHRV ||
+                     device is TurboSoundFmPro))
                     continue;
                 try
                 {
-                    UserControl control;
-                    if (isPentEvo &&
-                        (device is AYCHRV || device is TurboSoundFmPro))
-                    {
-                        var soundControl = new CtlSettingsGenericSound();
-                        soundControl.InitPentEvo(
-                            m_workBus,
-                            m_host,
-                            device);
-                        control = soundControl;
-                    }
-                    else
-                    {
-                        control = ResolveScreenControl(
-                            m_workBus,
-                            m_host,
-                            device);
-                    }
+                    var control = ResolveScreenControl(
+                        m_workBus,
+                        m_host,
+                        device);
                     insertListViewItem(lstNavigation.Items.Count, control, device);
                 }
                 catch (Exception ex)
@@ -566,11 +556,22 @@ namespace ZXMAK2.Host.WinForms.Views
             if (isPentEvo)
             {
                 var pentEvo = m_workBus.FindDevice<UlaPentEvo>();
+                var internalMusic = (BusDeviceBase)
+                    m_workBus.FindDevice<TurboSoundFmPro>() ??
+                    m_workBus.FindDevice<AYCHRV>();
+                m_pentEvoMusicControl = new CtlSettingsGenericSound();
+                m_pentEvoMusicControl.InitPentEvo(
+                    m_workBus, m_host, internalMusic);
                 m_pentEvoZxBusControl = new CtlSettingsPentEvoZxBus();
                 m_pentEvoZxBusControl.Initialize(m_workBus, m_host, pentEvo);
                 var ulaIndex = m_devList.FindIndex(device => device is UlaPentEvo);
                 insertSpecialListViewItem(
                     ulaIndex >= 0 ? ulaIndex + 1 : 1,
+                    m_pentEvoMusicControl,
+                    BusDeviceCategory.Music,
+                    "Internal PentEvo");
+                insertSpecialListViewItem(
+                    ulaIndex >= 0 ? ulaIndex + 2 : 2,
                     m_pentEvoZxBusControl,
                     BusDeviceCategory.Other,
                     "ZXBUS PentEvo");
@@ -587,9 +588,10 @@ namespace ZXMAK2.Host.WinForms.Views
                     m_neoGsSdControl,
                     BusDeviceCategory.Disk,
                     "SD NeoGS");
-                m_pentEvoZxBusControl.NeoGsAvailabilityChanged +=
-                    PentEvoNeoGsAvailabilityChanged;
-                PentEvoNeoGsAvailabilityChanged(
+                m_neoGsSdItem = lstNavigation.Items[neoGsSdIndex];
+                m_pentEvoZxBusControl.ConfigurationChanged +=
+                    PentEvoZxBusConfigurationChanged;
+                PentEvoZxBusConfigurationChanged(
                     m_pentEvoZxBusControl,
                     EventArgs.Empty);
             }
@@ -599,7 +601,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 lstNavigation.Items[0].Selected = true;
         }
 
-        private void PentEvoNeoGsAvailabilityChanged(
+        private void PentEvoZxBusConfigurationChanged(
             object sender,
             EventArgs e)
         {
@@ -612,6 +614,11 @@ namespace ZXMAK2.Host.WinForms.Views
                 m_neoGsSdItem.ForeColor = enabled
                     ? SystemColors.WindowText
                     : SystemColors.GrayText;
+            }
+            if (m_pentEvoMusicControl != null)
+            {
+                m_pentEvoMusicControl.SetMultiSoundYmOverride(
+                    m_pentEvoZxBusControl.IsAutomaticMultiSoundYmActive);
             }
         }
 
@@ -917,6 +924,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     var additionalIgnoreTypes = new List<Type>();
                     // NeoGS is installed only through a real ZXBUS slot.
                     additionalIgnoreTypes.Add(typeof(NeoGsDevice));
+                    additionalIgnoreTypes.Add(typeof(ZxMultiSoundDevice));
                     // TSFM Pro replaces an AY/YM socket. Do not offer it to
                     // profiles which have no compatible PSG to replace.
                     if (m_workBus.FindDevice<AY8910>() == null &&
