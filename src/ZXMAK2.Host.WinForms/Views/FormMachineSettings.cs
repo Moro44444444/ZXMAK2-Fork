@@ -16,6 +16,7 @@ using ZXMAK2.Host.Entities;
 using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
 using ZXMAK2.Host.WinForms.Tools;
 using ZXMAK2.Hardware.Evo;
+using ZXMAK2.Hardware.General;
 
 
 namespace ZXMAK2.Host.WinForms.Views
@@ -285,7 +286,7 @@ namespace ZXMAK2.Host.WinForms.Views
         private BusManager m_workBus;
         private List<ConfigScreenControl> m_ctlList = new List<ConfigScreenControl>();
         private List<BusDeviceBase> m_devList = new List<BusDeviceBase>();
-        private CtlSettingsPentEvo m_pentEvoControl;
+        private CtlSettingsPentEvoZxBus m_pentEvoZxBusControl;
         private CtlSettingsNeoGsSd m_neoGsSdControl;
         private ListViewItem m_neoGsSdItem;
 
@@ -483,12 +484,12 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private void initWorkBus()
         {
-            if (m_pentEvoControl != null)
+            if (m_pentEvoZxBusControl != null)
             {
-                m_pentEvoControl.NeoGsAvailabilityChanged -=
+                m_pentEvoZxBusControl.NeoGsAvailabilityChanged -=
                     PentEvoNeoGsAvailabilityChanged;
             }
-            m_pentEvoControl = null;
+            m_pentEvoZxBusControl = null;
             m_neoGsSdControl = null;
             m_neoGsSdItem = null;
             lstNavigation.Items.Clear();
@@ -502,20 +503,15 @@ namespace ZXMAK2.Host.WinForms.Views
             var isPentEvo = m_workBus.FindDevice<UlaPentEvo>() != null;
             foreach (var device in m_workBus.FindDevices<BusDeviceBase>())
             {
-                // BaseConf internal music is configured on the PENTEVO page.
-                // Keep it out of the generic device list to prevent two
-                // conflicting configuration surfaces for one onboard chip.
-                if (isPentEvo &&
-                    (device is AYCHRV ||
-                        device is TurboSoundFmPro ||
-                        device is NeoGsDevice))
+                // NeoGS is owned by the physical ZXBUS slot selector. Music
+                // devices use the normal list and can be replaced just like
+                // AY/YM on the other machine profiles.
+                if (isPentEvo && device is NeoGsDevice)
                     continue;
                 try
                 {
                     var control = ResolveScreenControl(m_workBus, m_host, device);
                     insertListViewItem(lstNavigation.Items.Count, control, device);
-                    if (device is UlaPentEvo)
-                        m_pentEvoControl = control as CtlSettingsPentEvo;
                 }
                 catch (Exception ex)
                 {
@@ -527,8 +523,18 @@ namespace ZXMAK2.Host.WinForms.Views
                 }
             }
 
-            if (isPentEvo && m_pentEvoControl != null)
+            if (isPentEvo)
             {
+                var pentEvo = m_workBus.FindDevice<UlaPentEvo>();
+                m_pentEvoZxBusControl = new CtlSettingsPentEvoZxBus();
+                m_pentEvoZxBusControl.Initialize(m_workBus, m_host, pentEvo);
+                var ulaIndex = m_devList.FindIndex(device => device is UlaPentEvo);
+                insertSpecialListViewItem(
+                    ulaIndex >= 0 ? ulaIndex + 1 : 1,
+                    m_pentEvoZxBusControl,
+                    BusDeviceCategory.Other,
+                    "ZXBUS PentEvo");
+
                 m_neoGsSdControl = new CtlSettingsNeoGsSd();
                 m_neoGsSdControl.Initialize(m_workBus, m_host);
                 var zControllerIndex = m_devList.FindIndex(
@@ -541,10 +547,10 @@ namespace ZXMAK2.Host.WinForms.Views
                     m_neoGsSdControl,
                     BusDeviceCategory.Disk,
                     "SD NeoGS");
-                m_pentEvoControl.NeoGsAvailabilityChanged +=
+                m_pentEvoZxBusControl.NeoGsAvailabilityChanged +=
                     PentEvoNeoGsAvailabilityChanged;
                 PentEvoNeoGsAvailabilityChanged(
-                    m_pentEvoControl,
+                    m_pentEvoZxBusControl,
                     EventArgs.Empty);
             }
 
@@ -557,9 +563,9 @@ namespace ZXMAK2.Host.WinForms.Views
             object sender,
             EventArgs e)
         {
-            if (m_pentEvoControl == null || m_neoGsSdControl == null)
+            if (m_pentEvoZxBusControl == null || m_neoGsSdControl == null)
                 return;
-            var enabled = m_pentEvoControl.IsNeoGsBoardEnabled;
+            var enabled = m_pentEvoZxBusControl.IsNeoGsBoardEnabled;
             m_neoGsSdControl.SetBoardEnabled(enabled);
             if (m_neoGsSdItem != null)
             {
@@ -868,16 +874,17 @@ namespace ZXMAK2.Host.WinForms.Views
                 {
                     wizard.IgnoreList =
                         m_workBus.FindDevices<BusDeviceBase>();
-                    if (m_workBus.FindDevice<UlaPentEvo>() != null)
+                    var additionalIgnoreTypes = new List<Type>();
+                    // NeoGS is installed only through a real ZXBUS slot.
+                    additionalIgnoreTypes.Add(typeof(NeoGsDevice));
+                    // TSFM Pro replaces an AY/YM socket. Do not offer it to
+                    // profiles which have no compatible PSG to replace.
+                    if (m_workBus.FindDevice<AY8910>() == null &&
+                        m_workBus.FindDevice<TurboSoundFmPro>() == null)
                     {
-                        wizard.AdditionalIgnoreTypes =
-                            new Type[]
-                            {
-                                typeof(AYCHRV),
-                                typeof(TurboSoundFmPro),
-                                typeof(NeoGsDevice),
-                            };
+                        additionalIgnoreTypes.Add(typeof(TurboSoundFmPro));
                     }
+                    wizard.AdditionalIgnoreTypes = additionalIgnoreTypes;
                     if (wizard.ShowDialog() != System.Windows.Forms.DialogResult.OK)
                     {
                         return;
@@ -890,6 +897,17 @@ namespace ZXMAK2.Host.WinForms.Views
                     }
 
                     var device = wizard.Device;
+                    if (device is TurboSoundFmPro)
+                    {
+                        foreach (var ay in m_workBus.FindDevices<AY8910>().ToArray())
+                            m_workBus.Remove(ay);
+                    }
+                    else if (device is AY8910)
+                    {
+                        var tsfm = m_workBus.FindDevice<TurboSoundFmPro>();
+                        if (tsfm != null)
+                            m_workBus.Remove(tsfm);
+                    }
                     m_workBus.Add(device);
 
                     m_workBus.Sort();

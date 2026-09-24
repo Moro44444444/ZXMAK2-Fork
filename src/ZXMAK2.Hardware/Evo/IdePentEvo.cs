@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using ZXMAK2.Engine;
 using ZXMAK2.Engine.Interfaces;
@@ -15,7 +16,8 @@ using ZXMAK2.Resources;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class IdePentEvo : BusDeviceBase, IMediaStatusDevice
+    public class IdePentEvo : BusDeviceBase, IMediaStatusDevice,
+        IOpticalMediaStatus
     {
         #region Fields
 
@@ -32,6 +34,8 @@ namespace ZXMAK2.Hardware.Evo
         private int m_ide_read;
         private IdeMediaCommand m_openImageCommand;
         private IdeMediaCommand m_ejectImageCommand;
+        private IdeMediaCommand m_connectCdRomCommand;
+        private IdeMediaCommand m_disconnectCdRomCommand;
 
         #endregion Fields
 
@@ -57,14 +61,30 @@ namespace ZXMAK2.Hardware.Evo
                 OpenImageCommand_OnExecute,
                 MediaCommand_OnCanExecute,
                 "Open HDD image...",
+                MediaCommandKind.HardDisk,
                 MediaCommandAction.Load);
             m_ejectImageCommand = new IdeMediaCommand(
                 EjectImageCommand_OnExecute,
                 MediaCommand_OnCanExecute,
                 "Eject HDD",
+                MediaCommandKind.HardDisk,
+                MediaCommandAction.Eject);
+            m_connectCdRomCommand = new IdeMediaCommand(
+                ConnectCdRomCommand_OnExecute,
+                ConnectCdRomCommand_OnCanExecute,
+                "Connect CD-ROM...",
+                MediaCommandKind.OpticalDisc,
+                MediaCommandAction.Load);
+            m_disconnectCdRomCommand = new IdeMediaCommand(
+                DisconnectCdRomCommand_OnExecute,
+                DisconnectCdRomCommand_OnCanExecute,
+                "Eject / Disconnect CD-ROM",
+                MediaCommandKind.OpticalDisc,
                 MediaCommandAction.Eject);
             bmgr.AddCommandUi(m_openImageCommand);
             bmgr.AddCommandUi(m_ejectImageCommand);
+            bmgr.AddCommandUi(m_connectCdRomCommand);
+            bmgr.AddCommandUi(m_disconnectCdRomCommand);
 
             bmgr.RegisterIcon(m_iconHdd);
             bmgr.Events.SubscribeBeginFrame(BusBeginFrame);
@@ -228,6 +248,38 @@ namespace ZXMAK2.Hardware.Evo
             CdRom.Disconnect();
         }
 
+        public bool IsOpticalDeviceConnected
+        {
+            get
+            {
+                return CdRom.IsCdrom &&
+                    !string.IsNullOrEmpty(CdRom.FileName);
+            }
+        }
+
+        public bool IsOpticalMediaReady
+        {
+            get
+            {
+                if (!IsOpticalDeviceConnected)
+                    return false;
+                try
+                {
+                    var drive = new DriveInfo(CdRom.FileName);
+                    return drive.DriveType == DriveType.CDRom && drive.IsReady;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        public string OpticalDriveName
+        {
+            get { return CdRom.FileName ?? string.Empty; }
+        }
+
         public MediaStatusKind MediaStatusKind
         {
             get { return MediaStatusKind.HardDisk; }
@@ -294,6 +346,79 @@ namespace ZXMAK2.Hardware.Evo
                 Logger.Error(ex);
                 Locator.Resolve<IUserMessage>()
                     .Error("Cannot eject HDD!\n\n{0}", ex.Message);
+            }
+        }
+
+        private bool ConnectCdRomCommand_OnCanExecute(Object arg)
+        {
+            var viewResolver = Locator.Resolve<IResolver>("View");
+            return viewResolver.CheckAvailable<IUserQuery>() &&
+                AtapiPasser.GetOpticalDrives().Any();
+        }
+
+        private bool DisconnectCdRomCommand_OnCanExecute(Object arg)
+        {
+            return IsOpticalDeviceConnected;
+        }
+
+        private void ConnectCdRomCommand_OnExecute(Object arg)
+        {
+            try
+            {
+                var drives = AtapiPasser.GetOpticalDrives().Cast<object>().ToArray();
+                if (drives.Length == 0)
+                {
+                    Locator.Resolve<IUserMessage>().Warning(
+                        "No Windows CD/DVD drive is available.");
+                    return;
+                }
+                var query = Locator.Resolve<IResolver>("View").TryResolve<IUserQuery>();
+                if (query == null)
+                    return;
+                var selected = drives.Length == 1
+                    ? drives[0]
+                    : query.ObjectSelector(drives, "Connect CD/DVD-ROM (IDE Slave)");
+                var driveName = selected as string;
+                if (string.IsNullOrEmpty(driveName))
+                    return;
+
+                m_ata.Close();
+                try
+                {
+                    ConfigureCdRom(driveName);
+                    m_ata.Open();
+                }
+                catch
+                {
+                    DisconnectCdRom();
+                    m_ata.Open();
+                    throw;
+                }
+                m_connectCdRomCommand.NotifyExecutedSuccessfully();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>().Error(
+                    "Cannot connect CD/DVD-ROM!\n\n{0}", ex.Message);
+            }
+        }
+
+        private void DisconnectCdRomCommand_OnExecute(Object arg)
+        {
+            try
+            {
+                m_ata.Close();
+                DisconnectCdRom();
+                m_ata.Open();
+                m_disconnectCdRomCommand.NotifyExecutedSuccessfully();
+                Logger.Info("CD/DVD-ROM ejected and IDE Slave disconnected");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex);
+                Locator.Resolve<IUserMessage>().Error(
+                    "Cannot disconnect CD/DVD-ROM!\n\n{0}", ex.Message);
             }
         }
 
@@ -502,15 +627,18 @@ namespace ZXMAK2.Hardware.Evo
                 Action<object> action,
                 Func<object, bool> canExecute,
                 string text,
+                MediaCommandKind mediaKind,
                 MediaCommandAction mediaAction)
                 : base(action, canExecute, text)
             {
+                MediaKind = mediaKind;
                 MediaAction = mediaAction;
             }
 
             public MediaCommandKind MediaKind
             {
-                get { return MediaCommandKind.HardDisk; }
+                get;
+                private set;
             }
 
             public MediaCommandAction MediaAction { get; private set; }

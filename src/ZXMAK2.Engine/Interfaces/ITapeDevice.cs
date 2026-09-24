@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ZXMAK2.Model.Tape.Interfaces;
+using ZXMAK2.Mvvm;
 
 
 namespace ZXMAK2.Engine.Interfaces
@@ -13,6 +14,7 @@ namespace ZXMAK2.Engine.Interfaces
 		void Eject();
 		void Reset();       // loaded new image
 		bool IsPlay { get; }
+		bool HasTape { get; }
 		int TactsPerSecond { get; }
 		// TAP/TZX pulse lengths use the original 3.5 MHz Z80 timebase.  The
 		// active machine profile supplies a factor when it advances Cpu.Tact
@@ -25,5 +27,6 @@ namespace ZXMAK2.Engine.Interfaces
 		int Position { get; }
 		bool UseTraps { get; set; }
 		bool UseAutoPlay { get; set; }
+		ICommand ViewCommand { get; }
 	}
 }

@@ -120,6 +120,53 @@ namespace ZXMAK2.Host.Presentation
                         ((IMediaStatusDevice)device).IsMediaMounted);
         }
 
+        public MediaState GetMediaState(MediaStatusKind mediaKind, int index)
+        {
+            if (m_vm == null)
+                return MediaState.Unavailable;
+            switch (mediaKind)
+            {
+                case MediaStatusKind.Floppy:
+                    var beta = m_vm.Bus.FindDevices<IBetaDiskDevice>().FirstOrDefault();
+                    if (beta == null || index < 0 || index > 3)
+                        return MediaState.Unavailable;
+                    return beta.IsDriveMounted(index)
+                        ? MediaState.Mounted
+                        : MediaState.Empty;
+                case MediaStatusKind.SecureDigital:
+                    var sd = m_vm.Bus.FindDevices<IMediaStatusDevice>()
+                        .OfType<ISecureDigitalMediaStatus>()
+                        .FirstOrDefault(device => device.SecureDigitalIndex == index);
+                    if (sd == null)
+                        return MediaState.Unavailable;
+                    return ((IMediaStatusDevice)sd).IsMediaMounted
+                        ? MediaState.Mounted
+                        : MediaState.Empty;
+                case MediaStatusKind.Tape:
+                    if (m_tapeDevice == null)
+                        return MediaState.Unavailable;
+                    return m_tapeDevice.HasTape
+                        ? MediaState.Mounted
+                        : MediaState.Empty;
+                case MediaStatusKind.OpticalDisc:
+                    var optical = m_vm.Bus.FindDevices<IOpticalMediaStatus>()
+                        .FirstOrDefault();
+                    if (optical == null || !optical.IsOpticalDeviceConnected)
+                        return MediaState.Unavailable;
+                    return optical.IsOpticalMediaReady
+                        ? MediaState.Mounted
+                        : MediaState.Empty;
+                default:
+                    var media = m_vm.Bus.FindDevices<IMediaStatusDevice>()
+                        .FirstOrDefault(device => device.MediaStatusKind == mediaKind);
+                    if (media == null)
+                        return MediaState.Unavailable;
+                    return media.IsMediaMounted
+                        ? MediaState.Mounted
+                        : MediaState.Empty;
+            }
+        }
+
         public bool ResetCmosState()
         {
             if (m_vm == null)
@@ -255,6 +302,14 @@ namespace ZXMAK2.Host.Presentation
         public ICommand CommandHelpKeyboardHelp { get; private set; }
         public ICommand CommandHelpAbout { get; private set; }
         public ICommand CommandTapePause { get; private set; }
+        public ICommand CommandTapeLoad { get; private set; }
+        public ICommand CommandTapeEject { get; private set; }
+        public ICommand CommandTapePlay { get; private set; }
+        public ICommand CommandTapeStop { get; private set; }
+        public ICommand CommandTapeRewind { get; private set; }
+        public ICommand CommandTapeQuickLoad { get; private set; }
+        public ICommand CommandTapeAutoPlay { get; private set; }
+        public ICommand CommandTapeOpenPlayer { get; private set; }
         public ICommand CommandQuickLoad { get; private set; }
         public ICommand CommandOpenUri { get; private set; }
         public ICommand CommandMachineSwitch { get; private set; }
@@ -547,6 +602,18 @@ namespace ZXMAK2.Host.Presentation
             CommandHelpKeyboardHelp = CreateViewHolderCommand<IKeyboardView>();
             CommandHelpAbout = CreateViewHolderCommand<IAboutView>();
             CommandTapePause = new CommandDelegate(CommandTapePause_OnExecute, CommandTapePause_CanExecute);
+            CommandTapeLoad = new CommandDelegate(CommandTapeLoad_OnExecute, CommandTapeLoad_CanExecute);
+            CommandTapeEject = new CommandDelegate(CommandTapeEject_OnExecute, CommandTapeEject_CanExecute);
+            CommandTapePlay = new CommandDelegate(CommandTapePlay_OnExecute, CommandTapePlay_CanExecute);
+            CommandTapeStop = new CommandDelegate(CommandTapeStop_OnExecute, CommandTapeStop_CanExecute);
+            CommandTapeRewind = new CommandDelegate(CommandTapeRewind_OnExecute, CommandTapeEject_CanExecute);
+            CommandTapeQuickLoad = new CommandDelegate(
+                CommandTapeQuickLoad_OnExecute,
+                arg => CommandTapeSetting_CanExecute());
+            CommandTapeAutoPlay = new CommandDelegate(
+                CommandTapeAutoPlay_OnExecute,
+                arg => CommandTapeSetting_CanExecute());
+            CommandTapeOpenPlayer = new CommandDelegate(CommandTapeOpenPlayer_OnExecute, CommandTapeSetting_CanExecute);
             CommandQuickLoad = new CommandDelegate(CommandQuickLoad_OnExecute, CommandQuickLoad_OnCanExecute);
             CommandOpenUri = new CommandDelegate(CommandOpenUri_OnExecute, CommandOpenUri_OnCanExecute);
             CommandMachineSwitch = new CommandDelegate(CommandMachineSwitch_OnExecute, CommandMachineSwitch_OnCanExecute);
@@ -572,6 +639,14 @@ namespace ZXMAK2.Host.Presentation
             CommandHelpKeyboardHelp.Text = "Keyboard Help";
             CommandHelpAbout.Text = "About...";
             CommandTapePause.Text = "Pause Tape";
+            CommandTapeLoad.Text = "Load Tape...";
+            CommandTapeEject.Text = "Eject Tape";
+            CommandTapePlay.Text = "Play";
+            CommandTapeStop.Text = "Stop";
+            CommandTapeRewind.Text = "Rewind to Start";
+            CommandTapeQuickLoad.Text = "Quick Load";
+            CommandTapeAutoPlay.Text = "Auto Play";
+            CommandTapeOpenPlayer.Text = "Tape Player...";
             CommandQuickLoad.Text = "Quick Boot";
             CommandOpenUri.Text = "Open Url";
             CommandMachineSwitch.Text = "Switch Machine";
@@ -604,6 +679,7 @@ namespace ZXMAK2.Host.Presentation
             CommandHelpKeyboardHelp.Update();
             CommandHelpAbout.Update();
             CommandTapePause.Update();
+            UpdateTapeCommands();
             CommandQuickLoad.Update();
             CommandOpenUri.Update();
             CommandMachineSwitch.Update();
@@ -1097,6 +1173,145 @@ namespace ZXMAK2.Host.Presentation
             }
         }
 
+        private bool CommandTapeLoad_CanExecute()
+        {
+            return m_tapeDevice != null && CheckViewAvailable<IOpenFileDialog>();
+        }
+
+        private void CommandTapeLoad_OnExecute()
+        {
+            if (!CommandTapeLoad_CanExecute())
+                return;
+            var dialog = GetView<IOpenFileDialog>();
+            if (dialog == null)
+                return;
+            using (dialog)
+            {
+                dialog.Title = "Load Tape...";
+                dialog.Filter = "Tape images (*.tap, *.tzx, *.csw, *.wav)|*.tap;*.tzx;*.csw;*.wav";
+                dialog.FileName = string.Empty;
+                dialog.ShowReadOnly = false;
+                dialog.ReadOnlyChecked = true;
+                dialog.CheckFileExists = true;
+                dialog.Multiselect = false;
+                dialog.FileOk += LoadDialog_FileOk;
+                try
+                {
+                    if (dialog.ShowDialog(m_view) == DlgResult.OK)
+                        OpenFile(dialog.FileName, true);
+                }
+                finally
+                {
+                    dialog.FileOk -= LoadDialog_FileOk;
+                }
+            }
+            UpdateTapeCommands();
+        }
+
+        private bool CommandTapeEject_CanExecute()
+        {
+            return m_tapeDevice != null && m_tapeDevice.HasTape;
+        }
+
+        private void CommandTapeEject_OnExecute()
+        {
+            if (!CommandTapeEject_CanExecute())
+                return;
+            m_tapeDevice.Stop();
+            m_tapeDevice.Eject();
+            Title = string.Empty;
+            if (m_vm != null)
+                m_vm.SaveConfig();
+            UpdateTapeCommands();
+        }
+
+        private bool CommandTapePlay_CanExecute()
+        {
+            return CommandTapeEject_CanExecute() &&
+                !m_tapeDevice.IsPlay && !m_tapeDevice.UseAutoPlay;
+        }
+
+        private void CommandTapePlay_OnExecute()
+        {
+            if (CommandTapePlay_CanExecute())
+                m_tapeDevice.Play();
+        }
+
+        private bool CommandTapeStop_CanExecute()
+        {
+            return m_tapeDevice != null && m_tapeDevice.IsPlay;
+        }
+
+        private void CommandTapeStop_OnExecute()
+        {
+            if (CommandTapeStop_CanExecute())
+                m_tapeDevice.Stop();
+        }
+
+        private void CommandTapeRewind_OnExecute()
+        {
+            if (CommandTapeEject_CanExecute())
+                m_tapeDevice.Rewind();
+        }
+
+        private bool CommandTapeSetting_CanExecute()
+        {
+            return m_tapeDevice != null;
+        }
+
+        private void CommandTapeQuickLoad_OnExecute(object state)
+        {
+            if (!CommandTapeSetting_CanExecute())
+                return;
+            var requested = state as bool?;
+            m_tapeDevice.UseTraps = requested.HasValue
+                ? requested.Value
+                : !m_tapeDevice.UseTraps;
+            if (m_vm != null)
+                m_vm.SaveConfig();
+            UpdateTapeCommands();
+        }
+
+        private void CommandTapeAutoPlay_OnExecute(object state)
+        {
+            if (!CommandTapeSetting_CanExecute())
+                return;
+            var requested = state as bool?;
+            m_tapeDevice.UseAutoPlay = requested.HasValue
+                ? requested.Value
+                : !m_tapeDevice.UseAutoPlay;
+            if (m_vm != null)
+                m_vm.SaveConfig();
+            UpdateTapeCommands();
+        }
+
+        private void CommandTapeOpenPlayer_OnExecute()
+        {
+            if (!CommandTapeSetting_CanExecute())
+                return;
+            var command = m_tapeDevice.ViewCommand;
+            if (command != null && command.CanExecute(m_view))
+                command.Execute(m_view);
+        }
+
+        private void UpdateTapeCommands()
+        {
+            if (CommandTapeLoad == null)
+                return;
+            CommandTapeQuickLoad.Checked = m_tapeDevice != null &&
+                m_tapeDevice.UseTraps;
+            CommandTapeAutoPlay.Checked = m_tapeDevice != null &&
+                m_tapeDevice.UseAutoPlay;
+            CommandTapeLoad.Update();
+            CommandTapeEject.Update();
+            CommandTapePlay.Update();
+            CommandTapeStop.Update();
+            CommandTapeRewind.Update();
+            CommandTapeQuickLoad.Update();
+            CommandTapeAutoPlay.Update();
+            CommandTapeOpenPlayer.Update();
+        }
+
         private void SetTapeDevice(ITapeDevice tapeDevice)
         {
             if (ReferenceEquals(m_tapeDevice, tapeDevice))
@@ -1106,17 +1321,25 @@ namespace ZXMAK2.Host.Presentation
             if (m_tapeDevice != null)
             {
                 m_tapeDevice.TapeEjected -= TapeDevice_OnTapeEjected;
+                m_tapeDevice.TapeStateChanged -= TapeDevice_OnTapeStateChanged;
             }
             m_tapeDevice = tapeDevice;
             if (m_tapeDevice != null)
             {
                 m_tapeDevice.TapeEjected += TapeDevice_OnTapeEjected;
+                m_tapeDevice.TapeStateChanged += TapeDevice_OnTapeStateChanged;
             }
+            UpdateTapeCommands();
         }
 
         private void TapeDevice_OnTapeEjected(object sender, EventArgs e)
         {
             ExecuteSynchronizedAsync(() => Title = string.Empty);
+        }
+
+        private void TapeDevice_OnTapeStateChanged(object sender, EventArgs e)
+        {
+            ExecuteSynchronizedAsync(UpdateTapeCommands);
         }
 
         private bool CommandQuickLoad_OnCanExecute()

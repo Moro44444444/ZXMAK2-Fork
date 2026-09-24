@@ -5,6 +5,7 @@ using ZXMAK2.Hardware;
 using ZXMAK2.Host.Interfaces;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
+using ZXMAK2.Hardware.Evo;
 
 
 namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
@@ -52,13 +53,23 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             }
         }
 
+        public void Init(BusManager bmgr, IHostService host, UlaPentEvo device)
+        {
+            Init(bmgr, host, (UlaDeviceBase)device);
+        }
+
         public override void Apply()
         {
             var bdd = (BusDeviceDescriptor)cbxType.SelectedItem;
 
             var ula = (IUlaDevice)Activator.CreateInstance(bdd.Type);
             var oldUla = m_bmgr.FindDevice<IUlaDevice>();
-            if (oldUla != null && oldUla.GetType() != ula.GetType())
+            if (oldUla != null && oldUla.GetType() == ula.GetType())
+            {
+                Init(m_bmgr, m_host, (UlaDeviceBase)oldUla);
+                return;
+            }
+            if (oldUla != null)
             {
                 var busOldUla = (BusDeviceBase)oldUla;
                 var busNewUla = (BusDeviceBase)ula;

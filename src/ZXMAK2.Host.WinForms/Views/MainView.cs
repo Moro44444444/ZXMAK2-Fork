@@ -40,8 +40,8 @@ namespace ZXMAK2.Host.WinForms.Views
         private const int MediaToolbarDropDownHeight = 42;
         private readonly Dictionary<MediaStatusKind, ToolStripDropDownButton> _mediaButtons =
             new Dictionary<MediaStatusKind, ToolStripDropDownButton>();
-        private readonly Dictionary<MediaStatusKind, bool?> _mediaMountedStates =
-            new Dictionary<MediaStatusKind, bool?>();
+        private readonly Dictionary<MediaStatusKind, MediaState?> _mediaMountedStates =
+            new Dictionary<MediaStatusKind, MediaState?>();
         private readonly List<ToolStripItemBindingAdapter> _mediaItemAdapters =
             new List<ToolStripItemBindingAdapter>();
         private bool? _quickBootAvailable;
@@ -51,14 +51,30 @@ namespace ZXMAK2.Host.WinForms.Views
             new ISuccessCommand[2];
         private readonly ToolStripMenuItem[] _ejectSdMenuItems =
             new ToolStripMenuItem[2];
-        private readonly bool?[] _sdMountedStates = new bool?[2];
+        private readonly MediaState?[] _sdMountedStates = new MediaState?[2];
         private ISuccessCommand _openHddCommand;
         private ISuccessCommand _ejectHddCommand;
         private readonly ISuccessCommand[] _openFddCommands = new ISuccessCommand[4];
         private readonly ISuccessCommand[] _ejectFddCommands = new ISuccessCommand[4];
         private readonly ToolStripMenuItem[] _ejectFddMenuItems =
             new ToolStripMenuItem[4];
-        private readonly bool?[] _fddMountedStates = new bool?[4];
+        private readonly MediaState?[] _fddMountedStates = new MediaState?[4];
+        private ISuccessCommand _connectOpticalCommand;
+        private ISuccessCommand _ejectOpticalCommand;
+        private ToolStripSplitButton _tapeButton;
+        private ToolStripSplitButton _opticalButton;
+        private ToolStripMenuItem _opticalEjectMenuItem;
+        private MediaState? _tapeState;
+        private MediaState? _opticalState;
+        private readonly ToolStripMenuItem _tapeLoadMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapeEjectMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapePlayMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapeStopMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapeRewindMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapeQuickLoadMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapeAutoPlayMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _tapePlayerMenuItem = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _opticalSettingsMenuItem = new ToolStripMenuItem("CD-ROM Settings...");
 
         private IHostService _host;
 
@@ -138,6 +154,15 @@ namespace ZXMAK2.Host.WinForms.Views
             BindCommand(tbrButtonQuickLoad, "CommandQuickLoad");
             BindCommand(_menuToolsQuickBoot, "CommandQuickLoad");
             BindCommand(tbrButtonSettings, "CommandVmSettings", this);
+            BindCommand(_tapeLoadMenuItem, "CommandTapeLoad");
+            BindCommand(_tapeEjectMenuItem, "CommandTapeEject");
+            BindCommand(_tapePlayMenuItem, "CommandTapePlay");
+            BindCommand(_tapeStopMenuItem, "CommandTapeStop");
+            BindCommand(_tapeRewindMenuItem, "CommandTapeRewind");
+            BindCommand(_tapeQuickLoadMenuItem, "CommandTapeQuickLoad");
+            BindCommand(_tapeAutoPlayMenuItem, "CommandTapeAutoPlay");
+            BindCommand(_tapePlayerMenuItem, "CommandTapeOpenPlayer");
+            BindCommand(_opticalSettingsMenuItem, "CommandVmSettings", this);
 
             BindCommand(menuViewCustomizeShowToolBar, "CommandViewToolBar");
             BindCommand(menuViewCustomizeShowStatusBar, "CommandViewStatusBar");
@@ -197,6 +222,7 @@ namespace ZXMAK2.Host.WinForms.Views
             _binding.Bind(this, "CommandVmMaxSpeed", "CommandVmMaxSpeed");
             _binding.Bind(this, "CommandVmWarmReset", "CommandVmWarmReset");
             _binding.Bind(this, "CommandTapePause", "CommandTapePause");
+            _binding.Bind(this, "CommandTapeOpenPlayer", "CommandTapeOpenPlayer");
             _binding.Bind(this, "CommandQuickLoad", "CommandQuickLoad");
             _binding.Bind(this, "CommandOpenUri", "CommandOpenUri");
             _binding.Bind(this, "CommandMachineSwitch", "CommandMachineSwitch");
@@ -211,6 +237,7 @@ namespace ZXMAK2.Host.WinForms.Views
         public ICommand CommandVmMaxSpeed { get; set; }
         public ICommand CommandVmWarmReset { get; set; }
         public ICommand CommandTapePause { get; set; }
+        public ICommand CommandTapeOpenPlayer { get; set; }
         public ICommand CommandQuickLoad { get; set; }
         public ICommand CommandOpenUri { get; set; }
         public ICommand CommandMachineSwitch { get; set; }
@@ -288,6 +315,8 @@ namespace ZXMAK2.Host.WinForms.Views
             _ejectHddCommand = null;
             Array.Clear(_openFddCommands, 0, _openFddCommands.Length);
             Array.Clear(_ejectFddCommands, 0, _ejectFddCommands.Length);
+            _connectOpticalCommand = null;
+            _ejectOpticalCommand = null;
             _mediaMountedStates.Clear();
             ClearMediaToolbarMenus();
             UpdateMediaToolbarStates();
@@ -362,6 +391,16 @@ namespace ZXMAK2.Host.WinForms.Views
                         _ejectFddCommands[mediaCommand.DriveIndex] = mediaCommand;
                     }
                     return true;
+                case MediaCommandKind.OpticalDisc:
+                    if (mediaCommand.MediaAction == MediaCommandAction.Load)
+                    {
+                        _connectOpticalCommand = mediaCommand;
+                    }
+                    else
+                    {
+                        _ejectOpticalCommand = mediaCommand;
+                    }
+                    return true;
             }
             return false;
         }
@@ -378,9 +417,73 @@ namespace ZXMAK2.Host.WinForms.Views
             var index = tbrStrip.Items.IndexOf(tbrButtonSdImage);
             tbrStrip.Items.Remove(tbrButtonSdImage);
             tbrButtonSdImage.Dispose();
+            _tapeButton = AddMediaSplitButton(
+                MediaStatusKind.Tape,
+                "Tape",
+                index++);
+            _tapeButton.ButtonClick += TapeButton_OnClick;
+            InitializeTapeMenu();
             AddMediaToolbarButton(MediaStatusKind.Floppy, "Floppy disk images", index++);
             AddMediaToolbarButton(MediaStatusKind.HardDisk, "HDD image", index++);
-            AddMediaToolbarButton(MediaStatusKind.SecureDigital, "SD card image", index);
+            AddMediaToolbarButton(MediaStatusKind.SecureDigital, "SD card image", index++);
+            _opticalButton = AddMediaSplitButton(
+                MediaStatusKind.OpticalDisc,
+                "CD-ROM / DVD-ROM",
+                index);
+            _opticalButton.ButtonClick += OpticalButton_OnClick;
+        }
+
+        private ToolStripSplitButton AddMediaSplitButton(
+            MediaStatusKind mediaKind,
+            string toolTip,
+            int index)
+        {
+            var button = new ToolStripSplitButton();
+            button.DisplayStyle = ToolStripItemDisplayStyle.Image;
+            button.ImageTransparentColor = Color.Magenta;
+            button.ImageScaling = ToolStripItemImageScaling.None;
+            button.AutoSize = false;
+            button.Size = new Size(
+                MediaToolbarDropDownWidth,
+                MediaToolbarDropDownHeight);
+            button.Text = toolTip;
+            button.ToolTipText = toolTip;
+            button.Enabled = false;
+            tbrStrip.Items.Insert(index, button);
+            SetSplitButtonImage(button, mediaKind, MediaState.Unavailable);
+            return button;
+        }
+
+        private void InitializeTapeMenu()
+        {
+            _tapeButton.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                _tapeLoadMenuItem,
+                _tapeEjectMenuItem,
+                new ToolStripSeparator(),
+                _tapePlayMenuItem,
+                _tapeStopMenuItem,
+                _tapeRewindMenuItem,
+                new ToolStripSeparator(),
+                _tapeQuickLoadMenuItem,
+                _tapeAutoPlayMenuItem,
+                new ToolStripSeparator(),
+                _tapePlayerMenuItem,
+            });
+        }
+
+        private void TapeButton_OnClick(object sender, EventArgs e)
+        {
+            OnCommand(CommandTapeOpenPlayer);
+        }
+
+        private void OpticalButton_OnClick(object sender, EventArgs e)
+        {
+            if (_connectOpticalCommand != null &&
+                _connectOpticalCommand.CanExecute(this))
+            {
+                ExecuteMediaCommand(_connectOpticalCommand, this, true);
+            }
         }
 
         private void AddMediaToolbarButton(MediaStatusKind mediaKind, string toolTip, int index)
@@ -398,7 +501,7 @@ namespace ZXMAK2.Host.WinForms.Views
             button.Enabled = false;
             _mediaButtons.Add(mediaKind, button);
             tbrStrip.Items.Insert(index, button);
-            SetMediaToolbarImage(mediaKind, false);
+            SetMediaToolbarImage(mediaKind, MediaState.Unavailable);
         }
 
         private void ClearMediaToolbarMenus()
@@ -430,6 +533,18 @@ namespace ZXMAK2.Host.WinForms.Views
             Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
             Array.Clear(_ejectSdMenuItems, 0, _ejectSdMenuItems.Length);
             Array.Clear(_sdMountedStates, 0, _sdMountedStates.Length);
+            if (_opticalEjectMenuItem != null && _opticalEjectMenuItem.Image != null)
+            {
+                _opticalEjectMenuItem.Image.Dispose();
+                _opticalEjectMenuItem.Image = null;
+            }
+            if (_opticalButton != null)
+            {
+                _opticalButton.DropDownItems.Clear();
+                _opticalButton.Enabled = false;
+            }
+            _opticalEjectMenuItem = null;
+            _opticalState = null;
         }
 
         private void RebuildMediaToolbarMenus()
@@ -468,6 +583,18 @@ namespace ZXMAK2.Host.WinForms.Views
             {
                 pair.Value.Enabled = pair.Value.DropDownItems.Count > 0;
             }
+            AddMediaMenuItem(
+                _opticalButton.DropDownItems,
+                "Connect CD-ROM / DVD-ROM...",
+                _connectOpticalCommand,
+                true);
+            _opticalEjectMenuItem = AddMediaMenuItem(
+                _opticalButton.DropDownItems,
+                "Eject / Disconnect CD-ROM",
+                _ejectOpticalCommand,
+                true);
+            _opticalButton.DropDownItems.Add(new ToolStripSeparator());
+            _opticalButton.DropDownItems.Add(_opticalSettingsMenuItem);
             UpdateMediaToolbarStates();
         }
 
@@ -477,11 +604,26 @@ namespace ZXMAK2.Host.WinForms.Views
             ISuccessCommand sourceCommand,
             bool requiresPowerCycle)
         {
+            return AddMediaMenuItem(
+                _mediaButtons[mediaKind].DropDownItems,
+                text,
+                sourceCommand,
+                requiresPowerCycle);
+        }
+
+        private ToolStripMenuItem AddMediaMenuItem(
+            ToolStripItemCollection target,
+            string text,
+            ISuccessCommand sourceCommand,
+            bool requiresPowerCycle)
+        {
+            var item = new ToolStripMenuItem(text);
             if (sourceCommand == null)
             {
-                return null;
+                item.Enabled = false;
+                target.Add(item);
+                return item;
             }
-            var item = new ToolStripMenuItem(text);
             var command = new CommandDelegate(
                 arg => ExecuteMediaCommand(sourceCommand, arg, requiresPowerCycle),
                 arg => sourceCommand.CanExecute(arg),
@@ -490,7 +632,7 @@ namespace ZXMAK2.Host.WinForms.Views
             adapter.CommandParameter = this;
             adapter.Command = command;
             _mediaItemAdapters.Add(adapter);
-            _mediaButtons[mediaKind].DropDownItems.Add(item);
+            target.Add(item);
             return item;
         }
 
@@ -614,6 +756,27 @@ namespace ZXMAK2.Host.WinForms.Views
                         button.Image.Dispose();
                         button.Image = null;
                     }
+                }
+                if (_tapeButton != null && _tapeButton.Image != null)
+                {
+                    _tapeButton.Image.Dispose();
+                    _tapeButton.Image = null;
+                }
+                if (_opticalButton != null && _opticalButton.Image != null)
+                {
+                    _opticalButton.Image.Dispose();
+                    _opticalButton.Image = null;
+                }
+                if (_tapeEjectMenuItem.Image != null)
+                {
+                    _tapeEjectMenuItem.Image.Dispose();
+                    _tapeEjectMenuItem.Image = null;
+                }
+                if (_opticalEjectMenuItem != null &&
+                    _opticalEjectMenuItem.Image != null)
+                {
+                    _opticalEjectMenuItem.Image.Dispose();
+                    _opticalEjectMenuItem.Image = null;
                 }
                 OnViewClosed();
                 if (_host != null)
@@ -1229,18 +1392,78 @@ namespace ZXMAK2.Host.WinForms.Views
             var viewModel = DataContext as IMainViewModel;
             foreach (var mediaKind in _mediaButtons.Keys)
             {
-                var isMounted = viewModel != null && viewModel.IsMediaMounted(mediaKind);
-                bool? lastState;
-                if (_mediaMountedStates.TryGetValue(mediaKind, out lastState) &&
-                    lastState.HasValue && lastState.Value == isMounted)
+                var state = GetAggregateMediaState(viewModel, mediaKind);
+                MediaState? lastState;
+                if (!_mediaMountedStates.TryGetValue(mediaKind, out lastState) ||
+                    !lastState.HasValue || lastState.Value != state)
                 {
-                    continue;
+                    _mediaMountedStates[mediaKind] = state;
+                    SetMediaToolbarImage(mediaKind, state);
                 }
-                _mediaMountedStates[mediaKind] = isMounted;
-                SetMediaToolbarImage(mediaKind, isMounted);
+                _mediaButtons[mediaKind].Enabled =
+                    state != MediaState.Unavailable &&
+                    _mediaButtons[mediaKind].DropDownItems.Count > 0;
             }
             UpdateFloppyMenuIndicators(viewModel);
             UpdateSecureDigitalMenuIndicators(viewModel);
+            UpdateTapeToolbarState(viewModel);
+            UpdateOpticalToolbarState(viewModel);
+        }
+
+        private static MediaState GetAggregateMediaState(
+            IMainViewModel viewModel,
+            MediaStatusKind mediaKind)
+        {
+            if (viewModel == null)
+                return MediaState.Unavailable;
+            var count = mediaKind == MediaStatusKind.Floppy ? 4 :
+                mediaKind == MediaStatusKind.SecureDigital ? 2 : 0;
+            if (count == 0)
+                return viewModel.GetMediaState(mediaKind, -1);
+            var available = false;
+            for (var index = 0; index < count; index++)
+            {
+                var state = viewModel.GetMediaState(mediaKind, index);
+                if (state == MediaState.Mounted)
+                    return MediaState.Mounted;
+                if (state == MediaState.Empty)
+                    available = true;
+            }
+            return available ? MediaState.Empty : MediaState.Unavailable;
+        }
+
+        private void UpdateTapeToolbarState(IMainViewModel viewModel)
+        {
+            var state = viewModel == null
+                ? MediaState.Unavailable
+                : viewModel.GetMediaState(MediaStatusKind.Tape, -1);
+            if (!_tapeState.HasValue || _tapeState.Value != state)
+            {
+                _tapeState = state;
+                SetSplitButtonImage(_tapeButton, MediaStatusKind.Tape, state);
+                ReplaceMenuIndicator(_tapeEjectMenuItem, state);
+            }
+            _tapeButton.Enabled = state != MediaState.Unavailable;
+        }
+
+        private void UpdateOpticalToolbarState(IMainViewModel viewModel)
+        {
+            var state = viewModel == null
+                ? MediaState.Unavailable
+                : viewModel.GetMediaState(MediaStatusKind.OpticalDisc, -1);
+            if (!_opticalState.HasValue || _opticalState.Value != state)
+            {
+                _opticalState = state;
+                SetSplitButtonImage(
+                    _opticalButton,
+                    MediaStatusKind.OpticalDisc,
+                    state);
+                ReplaceMenuIndicator(_opticalEjectMenuItem, state);
+            }
+            // A disconnected drive is shown gray, but the button remains usable
+            // so that the user can connect or select a Windows optical drive.
+            _opticalButton.Enabled = _connectOpticalCommand != null &&
+                _connectOpticalCommand.CanExecute(this);
         }
 
         private void UpdateSecureDigitalMenuIndicators(
@@ -1249,8 +1472,11 @@ namespace ZXMAK2.Host.WinForms.Views
             UpdateMediaMenuIndicators(
                 _ejectSdMenuItems,
                 _sdMountedStates,
-                index => viewModel != null &&
-                    viewModel.IsSecureDigitalMounted(index));
+                index => viewModel == null
+                    ? MediaState.Unavailable
+                    : viewModel.GetMediaState(
+                        MediaStatusKind.SecureDigital,
+                        index));
         }
 
         private void UpdateFloppyMenuIndicators(IMainViewModel viewModel)
@@ -1258,33 +1484,44 @@ namespace ZXMAK2.Host.WinForms.Views
             UpdateMediaMenuIndicators(
                 _ejectFddMenuItems,
                 _fddMountedStates,
-                index => viewModel != null && viewModel.IsFloppyMounted(index));
+                index => viewModel == null
+                    ? MediaState.Unavailable
+                    : viewModel.GetMediaState(MediaStatusKind.Floppy, index));
         }
 
         private static void UpdateMediaMenuIndicators(
             ToolStripMenuItem[] menuItems,
-            bool?[] mountedStates,
-            Func<int, bool> getMountedState)
+            MediaState?[] mountedStates,
+            Func<int, MediaState> getMountedState)
         {
             for (var index = 0; index < menuItems.Length; index++)
             {
                 var item = menuItems[index];
                 if (item == null)
                     continue;
-                var isMounted = getMountedState(index);
+                var state = getMountedState(index);
                 if (mountedStates[index].HasValue &&
-                    mountedStates[index].Value == isMounted)
+                    mountedStates[index].Value == state)
                     continue;
-                mountedStates[index] = isMounted;
-                var oldImage = item.Image;
-                item.Image = CreateMediaMenuIndicator(isMounted);
-                if (oldImage != null)
-                    oldImage.Dispose();
-                item.ImageScaling = ToolStripItemImageScaling.None;
+                mountedStates[index] = state;
+                ReplaceMenuIndicator(item, state);
             }
         }
 
-        private static Bitmap CreateMediaMenuIndicator(bool isMounted)
+        private static void ReplaceMenuIndicator(
+            ToolStripMenuItem item,
+            MediaState state)
+        {
+            if (item == null)
+                return;
+            var oldImage = item.Image;
+            item.Image = CreateMediaMenuIndicator(state);
+            if (oldImage != null)
+                oldImage.Dispose();
+            item.ImageScaling = ToolStripItemImageScaling.None;
+        }
+
+        private static Bitmap CreateMediaMenuIndicator(MediaState state)
         {
             const int size = 10;
             var image = new Bitmap(size, size);
@@ -1293,9 +1530,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 graphics.Clear(Color.Magenta);
                 graphics.SmoothingMode =
                     System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using (var brush = new SolidBrush(isMounted
-                    ? Color.FromArgb(35, 180, 70)
-                    : Color.FromArgb(215, 55, 50)))
+                using (var brush = new SolidBrush(GetMediaStateColor(state)))
                 {
                     graphics.FillEllipse(brush, 0, 0, size - 1, size - 1);
                 }
@@ -1309,6 +1544,8 @@ namespace ZXMAK2.Host.WinForms.Views
             _mediaMountedStates.Clear();
             Array.Clear(_fddMountedStates, 0, _fddMountedStates.Length);
             Array.Clear(_sdMountedStates, 0, _sdMountedStates.Length);
+            _tapeState = null;
+            _opticalState = null;
             UpdateMediaToolbarStates();
         }
 
@@ -1356,7 +1593,7 @@ namespace ZXMAK2.Host.WinForms.Views
             Close();
         }
 
-        private void SetMediaToolbarImage(MediaStatusKind mediaKind, bool isMounted)
+        private void SetMediaToolbarImage(MediaStatusKind mediaKind, MediaState state)
         {
             ToolStripDropDownButton button;
             if (!_mediaButtons.TryGetValue(mediaKind, out button))
@@ -1364,7 +1601,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 return;
             }
             var oldImage = button.Image;
-            button.Image = CreateMediaToolbarImage(mediaKind, isMounted);
+            button.Image = CreateMediaToolbarImage(mediaKind, state);
             if (oldImage != null)
             {
                 oldImage.Dispose();
@@ -1373,7 +1610,7 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private static Bitmap CreateMediaToolbarImage(
             MediaStatusKind mediaKind,
-            bool isMounted)
+            MediaState state)
         {
             var image = new Bitmap(MediaToolbarArtworkWidth, MediaToolbarArtworkHeight);
             using (var graphics = Graphics.FromImage(image))
@@ -1382,28 +1619,42 @@ namespace ZXMAK2.Host.WinForms.Views
                 graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                 graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                 graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
-                if (mediaKind == MediaStatusKind.SecureDigital)
+                var artwork = GetMediaArtwork(mediaKind);
+                var destination = new Rectangle(
+                    0,
+                    0,
+                    MediaToolbarArtworkWidth,
+                    MediaToolbarArtworkHeight);
+                if (state == MediaState.Unavailable)
                 {
-                    graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_104x72,
-                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
-                }
-                else if (mediaKind == MediaStatusKind.HardDisk)
-                {
-                    graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_104x72,
-                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
+                    using (var attributes = new System.Drawing.Imaging.ImageAttributes())
+                    {
+                        attributes.SetColorMatrix(
+                            new System.Drawing.Imaging.ColorMatrix(new[]
+                            {
+                                new[] { .30f, .30f, .30f, 0f, 0f },
+                                new[] { .59f, .59f, .59f, 0f, 0f },
+                                new[] { .11f, .11f, .11f, 0f, 0f },
+                                new[] { 0f, 0f, 0f, 1f, 0f },
+                                new[] { 0f, 0f, 0f, 0f, 1f },
+                            }));
+                        graphics.DrawImage(
+                            artwork,
+                            destination,
+                            0,
+                            0,
+                            artwork.Width,
+                            artwork.Height,
+                            GraphicsUnit.Pixel,
+                            attributes);
+                    }
                 }
                 else
                 {
-                    graphics.DrawImage(
-                        global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_104x72,
-                        new Rectangle(0, 0, MediaToolbarArtworkWidth, MediaToolbarArtworkHeight));
+                    graphics.DrawImage(artwork, destination);
                 }
 
-                var dotColor = isMounted ?
-                    Color.FromArgb(35, 180, 70) :
-                    Color.FromArgb(215, 55, 50);
+                var dotColor = GetMediaStateColor(state);
                 var dotX = MediaToolbarArtworkWidth - MediaStatusDotDiameter - 1;
                 var dotY = MediaToolbarArtworkHeight - MediaStatusDotDiameter - 1;
                 graphics.FillEllipse(Brushes.WhiteSmoke,
@@ -1420,6 +1671,49 @@ namespace ZXMAK2.Host.WinForms.Views
             }
             image.MakeTransparent(Color.Magenta);
             return image;
+        }
+
+        private static Image GetMediaArtwork(MediaStatusKind mediaKind)
+        {
+            switch (mediaKind)
+            {
+                case MediaStatusKind.SecureDigital:
+                    return global::ZXMAK2.Host.WinForms.Properties.Resources.EmuSdImage_104x72;
+                case MediaStatusKind.HardDisk:
+                    return global::ZXMAK2.Host.WinForms.Properties.Resources.EmuHddImage_104x72;
+                case MediaStatusKind.Tape:
+                    return global::ZXMAK2.Host.WinForms.Properties.Resources.EmuTapeImage_104x72;
+                case MediaStatusKind.OpticalDisc:
+                    return global::ZXMAK2.Host.WinForms.Properties.Resources.EmuCdImage_104x72;
+                default:
+                    return global::ZXMAK2.Host.WinForms.Properties.Resources.EmuFddImage_104x72;
+            }
+        }
+
+        private static Color GetMediaStateColor(MediaState state)
+        {
+            switch (state)
+            {
+                case MediaState.Mounted:
+                    return Color.FromArgb(35, 180, 70);
+                case MediaState.Empty:
+                    return Color.FromArgb(215, 55, 50);
+                default:
+                    return Color.FromArgb(135, 135, 135);
+            }
+        }
+
+        private static void SetSplitButtonImage(
+            ToolStripSplitButton button,
+            MediaStatusKind mediaKind,
+            MediaState state)
+        {
+            if (button == null)
+                return;
+            var oldImage = button.Image;
+            button.Image = CreateMediaToolbarImage(mediaKind, state);
+            if (oldImage != null)
+                oldImage.Dispose();
         }
 
         private void QuickBootStateTimer_OnTick(object sender, EventArgs e)

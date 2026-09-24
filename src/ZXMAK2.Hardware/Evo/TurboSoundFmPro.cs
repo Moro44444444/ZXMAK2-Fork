@@ -311,6 +311,33 @@ namespace ZXMAK2.Hardware.Evo
                 handler(this, state);
             }
         }
+
+        /// <summary>
+        /// The accepted board model was quieter than the surrounding ZXMAK2
+        /// devices. Apply one common +50% gain after each TSFM source has
+        /// rendered so AY/YM, FM and SAA retain their established balance.
+        /// Saturation prevents signed 16-bit wraparound on loud passages.
+        /// </summary>
+        internal static void ApplyOutputGain(uint[] buffer)
+        {
+            if (buffer == null)
+                return;
+            for (var index = 0; index < buffer.Length; index++)
+            {
+                var packed = buffer[index];
+                var left = (short)(packed & 0xFFFF);
+                var right = (short)(packed >> 16);
+                var boostedLeft = Math.Max(
+                    short.MinValue,
+                    Math.Min(short.MaxValue, left * 3 / 2));
+                var boostedRight = Math.Max(
+                    short.MinValue,
+                    Math.Min(short.MaxValue, right * 3 / 2));
+                buffer[index] = (uint)(
+                    (ushort)(short)boostedLeft |
+                    ((uint)(ushort)(short)boostedRight << 16));
+            }
+        }
     }
 
     internal sealed class TsFmPsgRenderer : SoundDeviceBase
@@ -374,6 +401,7 @@ namespace ZXMAK2.Hardware.Evo
             if (m_lastTime >= 1D)
                 m_lastTime -= Math.Floor(m_lastTime);
             base.OnEndFrame();
+            TurboSoundFmPro.ApplyOutputGain(AudioBuffer);
         }
     }
 
@@ -482,6 +510,7 @@ namespace ZXMAK2.Hardware.Evo
             RenderTo(m_frameSamples);
             m_rendering = false;
             base.OnEndFrame();
+            TurboSoundFmPro.ApplyOutputGain(AudioBuffer);
         }
 
         private void RenderToCurrentTime()
@@ -833,6 +862,7 @@ namespace ZXMAK2.Hardware.Evo
             RenderTo(m_frameSamples);
             m_rendering = false;
             base.OnEndFrame();
+            TurboSoundFmPro.ApplyOutputGain(AudioBuffer);
         }
 
         private void RenderToCurrentTime()

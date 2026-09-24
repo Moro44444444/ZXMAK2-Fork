@@ -16,6 +16,7 @@ namespace ZXMAK2.Mvvm
         Floppy,
         HardDisk,
         SecureDigital,
+        OpticalDisc,
     }
 
     public enum MediaCommandAction

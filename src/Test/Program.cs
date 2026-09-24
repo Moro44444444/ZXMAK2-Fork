@@ -290,6 +290,25 @@ namespace Test
                 sourceAudio.Add(sourceHasAudio);
             }
 
+            var gainMethod = typeof(ZXMAK2.Hardware.Evo.TurboSoundFmPro)
+                .GetMethod(
+                    "ApplyOutputGain",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+            var gainSamples = new uint[]
+            {
+                PackStereo(1000, -1000),
+                PackStereo(30000, -30000),
+                PackStereo(short.MinValue, short.MaxValue),
+            };
+            gainMethod.Invoke(null, new object[] { gainSamples });
+            var gainPassed =
+                GetLeft(gainSamples[0]) == 1500 &&
+                GetRight(gainSamples[0]) == -1500 &&
+                GetLeft(gainSamples[1]) == short.MaxValue &&
+                GetRight(gainSamples[1]) == short.MinValue &&
+                GetLeft(gainSamples[2]) == short.MinValue &&
+                GetRight(gainSamples[2]) == short.MaxValue;
+
             byte chip0 = memory.RDMEM_DBG(chip0ReadAddress);
             byte chip1 = memory.RDMEM_DBG(chip1ReadAddress);
             byte status = memory.RDMEM_DBG(statusAddress);
@@ -297,7 +316,7 @@ namespace Test
             machine.Dispose();
 
             bool passed = chip0 == 0x20 && chip1 == 0x40 &&
-                status == 0x00 && hasAudio;
+                status == 0x00 && hasAudio && gainPassed;
             Console.ForegroundColor = passed ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
                 "TSFM Rev. C: D1=#{0:X2}, D2=#{1:X2}, status=#{2:X2}, audio={3}: {4}",
@@ -312,9 +331,26 @@ namespace Test
                 sourceAudio[1],
                 sourceAudio[2],
                 sourceAudio[3]);
+            Console.WriteLine("Output gain +50% with saturation: {0}",
+                gainPassed ? "PASS" : "FAIL");
             Console.ResetColor();
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static uint PackStereo(short left, short right)
+        {
+            return (uint)((ushort)left | ((uint)(ushort)right << 16));
+        }
+
+        private static short GetLeft(uint sample)
+        {
+            return (short)(sample & 0xFFFF);
+        }
+
+        private static short GetRight(uint sample)
+        {
+            return (short)(sample >> 16);
         }
 
         private static void AddAyWrite(

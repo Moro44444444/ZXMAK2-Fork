@@ -16,5 +16,14 @@ namespace ZXMAK2.Engine.Interfaces
         Floppy,
         HardDisk,
         SecureDigital,
+        Tape,
+        OpticalDisc,
+    }
+
+    public enum MediaState
+    {
+        Unavailable,
+        Empty,
+        Mounted,
     }
 }

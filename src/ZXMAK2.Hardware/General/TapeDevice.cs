@@ -17,6 +17,7 @@ using ZXMAK2.Host.Entities;
 using ZXMAK2.Host.Presentation;
 using ZXMAK2.Host.Presentation.Interfaces;
 using ZXMAK2.Resources;
+using ZXMAK2.Mvvm;
 
 
 namespace ZXMAK2.Hardware.General
@@ -244,6 +245,11 @@ namespace ZXMAK2.Hardware.General
             set { m_autoPlay = value; OnConfigChanged(); detectorReset(); }
         }
 
+        public ICommand ViewCommand
+        {
+            get { return m_viewHolder != null ? m_viewHolder.CommandOpen : null; }
+        }
+
         #endregion
 
 
@@ -449,6 +455,11 @@ namespace ZXMAK2.Hardware.General
         public bool IsPlay
         {
             get { return m_isPlay; }
+        }
+
+        public bool HasTape
+        {
+            get { return Blocks.Count > 0; }
         }
 
         public int TactsPerSecond

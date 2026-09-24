@@ -15,6 +15,7 @@ namespace ZXMAK2.Host.Presentation.Interfaces
         bool IsMediaMounted(MediaStatusKind mediaKind);
         bool IsFloppyMounted(int driveIndex);
         bool IsSecureDigitalMounted(int secureDigitalIndex);
+        MediaState GetMediaState(MediaStatusKind mediaKind, int index);
         bool ResetCmosState();
         bool PrepareFactoryReset();
     }

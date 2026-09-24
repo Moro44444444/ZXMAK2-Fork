@@ -34,9 +34,9 @@ internal static class PentEvoProfileProbe
             bus.Add(ula);
             bus.Add(ay);
 
-            var control = new CtlSettingsPentEvo();
+            var control = new CtlSettingsPentEvoZxBus();
             control.Size = new Size(284, 334);
-            control.Init(bus, null, ula);
+            control.Initialize(bus, null, ula);
             AssertLayoutFits(control);
             var neoGsSd = new CtlSettingsNeoGsSd();
             neoGsSd.Size = new Size(300, 240);
@@ -51,23 +51,19 @@ internal static class PentEvoProfileProbe
             {
                 neoGsSd.SetBoardEnabled(control.IsNeoGsBoardEnabled);
             };
-            var sound = GetField<ComboBox>(control, "m_internalSound");
             var slot1 = GetField<CheckBox>(control, "m_slot1Enabled");
             var slot1Device = GetField<ComboBox>(control, "m_slot1Device");
             var slot2 = GetField<CheckBox>(control, "m_slot2Enabled");
             var slot2Device = GetField<ComboBox>(control, "m_slot2Device");
 
-            sound.SelectedIndex = 1;
             slot1Device.SelectedIndex = 1;
             slot1.Checked = true;
             Assert(neoGsConnected.Enabled,
                 "NeoGS microSD was not enabled with the ZXBUS board");
             slot2.Checked = false;
             control.Apply();
-            Assert(bus.FindDevice<AYCHRV>() == null, "AY was not removed");
-            Assert(
-                ula.InternalSound == PentEvoInternalSound.None,
-                "None selection was not stored");
+            Assert(bus.FindDevice<AYCHRV>() != null,
+                "ZXBUS settings unexpectedly changed the Music device");
             Assert(ula.ZxBusSlot1Enabled, "Slot 1 state was not stored");
             Assert(!ula.ZxBusSlot2Enabled, "Slot 2 state was not stored");
             Assert(
@@ -90,19 +86,13 @@ internal static class PentEvoProfileProbe
                 !slot2.Checked && slot2Device.SelectedIndex == 0,
                 "Moving NeoGS back to slot 1 did not clear slot 2");
 
-            sound.SelectedIndex = 0;
             control.Apply();
-            Assert(bus.FindDevice<AYCHRV>() != null, "AY was not restored");
-            Assert(
-                ula.InternalSound == PentEvoInternalSound.AY8910CHRV,
-                "AY selection was not stored");
+            Assert(bus.FindDevice<AYCHRV>() != null,
+                "ZXBUS settings removed the Music device");
 
             var xml = new XmlDocument();
             var node = xml.AppendChild(xml.CreateElement("Device"));
             ula.SaveConfigXml(node);
-            Assert(
-                node.Attributes["internalSound"].Value == "AY8910CHRV",
-                "Internal sound XML mismatch");
             Assert(
                 node.Attributes["zxBusSlot1Enabled"].Value == "True",
                 "Slot 1 XML mismatch");
@@ -117,7 +107,7 @@ internal static class PentEvoProfileProbe
                 restored.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS,
                 "Slot 1 device XML did not reload");
 
-            var init = typeof(CtlSettingsPentEvo).GetMethod(
+            var init = typeof(CtlSettingsUla).GetMethod(
                 "Init",
                 new Type[]
                 {
@@ -125,7 +115,7 @@ internal static class PentEvoProfileProbe
                     typeof(ZXMAK2.Host.Interfaces.IHostService),
                     typeof(UlaPentEvo),
                 });
-            Assert(init != null, "Exact PENTEVO settings binding is missing");
+            Assert(init != null, "Standard ULA selector is not bound to PENTEVO");
 
             if (Environment.GetCommandLineArgs().Length > 1)
             {
@@ -140,7 +130,7 @@ internal static class PentEvoProfileProbe
                 }
             }
 
-            Console.WriteLine("PASS: PENTEVO sound and ZXBUS profile round-trip");
+            Console.WriteLine("PASS: standard PENTEVO ULA, separate Music and ZXBUS round-trip");
             return 0;
         }
         catch (Exception ex)
@@ -171,15 +161,23 @@ internal static class PentEvoProfileProbe
             "CreateMediaMenuIndicator",
             BindingFlags.Static | BindingFlags.NonPublic);
         Assert(factory != null, "FDD menu indicator factory is missing");
-        using (var mounted = (Bitmap)factory.Invoke(null, new object[] { true }))
-        using (var empty = (Bitmap)factory.Invoke(null, new object[] { false }))
+        using (var mounted = (Bitmap)factory.Invoke(
+            null, new object[] { MediaState.Mounted }))
+        using (var empty = (Bitmap)factory.Invoke(
+            null, new object[] { MediaState.Empty }))
+        using (var unavailable = (Bitmap)factory.Invoke(
+            null, new object[] { MediaState.Unavailable }))
         {
             var green = mounted.GetPixel(4, 4);
             var red = empty.GetPixel(4, 4);
+            var gray = unavailable.GetPixel(4, 4);
             Assert(green.G > green.R,
                 "Mounted FDD indicator is not green");
             Assert(red.R > red.G,
                 "Empty FDD indicator is not red");
+            Assert(Math.Abs(gray.R - gray.G) < 4 &&
+                Math.Abs(gray.G - gray.B) < 4,
+                "Unavailable device indicator is not gray");
         }
     }
 
@@ -193,6 +191,7 @@ internal static class PentEvoProfileProbe
         ula.ZxBusSlot1Enabled = true;
         ula.ZxBusSlot1Device = PentEvoZxBusDevice.NeoGS;
         bus.Add(ula);
+        bus.Add(new AYCHRV());
         bus.Add(new ZsdPentEvo());
         bus.Add(new NeoGsDevice());
 
@@ -203,6 +202,8 @@ internal static class PentEvoProfileProbe
             var navigation = GetField<ListView>(form, "lstNavigation");
             var zController = -1;
             var neoGs = -1;
+            var zxBus = -1;
+            var ay = -1;
             for (var i = 0; i < navigation.Items.Count; i++)
             {
                 if (navigation.Items[i].SubItems.Count < 2)
@@ -212,6 +213,10 @@ internal static class PentEvoProfileProbe
                     zController = i;
                 else if (name == "SD NeoGS")
                     neoGs = i;
+                else if (name == "ZXBUS PentEvo")
+                    zxBus = i;
+                else if (name == "AY8910-CHRV")
+                    ay = i;
             }
             Assert(zController >= 0,
                 "SD Z-controller navigation item is missing");
@@ -219,6 +224,8 @@ internal static class PentEvoProfileProbe
                 "SD NeoGS is not placed after SD Z-controller");
             Assert(navigation.Items[neoGs].ForeColor != SystemColors.GrayText,
                 "SD NeoGS is disabled with an active ZXBUS board");
+            Assert(zxBus >= 0, "Separate ZXBUS navigation item is missing");
+            Assert(ay >= 0, "AY/YM is not exposed as a normal Music device");
         }
     }
 
@@ -226,6 +233,20 @@ internal static class PentEvoProfileProbe
     {
         using (var view = new MainView(null))
         {
+            var tapeButton = GetField<ToolStripSplitButton>(view, "_tapeButton");
+            var opticalButton = GetField<ToolStripSplitButton>(view, "_opticalButton");
+            var toolbar = GetField<ToolStrip>(view, "tbrStrip");
+            Assert(tapeButton.Width == 74 && opticalButton.Width == 74,
+                "Tape/CD buttons do not reserve room for the drop-down arrow");
+            Assert(tapeButton.Image != null && tapeButton.Image.Size == new Size(52, 36),
+                "Tape artwork does not fit the common toolbar canvas");
+            Assert(opticalButton.Image != null && opticalButton.Image.Size == new Size(52, 36),
+                "CD artwork does not fit the common toolbar canvas");
+            Assert(toolbar.Items.IndexOf(opticalButton) == toolbar.Items.Count - 1,
+                "CD button is not the rightmost toolbar item");
+            Assert(tapeButton.DropDownItems.Count == 11,
+                "Tape transport menu is incomplete");
+
             view.Add(new ProbeMediaCommand(
                 MediaCommandAction.Load, 0, "load-z"));
             view.Add(new ProbeMediaCommand(
@@ -237,16 +258,16 @@ internal static class PentEvoProfileProbe
 
             var items = GetField<ToolStripMenuItem[]>(
                 view, "_ejectSdMenuItems");
-            var states = GetField<bool?[]>(view, "_sdMountedStates");
+            var states = GetField<MediaState?[]>(view, "_sdMountedStates");
             Assert(items[0] != null && items[0].Text == "Eject Z-controller",
                 "Z-controller Eject menu item is missing or too long");
             Assert(items[1] != null && items[1].Text == "Eject NeoGS",
                 "NeoGS Eject menu item is missing");
             Assert(items[0].Image != null && items[1].Image != null,
                 "SD menu indicators are missing");
-            Assert(((Bitmap)items[0].Image).GetPixel(4, 4).R >
-                ((Bitmap)items[0].Image).GetPixel(4, 4).G,
-                "Empty Z-controller indicator is not red");
+            var unavailable = ((Bitmap)items[0].Image).GetPixel(4, 4);
+            Assert(Math.Abs(unavailable.R - unavailable.G) < 4,
+                "Unresolved Z-controller indicator is not gray");
 
             var update = typeof(MainView).GetMethod(
                 "UpdateMediaMenuIndicators",
@@ -256,11 +277,16 @@ internal static class PentEvoProfileProbe
             {
                 items,
                 states,
-                new Func<int, bool>(index => index == 1),
+                new Func<int, MediaState>(index => index == 1
+                    ? MediaState.Mounted
+                    : MediaState.Empty),
             });
             var neoGsGreen = ((Bitmap)items[1].Image).GetPixel(4, 4);
             Assert(neoGsGreen.G > neoGsGreen.R,
                 "Mounted NeoGS indicator is not green");
+            var zControllerRed = ((Bitmap)items[0].Image).GetPixel(4, 4);
+            Assert(zControllerRed.R > zControllerRed.G,
+                "Available empty Z-controller indicator is not red");
         }
     }
 
