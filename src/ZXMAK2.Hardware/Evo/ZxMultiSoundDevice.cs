@@ -72,7 +72,6 @@ namespace ZXMAK2.Hardware.Evo
         private byte m_ymChip;
         private bool m_ymReadRegister;
         private bool m_fmEnabled;
-        private bool m_saaClockEnabled;
         private byte m_gsPage;
         private byte m_gsCommand;
         private byte m_gsHostData;
@@ -308,7 +307,6 @@ namespace ZXMAK2.Hardware.Evo
             m_ymChip = 0;
             m_ymReadRegister = false;
             m_fmEnabled = false;
-            m_saaClockEnabled = false;
             m_hostRomM1Access = false;
             Array.Clear(m_ymRegister, 0, m_ymRegister.Length);
             m_psg[0].ResetChip();
@@ -316,6 +314,7 @@ namespace ZXMAK2.Hardware.Evo
             m_fm.ResetChip();
             m_fm.Enabled = false;
             m_saa.ResetChip();
+            m_saa.ClockEnabled = false;
             m_gsPage = 0;
             m_gsCommand = 0;
             m_gsHostData = 0;
@@ -347,7 +346,7 @@ namespace ZXMAK2.Hardware.Evo
                     m_fm.Enabled = m_fmEnabled;
                 }
                 if (m_effectiveSaa)
-                    m_saaClockEnabled = (value & 8) == 0;
+                    m_saa.ClockEnabled = (value & 8) == 0;
                 return;
             }
             if (!m_effectiveYm)
@@ -400,7 +399,10 @@ namespace ZXMAK2.Hardware.Evo
 
         private void WriteSaa(ushort address, byte value, ref bool handled)
         {
-            if (!m_saaClockEnabled || m_hostRomM1Access)
+            // The CPLD's SAA chip select does not depend on saa_clk_en.
+            // Software may therefore preload registers while the 8 MHz clock
+            // is stopped and start the generators afterwards with #F7.
+            if (m_hostRomM1Access)
                 return;
             if ((address & 0x0100) != 0)
                 m_saa.RegAddr = value;

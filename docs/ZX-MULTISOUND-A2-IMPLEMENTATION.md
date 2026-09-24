@@ -66,6 +66,27 @@ add a platform-specific runtime dependency; only documented, source-verified
 behaviour from the permissively licensed current implementation was ported
 into the existing managed renderer.
 
+## v45 SAA register-bus correction
+
+Real software acceptance showed that the v44 synthetic SAA generator vectors
+were not sufficient: a trusted player still produced incomplete, noisy music.
+The fault was in the ZX-MultiSound adapter, not in the six-channel renderer.
+
+In official `cpld/rtl/top.v`, `saa_cs_n` is generated from the `#FF/#1FF`
+write decode, the physical SAA switch and the ROM-M1 guard.  It is deliberately
+independent of `saa_clk_en`.  Consequently software can stop the 8 MHz SAA
+clock, preload all registers, and only then write `#F7` to an `#FFFD` alias to
+start the generators.  The v44 adapter incorrectly rejected every SAA write
+while that clock was stopped, losing the player's initial amplitude,
+frequency, mixer and envelope state.
+
+The register bus and external clock are now modelled separately.  Writes are
+accepted whenever the real chip select would be active; the oscillator state
+advances only while the 8 MHz clock is enabled.  A board-level regression test
+now preloads a complete voice before enabling the clock.  This exact sequence
+fails with the v44 adapter and passes with the correction.  The accepted TSFM
+port path, GS, SounDrive, NeoGS and UI are not changed.
+
 The external SAM2695 MIDI synthesizer is a separate proprietary sound IC.
 The public board sources document its clock and its connection to a YM2203
 I/O port, but do not provide a synthesizer core, firmware or sample ROM that

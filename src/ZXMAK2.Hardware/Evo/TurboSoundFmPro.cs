@@ -461,6 +461,7 @@ namespace ZXMAK2.Hardware.Evo
         private int m_renderSample;
         private bool m_rendering;
         private bool m_sync;
+        private bool m_clockEnabled = true;
 
         public TsFmSaa1099Renderer()
         {
@@ -480,6 +481,23 @@ namespace ZXMAK2.Hardware.Evo
                     ClockEnvelope(0);
                 else if (m_register == 0x19 && m_envelopeExternal[1])
                     ClockEnvelope(1);
+            }
+        }
+
+        /// <summary>
+        /// Controls the external 8 MHz clock without disconnecting the SAA
+        /// register bus.  ZX-MultiSound can preload SAA registers while this
+        /// clock is stopped and start the generators afterwards with #F7.
+        /// </summary>
+        public bool ClockEnabled
+        {
+            get { return m_clockEnabled; }
+            set
+            {
+                if (m_clockEnabled == value)
+                    return;
+                RenderToCurrentTime();
+                m_clockEnabled = value;
             }
         }
 
@@ -569,7 +587,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             left = 0;
             right = 0;
-            if (m_sync || (m_registers[0x1C] & 1) == 0)
+            if (!m_clockEnabled || m_sync ||
+                (m_registers[0x1C] & 1) == 0)
                 return;
 
             long accumulatedLeft = 0;

@@ -490,14 +490,10 @@ namespace Test
             const ushort gsReadyProgramAddress = 0x4400;
             var program = new System.Collections.Generic.List<byte>();
 
-            // Rev.A2 uses partial YM decoding. These aliases deliberately are
-            // not the canonical #FFFD/#BFFD pair.
-            AddPortWrite(program, 0xD00D, 0xF6);
-            AddPortWrite(program, 0xD00D, 0x00);
-            AddPortWrite(program, 0x900D, 0x34);
-            AddPortReadAndStore(program, 0xE00D, ymReadAddress);
-
             // SAA address/data are #1FF/#FF, unlike the socket TSFM board.
+            // The real CPLD keeps these writes active while saa_clk_en is
+            // false.  Preload the complete voice before #F7 so a regression
+            // that silently discards stopped-clock writes cannot pass.
             AddPortWrite(program, 0x01FF, 0x00);
             AddPortWrite(program, 0x00FF, 0xFF);
             AddPortWrite(program, 0x01FF, 0x08);
@@ -508,6 +504,14 @@ namespace Test
             AddPortWrite(program, 0x00FF, 0x01);
             AddPortWrite(program, 0x01FF, 0x1C);
             AddPortWrite(program, 0x00FF, 0x01);
+
+            // Rev.A2 uses partial YM decoding. These aliases deliberately are
+            // not the canonical #FFFD/#BFFD pair. #F6 also starts the SAA
+            // clock only after the register preload above has completed.
+            AddPortWrite(program, 0xD00D, 0xF6);
+            AddPortWrite(program, 0xD00D, 0x00);
+            AddPortWrite(program, 0x900D, 0x34);
+            AddPortReadAndStore(program, 0xE00D, ymReadAddress);
 
             // Four physical DAC aliases and a GS command/status handshake.
             AddPortWrite(program, 0x000F, 0x20);
@@ -622,7 +626,7 @@ namespace Test
                 ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine(
                 "ZX-MultiSound A2: YM=#{0:X2}, GSSTAT=#{1:X2}->#{2:X2}, " +
-                "SAA={3}, DAC={4}, ROM-LOCK={5}, AUTO={6}, " +
+                "SAA-PRELOAD={3}, DAC={4}, ROM-LOCK={5}, AUTO={6}, " +
                 "MANUAL-GUARD={7}: {8}",
                 ym, gsStatus, gsReadyStatus, saaAudio, dacAudio,
                 romLockPassed, autoPolicy, manualRejected,
