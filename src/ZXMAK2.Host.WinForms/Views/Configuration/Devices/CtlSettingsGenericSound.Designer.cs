@@ -31,6 +31,7 @@
 			this.groupBox = new System.Windows.Forms.GroupBox();
 			this.lblVolume = new System.Windows.Forms.Label();
 			this.trkVolume = new System.Windows.Forms.TrackBar();
+			this.cbxPentEvoDevice = new System.Windows.Forms.ComboBox();
 			this.txtDevice = new System.Windows.Forms.TextBox();
 			this.lblDevice = new System.Windows.Forms.Label();
 			this.txtDescription = new System.Windows.Forms.TextBox();
@@ -43,6 +44,7 @@
 			// 
 			this.groupBox.Controls.Add(this.lblVolume);
 			this.groupBox.Controls.Add(this.trkVolume);
+			this.groupBox.Controls.Add(this.cbxPentEvoDevice);
 			this.groupBox.Controls.Add(this.txtDevice);
 			this.groupBox.Controls.Add(this.lblDevice);
 			this.groupBox.Controls.Add(this.txtDescription);
@@ -74,6 +76,19 @@
 			this.trkVolume.Size = new System.Drawing.Size(288, 50);
 			this.trkVolume.TabIndex = 6;
 			this.trkVolume.TickFrequency = 2;
+			//
+			// cbxPentEvoDevice
+			//
+			this.cbxPentEvoDevice.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+						| System.Windows.Forms.AnchorStyles.Right)));
+			this.cbxPentEvoDevice.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+			this.cbxPentEvoDevice.FormattingEnabled = true;
+			this.cbxPentEvoDevice.Location = new System.Drawing.Point(56, 22);
+			this.cbxPentEvoDevice.Name = "cbxPentEvoDevice";
+			this.cbxPentEvoDevice.Size = new System.Drawing.Size(238, 21);
+			this.cbxPentEvoDevice.TabIndex = 8;
+			this.cbxPentEvoDevice.Visible = false;
+			this.cbxPentEvoDevice.SelectedIndexChanged += new System.EventHandler(this.cbxPentEvoDevice_SelectedIndexChanged);
 			// 
 			// txtDevice
 			// 
@@ -141,5 +156,6 @@
 		private System.Windows.Forms.Label lblDescription;
 		private System.Windows.Forms.TrackBar trkVolume;
 		private System.Windows.Forms.Label lblVolume;
+		private System.Windows.Forms.ComboBox cbxPentEvoDevice;
 	}
 }

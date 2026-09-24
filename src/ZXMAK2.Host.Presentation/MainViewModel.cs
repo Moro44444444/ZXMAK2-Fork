@@ -1085,6 +1085,11 @@ namespace ZXMAK2.Host.Presentation
                 using (viewSettings)
                 {
                     viewSettings.Init(m_view.Host, m_vm);
+                    var deviceName = objArg as string;
+                    if (!string.IsNullOrEmpty(deviceName))
+                    {
+                        viewSettings.SelectDevice(deviceName);
+                    }
                     viewSettings.ShowDialog(m_view);
                     m_vm.RequestFrame();
                     

@@ -22,6 +22,7 @@ internal static class PentEvoProfileProbe
         {
             VerifyFloppyIndicators();
             VerifySecureDigitalMenu();
+            VerifyPentEvoMusicSelector();
             VerifyMachineSettingsNavigation();
 
             var bus = new BusManager();
@@ -192,6 +193,7 @@ internal static class PentEvoProfileProbe
         ula.ZxBusSlot1Device = PentEvoZxBusDevice.NeoGS;
         bus.Add(ula);
         bus.Add(new AYCHRV());
+        bus.Add(new IdePentEvo());
         bus.Add(new ZsdPentEvo());
         bus.Add(new NeoGsDevice());
 
@@ -204,6 +206,7 @@ internal static class PentEvoProfileProbe
             var neoGs = -1;
             var zxBus = -1;
             var ay = -1;
+            var ide = -1;
             for (var i = 0; i < navigation.Items.Count; i++)
             {
                 if (navigation.Items[i].SubItems.Count < 2)
@@ -217,6 +220,8 @@ internal static class PentEvoProfileProbe
                     zxBus = i;
                 else if (name == "AY8910-CHRV")
                     ay = i;
+                else if (name == "IDE PentEvo")
+                    ide = i;
             }
             Assert(zController >= 0,
                 "SD Z-controller navigation item is missing");
@@ -226,6 +231,61 @@ internal static class PentEvoProfileProbe
                 "SD NeoGS is disabled with an active ZXBUS board");
             Assert(zxBus >= 0, "Separate ZXBUS navigation item is missing");
             Assert(ay >= 0, "AY/YM is not exposed as a normal Music device");
+            Assert(navigation.Items[ay].Tag is CtlSettingsGenericSound,
+                "PentEvo Music does not use the AY/TSFM selector");
+
+            form.SelectDevice("IDE PentEvo");
+            Assert(ide >= 0 && navigation.Items[ide].Selected,
+                "CD-ROM settings did not select IDE PentEvo");
+        }
+    }
+
+    private static void VerifyPentEvoMusicSelector()
+    {
+        var bus = new BusManager();
+        bus.Init(null, true);
+        bus.Disconnect();
+        bus.Clear();
+        var ula = new UlaPentEvo();
+        var ay = new AYCHRV();
+        ay.BusOrder = 25;
+        ay.Volume = 67;
+        bus.Add(ula);
+        bus.Add(ay);
+        var musicBusOrder = ay.BusOrder;
+
+        using (var control = new CtlSettingsGenericSound())
+        {
+            control.InitPentEvo(bus, null, ay);
+            var selector = GetField<ComboBox>(
+                control,
+                "cbxPentEvoDevice");
+            var volume = GetField<TrackBar>(control, "trkVolume");
+            Assert(selector.Items.Count == 2,
+                "PentEvo AY/TSFM selector was not initialized");
+            Assert(selector.SelectedIndex == 0,
+                "PentEvo AY was not selected initially");
+            selector.SelectedIndex = 1;
+            volume.Value = 67;
+            control.Apply();
+            var tsfm = bus.FindDevice<TurboSoundFmPro>();
+            Assert(tsfm != null && bus.FindDevice<AYCHRV>() == null,
+                "PentEvo Music did not replace AY with TSFM");
+            Assert(tsfm.Volume == 67 && tsfm.BusOrder == musicBusOrder,
+                "AY to TSFM did not preserve volume/order");
+            Assert(
+                ula.InternalSound == PentEvoInternalSound.TurboSoundFmPro,
+                "PentEvo internal sound was not synchronized to TSFM");
+
+            selector.SelectedIndex = 0;
+            control.Apply();
+            var restoredAy = bus.FindDevice<AYCHRV>();
+            Assert(restoredAy != null &&
+                bus.FindDevice<TurboSoundFmPro>() == null,
+                "PentEvo Music did not restore AY from TSFM");
+            Assert(restoredAy.Volume == 67 &&
+                restoredAy.BusOrder == musicBusOrder,
+                "TSFM to AY did not preserve volume/order");
         }
     }
 
@@ -235,6 +295,9 @@ internal static class PentEvoProfileProbe
         {
             var tapeButton = GetField<ToolStripSplitButton>(view, "_tapeButton");
             var opticalButton = GetField<ToolStripSplitButton>(view, "_opticalButton");
+            var opticalSettings = GetField<ToolStripMenuItem>(
+                view,
+                "_opticalSettingsMenuItem");
             var toolbar = GetField<ToolStrip>(view, "tbrStrip");
             Assert(tapeButton.Width == 74 && opticalButton.Width == 74,
                 "Tape/CD buttons do not reserve room for the drop-down arrow");
@@ -244,6 +307,8 @@ internal static class PentEvoProfileProbe
                 "CD artwork does not fit the common toolbar canvas");
             Assert(toolbar.Items.IndexOf(opticalButton) == toolbar.Items.Count - 1,
                 "CD button is not the rightmost toolbar item");
+            Assert((string)opticalSettings.Tag == "IDE PentEvo",
+                "CD-ROM Settings does not target IDE PentEvo");
             Assert(tapeButton.DropDownItems.Count == 11,
                 "Tape transport menu is incomplete");
 

@@ -162,7 +162,10 @@ namespace ZXMAK2.Host.WinForms.Views
             BindCommand(_tapeQuickLoadMenuItem, "CommandTapeQuickLoad");
             BindCommand(_tapeAutoPlayMenuItem, "CommandTapeAutoPlay");
             BindCommand(_tapePlayerMenuItem, "CommandTapeOpenPlayer");
-            BindCommand(_opticalSettingsMenuItem, "CommandVmSettings", this);
+            BindCommand(
+                _opticalSettingsMenuItem,
+                "CommandVmSettings",
+                "IDE PentEvo");
 
             BindCommand(menuViewCustomizeShowToolBar, "CommandViewToolBar");
             BindCommand(menuViewCustomizeShowStatusBar, "CommandViewStatusBar");

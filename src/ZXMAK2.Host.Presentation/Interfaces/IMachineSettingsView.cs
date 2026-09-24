@@ -9,6 +9,7 @@ namespace ZXMAK2.Host.Presentation.Interfaces
     public interface IMachineSettingsView : IDisposable
     {
         void Init(IHostService host, IVirtualMachine vm);
+        void SelectDevice(string deviceName);
         DlgResult ShowDialog(object owner);
     }
 }

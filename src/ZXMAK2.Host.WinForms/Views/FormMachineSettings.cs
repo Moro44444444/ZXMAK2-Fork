@@ -472,6 +472,29 @@ namespace ZXMAK2.Host.WinForms.Views
             }
         }
 
+        public void SelectDevice(string deviceName)
+        {
+            if (string.IsNullOrEmpty(deviceName))
+                return;
+            for (var index = 0; index < m_devList.Count; index++)
+            {
+                var device = m_devList[index];
+                if (device == null ||
+                    !string.Equals(
+                        device.Name,
+                        deviceName,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                lstNavigation.SelectedItems.Clear();
+                lstNavigation.Items[index].Selected = true;
+                lstNavigation.Items[index].Focused = true;
+                lstNavigation.Items[index].EnsureVisible();
+                break;
+            }
+        }
+
 
         private void initConfig(XmlNode busNode)
         {
@@ -510,7 +533,24 @@ namespace ZXMAK2.Host.WinForms.Views
                     continue;
                 try
                 {
-                    var control = ResolveScreenControl(m_workBus, m_host, device);
+                    UserControl control;
+                    if (isPentEvo &&
+                        (device is AYCHRV || device is TurboSoundFmPro))
+                    {
+                        var soundControl = new CtlSettingsGenericSound();
+                        soundControl.InitPentEvo(
+                            m_workBus,
+                            m_host,
+                            device);
+                        control = soundControl;
+                    }
+                    else
+                    {
+                        control = ResolveScreenControl(
+                            m_workBus,
+                            m_host,
+                            device);
+                    }
                     insertListViewItem(lstNavigation.Items.Count, control, device);
                 }
                 catch (Exception ex)
