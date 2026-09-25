@@ -3031,3 +3031,34 @@ portable-папка не изменяются.
   `F6CF700B438EB6907155AFF660D44A214E3AF7F41EA22416640B4A01BC83A3B1`;
   `Test.exe` —
   `9A05CA0C814C874E98BC777295B55CE98816458D63C665746D9EFD0D92404BE8`.
+
+## SAASound.dll experiment for both SAA1099 boards — v48 — 2026-09-24
+
+Статус: **отдельная локальная 32-битная проверочная сборка; Alpha 8/v47 и
+её Git-тег не менялись. Публикация на GitHub запрещена до отдельного решения
+и проверки условий распространения DLL.**
+
+- По предоставленному `SAASound.dll` подтверждена совместимость с отдельной
+  x86-сборкой; SHA-256 библиотеки:
+  `F9FE0360BF103447E055ECAA4CADC49D13C94588770C142E80AAE85C20FB9135`.
+- В общем `TsFmSaa1099Renderer`, которым пользуются и TurboSound FM Pro, и
+  ZX-MultiSound, добавлен отдельный native backend. Регистровые записи
+  остаются привязаны к текущему месту видеокадра; backend получает 16-bit
+  stereo с текущей частотой микшера, фиксированный SAA clock 8 MHz и
+  oversample 64x.
+- Логика декодирования портов, режимы SAA port compatibility, AY/FM, GS,
+  SoundDrive и настройки плат не менялись. Тем самым качество генерации SAA
+  можно оценить без смешивания с изменениями железа/интерфейса.
+- Поскольку DLL 32-битная, для v48 собраны только `ZXMAK2.exe` и `Test.exe`
+  как x86; остальные managed-библиотеки идентичны Release-сборке. Отдельная
+  папка: `L:\Work_two\ZX\ZXMAK2-v48-ZXEVO-BC-Alpha8-SAASound-DLL-Test-20260924\release`.
+- После пересборки x86 `Test.exe` с его штатными embedded-снапшотами
+  `testVideo.z80`, `zexall.sna` и `testOutFe.z80` прошёл также полный запуск:
+  все ULA sanity — PASS, а benchmark 500 кадров — примерно 245–413 мс. Это
+  устраняет прежний `NullReferenceException` в `Z80Serializer.LoadFromStream`,
+  вызванный именно отсутствовавшими ресурсами в ручной сборке теста.
+- Из этой папки прошли `Test.exe /tsfm` (D1/D2/FM/SAA, шесть тонов, noise,
+  envelope и оба протокола SAA) и `Test.exe /multisound` (YM, SAA preload,
+  GS, SoundDrive, ROM lock и политика конфликтов).
+- Памятка приёмки: `docs/releases/README-B48.txt` и одноимённый файл в
+  portable-папке.

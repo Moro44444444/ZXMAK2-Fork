@@ -164,6 +164,10 @@
       <Link>NLayer.LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Libraries\SAASound\SAASound.dll">
+      <Link>SAASound.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ZipLib\ZipLib.csproj">

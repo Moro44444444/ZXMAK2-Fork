@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Xml;
 using ZXMAK2.Dependency;
 using ZXMAK2.Engine;
@@ -444,6 +445,12 @@ namespace ZXMAK2.Hardware.Evo
     {
         private const int ChannelCount = 6;
         private const double InternalClock = 8000000D / 256D;
+        // Test build: SAASound receives signed 16-bit interleaved stereo.
+        // Its rate is kept equal to the host mixer rate rather than resampled
+        // afterwards, so register writes retain their exact video-frame time.
+        private const uint ExternalSoundParameters = 0x03U | 0x0CU | 0x30U;
+        private const uint ExternalClockRate = 8000000U;
+        private const uint ExternalOversample = 64U;
 
         private readonly byte[] m_registers = new byte[0x20];
         private readonly double[] m_toneCounter = new double[ChannelCount];
@@ -466,6 +473,9 @@ namespace ZXMAK2.Hardware.Evo
         private int m_renderSample;
         private bool m_rendering;
         private bool m_clockEnabled = true;
+        private IntPtr m_externalSound;
+        private int m_externalSampleRate;
+        private byte[] m_externalPcm;
 
         public TsFmSaa1099Renderer()
         {
@@ -481,6 +491,8 @@ namespace ZXMAK2.Hardware.Evo
             {
                 RenderToCurrentTime();
                 m_register = (byte)(value & 0x1F);
+                if (m_externalSound != IntPtr.Zero)
+                    SaaSoundNative.WriteAddress(m_externalSound, m_register);
                 if (m_register == 0x18 || m_register == 0x19)
                 {
                     if (m_envelopeExternal[0])
@@ -534,6 +546,8 @@ namespace ZXMAK2.Hardware.Evo
             m_envelopeValue[0, 0] = m_envelopeValue[0, 1] = 16;
             m_envelopeValue[1, 0] = m_envelopeValue[1, 1] = 16;
             m_register = 0;
+            if (m_externalSound != IntPtr.Zero)
+                SaaSoundNative.Clear(m_externalSound);
         }
 
         public override void BusConnect()
@@ -542,6 +556,7 @@ namespace ZXMAK2.Hardware.Evo
 
         public override void BusDisconnect()
         {
+            ReleaseExternalSound();
         }
 
         protected override void OnBeginFrame()
@@ -550,6 +565,7 @@ namespace ZXMAK2.Hardware.Evo
             m_frameSamples = Math.Max(1, SampleRate / 50);
             m_renderSample = 0;
             m_rendering = true;
+            EnsureExternalSound();
         }
 
         protected override void OnEndFrame()
@@ -571,6 +587,11 @@ namespace ZXMAK2.Hardware.Evo
         private void RenderTo(int target)
         {
             target = Math.Max(m_renderSample, Math.Min(m_frameSamples, target));
+            if (m_externalSound != IntPtr.Zero)
+            {
+                RenderExternal(target);
+                return;
+            }
             while (m_renderSample < target)
             {
                 int left;
@@ -578,6 +599,38 @@ namespace ZXMAK2.Hardware.Evo
                 RenderSample(out left, out right);
                 double frameTime = (double)m_renderSample / m_frameSamples;
                 UpdateDac(frameTime, Clamp16(left), Clamp16(right));
+                m_renderSample++;
+            }
+        }
+
+        private void RenderExternal(int target)
+        {
+            int samples = target - m_renderSample;
+            if (samples <= 0)
+                return;
+
+            int bytes = samples * 4;
+            if (m_externalPcm == null || m_externalPcm.Length < bytes)
+                m_externalPcm = new byte[bytes];
+
+            if (m_clockEnabled)
+                SaaSoundNative.GenerateMany(m_externalSound, m_externalPcm,
+                    (uint)samples);
+            else
+                Array.Clear(m_externalPcm, 0, bytes);
+
+            int volume = Volume;
+            for (int i = 0; i < samples; i++)
+            {
+                int offset = i * 4;
+                short left = (short)(m_externalPcm[offset] |
+                    (m_externalPcm[offset + 1] << 8));
+                short right = (short)(m_externalPcm[offset + 2] |
+                    (m_externalPcm[offset + 3] << 8));
+                left = (short)(left * volume / 100);
+                right = (short)(right * volume / 100);
+                double frameTime = (double)m_renderSample / m_frameSamples;
+                UpdateDac(frameTime, left, right);
                 m_renderSample++;
             }
         }
@@ -698,6 +751,9 @@ namespace ZXMAK2.Hardware.Evo
             if (index > 0x1C)
                 return;
             m_registers[index] = value;
+            if (m_externalSound != IntPtr.Zero)
+                SaaSoundNative.WriteAddressData(m_externalSound, (byte)index,
+                    value);
 
             if (index == 0x18 || index == 0x19)
             {
@@ -790,6 +846,112 @@ namespace ZXMAK2.Hardware.Evo
         private static short Clamp16(int value)
         {
             return (short)Math.Max(short.MinValue, Math.Min(short.MaxValue, value));
+        }
+
+        private void EnsureExternalSound()
+        {
+            if (m_externalSound != IntPtr.Zero)
+            {
+                ConfigureExternalSound();
+                return;
+            }
+
+            try
+            {
+                m_externalSound = SaaSoundNative.Create();
+                if (m_externalSound == IntPtr.Zero)
+                    throw new InvalidOperationException(
+                        "SAASound.dll could not create an SAA1099 instance.");
+                ConfigureExternalSound();
+                SaaSoundNative.Clear(m_externalSound);
+                for (int index = 0; index <= 0x1C; index++)
+                    SaaSoundNative.WriteAddressData(m_externalSound,
+                        (byte)index, m_registers[index]);
+            }
+            catch (DllNotFoundException ex)
+            {
+                throw new InvalidOperationException(
+                    "The SAA test build requires SAASound.dll next to ZXMAK2.exe.",
+                    ex);
+            }
+            catch (EntryPointNotFoundException ex)
+            {
+                throw new InvalidOperationException(
+                    "SAASound.dll does not provide the required SAA1099 API.", ex);
+            }
+        }
+
+        private void ConfigureExternalSound()
+        {
+            int sampleRate = Math.Max(1, SampleRate);
+            if (m_externalSampleRate == sampleRate)
+                return;
+            SaaSoundNative.SetSoundParameters(m_externalSound,
+                ExternalSoundParameters);
+            SaaSoundNative.SetClockRate(m_externalSound, ExternalClockRate);
+            SaaSoundNative.SetSampleRate(m_externalSound, (uint)sampleRate);
+            SaaSoundNative.SetOversample(m_externalSound, ExternalOversample);
+            m_externalSampleRate = sampleRate;
+        }
+
+        private void ReleaseExternalSound()
+        {
+            if (m_externalSound == IntPtr.Zero)
+                return;
+            SaaSoundNative.Destroy(m_externalSound);
+            m_externalSound = IntPtr.Zero;
+            m_externalSampleRate = 0;
+            m_externalPcm = null;
+        }
+
+        private static class SaaSoundNative
+        {
+            private const string LibraryName = "SAASound.dll";
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "newSAASND")]
+            internal static extern IntPtr Create();
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "deleteSAASND")]
+            internal static extern void Destroy(IntPtr sound);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDSetSoundParameters")]
+            internal static extern void SetSoundParameters(IntPtr sound,
+                uint parameters);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDWriteAddress")]
+            internal static extern void WriteAddress(IntPtr sound, byte address);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDWriteAddressData")]
+            internal static extern void WriteAddressData(IntPtr sound,
+                byte address, byte data);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDClear")]
+            internal static extern void Clear(IntPtr sound);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDGenerateMany")]
+            internal static extern void GenerateMany(IntPtr sound,
+                [Out] byte[] buffer, uint samples);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDSetClockRate")]
+            internal static extern void SetClockRate(IntPtr sound, uint clockRate);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDSetSampleRate")]
+            internal static extern void SetSampleRate(IntPtr sound,
+                uint sampleRate);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDSetOversample")]
+            internal static extern void SetOversample(IntPtr sound,
+                uint oversample);
         }
     }
 
