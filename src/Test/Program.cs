@@ -45,6 +45,16 @@ namespace Test
                 TestZxMultiSound();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/multisoundmax")
+            {
+                TestZxMultiSoundMax();
+                return;
+            }
+            if (args.Length >= 1 && args[0].ToLower() == "/evo-display")
+            {
+                TestEvoDisplayModes();
+                return;
+            }
             if (args.Length >= 1 && args[0].ToLower() == "/moonsound")
             {
                 TestZxmMoonSound();
@@ -1049,7 +1059,7 @@ namespace Test
             // Rev.A2 remembers whether the last host opcode fetch was in the
             // lower 16K and locks SAA/SounDrive in that state.  Exercise the
             // write guard directly so this CPLD quirk cannot regress silently.
-            var boardType = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundDevice);
+            var boardType = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore);
             var romLockField = boardType.GetField(
                 "m_hostRomM1Access",
                 BindingFlags.Instance | BindingFlags.NonPublic);
@@ -1148,6 +1158,123 @@ namespace Test
                 Environment.ExitCode = 1;
         }
 
+        private static void TestZxMultiSoundMax()
+        {
+            var board = new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice
+            {
+                TsFmSaaPortCompatibility = true,
+            };
+            var config = new XmlDocument();
+            var node = config.AppendChild(config.CreateElement("Device"));
+            board.SaveConfigXml(node);
+            var restored = new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice();
+            restored.LoadConfigXml(node);
+            var distinct = board.GetType() !=
+                typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundDevice) &&
+                restored.TsFmSaaPortCompatibility;
+
+            var priorityProbe = new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice();
+            priorityProbe.ResolveConfiguration(false, false, true);
+            var priority = !priorityProbe.EffectiveYmEnabled &&
+                !priorityProbe.EffectiveSaaEnabled &&
+                !priorityProbe.EffectiveGeneralSoundEnabled &&
+                !priorityProbe.EffectiveSoundDriveEnabled;
+
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            if (!machine.BusManager.Connect())
+                throw new InvalidOperationException("MultiSound Max connect failed");
+
+            var core = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore);
+            var ram = (byte[])core.GetField("m_gsRam",
+                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(board);
+            var rom = (byte[])core.GetField("m_gsRom",
+                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(board);
+            var memoryOk = ram.Length == 2 * 1024 * 1024 &&
+                rom[0] == 0xF3 && rom[1] == 0xC3;
+
+            const ushort start = 0x4000;
+            var program = new System.Collections.Generic.List<byte>();
+            // TSFM-compatible SAA selector and voice.
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0xFF);
+            AddAyWrite(program, 0x08, 0x80);
+            AddAyWrite(program, 0x10, 0x03);
+            AddAyWrite(program, 0x14, 0x01);
+            AddAyWrite(program, 0x1C, 0x01);
+            // One audible OPL3 FM voice on the Max-specific #C4/#C5 ports.
+            AddMoonSoundFmWrite(program, 0x34C4, 0x20, 0x01);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x23, 0x01);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x40, 0x10);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x43, 0x00);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x60, 0xF0);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x63, 0xF0);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x80, 0x77);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x83, 0x77);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xC0, 0x30);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xA0, 0x98);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xB0, 0x31);
+            program.Add(0x18); program.Add(0xFE);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+
+            var renderers = new System.Collections.Generic.List<ISoundRenderer>(
+                board.SoundRenderers);
+            var saaPeak = GetStereoPeak(renderers[3].AudioBuffer);
+            var oplPeak = GetStereoPeak(renderers[4].AudioBuffer);
+            memory.WRMEM_DBG(0x4600, 0x18);
+            memory.WRMEM_DBG(0x4601, 0xFE);
+            machine.CPU.regs.PC = 0x4600;
+            for (var frame = 0; frame < 200; frame++)
+                machine.ExecuteFrame();
+            var readyProgram = new System.Collections.Generic.List<byte>();
+            AddPortReadAndStore(readyProgram, 0x00BB, 0x4700);
+            for (var i = 0; i < readyProgram.Count; i++)
+                memory.WRMEM_DBG((ushort)(0x4650 + i), readyProgram[i]);
+            machine.CPU.regs.PC = 0x4650;
+            while (machine.CPU.regs.PC < 0x4650 + readyProgram.Count)
+                machine.DebugStepInto();
+            var gsReady = (memory.RDMEM_DBG(0x4700) & 1) == 0;
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            var passed = distinct && priority && memoryOk &&
+                saaPeak > 256 && oplPeak > 256 && gsReady;
+            Console.WriteLine(
+                "ZX-MultiSound Max: distinct={0}, ports={1}, GS-2MB={2}, " +
+                "SAA={3}, OPL3={4}, GS-ready={5}: {6}",
+                distinct, priority, memoryOk, saaPeak, oplPeak, gsReady,
+                passed ? "PASS" : "FAIL");
+            if (!passed)
+                Environment.ExitCode = 1;
+        }
+
+        private static void TestEvoDisplayModes()
+        {
+            var cmos = new ZXMAK2.Hardware.Evo.CmosPentEvo();
+            for (var mode = 0; mode < 8; mode++)
+            {
+                cmos.DisplayMode = mode;
+                var expected = (byte)(((mode & 3) << 4) |
+                    ((mode >> 2) & 1));
+                if (cmos.DisplayMode != mode ||
+                    cmos.AvrVideoConfiguration != expected)
+                    throw new InvalidOperationException(
+                        "EVO display mode mapping failed at " + mode);
+            }
+            Console.WriteLine("EVO TV/VGA x 4 raster modes: PASS");
+        }
+
         private static bool TestMultiSoundTsFmSaaCompatibility()
         {
             var nativeDefault =
@@ -1234,7 +1361,7 @@ namespace Test
             memory.WRMEM_DBG(0x4001, 0xFE);
             machine.CPU.regs.PC = 0x4000;
 
-            var boardType = board.GetType();
+            var boardType = board.GetType().BaseType;
             var gsRam = (byte[])boardType.GetField(
                 "m_gsRam", BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(board);

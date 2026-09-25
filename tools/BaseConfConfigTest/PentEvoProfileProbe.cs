@@ -229,6 +229,45 @@ internal static class PentEvoProfileProbe
                     PentEvoZxBusDevice.MoonSound,
                 "MoonSound slot selection did not survive XML round-trip");
 
+            // MultiSound Max is a separate card with independent switches.
+            // Preserve all previous combo indexes by appending it at index 5.
+            slot1Device.SelectedIndex = 5;
+            slot1.Checked = true;
+            slot2Device.SelectedIndex = 1;
+            slot2.Checked = true;
+            var maxCompatibility = GetField<CheckBox>(control,
+                "m_maxTsFmSaaCompatibility");
+            maxCompatibility.Checked = true;
+            AssertLayoutFits(control);
+            control.Apply();
+            var max = bus.FindDevice<ZxMultiSoundMaxDevice>();
+            Assert(max != null && max.TsFmSaaPortCompatibility &&
+                bus.FindDevice<ZxMultiSoundDevice>() == null,
+                "MultiSound Max was not installed separately from Rev.A2");
+            Assert(ula.ZxBusSlot1Device == PentEvoZxBusDevice.MultiSoundMax &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.NeoGS,
+                "MultiSound Max slot selection was not saved");
+            slot1Device.SelectedIndex = 1;
+            slot2Device.SelectedIndex = 5;
+            slot2.Checked = true;
+            control.Apply();
+            Assert(ula.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.MultiSoundMax,
+                "MultiSound Max could not be moved to Slot 2");
+            slot1Device.SelectedIndex = 5;
+            slot1.Checked = true;
+            Assert(!slot2.Checked && slot2Device.SelectedIndex == 0,
+                "Two MultiSound Max boards were allowed simultaneously");
+
+            slot2Device.SelectedIndex = 2;
+            slot2.Checked = true;
+            Assert(control.AutoScrollMinSize.Height > control.Height,
+                "Both independent MultiSound switch panels cannot scroll");
+            control.Apply();
+            Assert(bus.FindDevice<ZxMultiSoundDevice>() != null &&
+                bus.FindDevice<ZxMultiSoundMaxDevice>() != null,
+                "Rev.A2 and Max could not occupy separate ZXBUS slots");
+
             var init = typeof(CtlSettingsUla).GetMethod(
                 "Init",
                 new Type[]
@@ -422,6 +461,20 @@ internal static class PentEvoProfileProbe
     {
         using (var view = new MainView(null))
         {
+            var viewMenu = GetField<ToolStripMenuItem>(view, "menuView");
+            var filterMenu = GetField<ToolStripMenuItem>(view,
+                "menuViewVideoFilter");
+            var evoMenu = GetField<ToolStripMenuItem>(view,
+                "_menuEvoDisplayMode");
+            Assert(viewMenu.DropDownItems.IndexOf(evoMenu) ==
+                viewMenu.DropDownItems.IndexOf(filterMenu) + 1 &&
+                evoMenu.DropDownItems.Count == 8,
+                "EVO Display Mode is not beside Scale/Filter with 8 modes");
+            var warmReset = GetField<ToolStripMenuItem>(view,
+                "menuVmWarmReset");
+            Assert(warmReset.Text == "Warm Reset" &&
+                warmReset.ShortcutKeyDisplayString == "F12",
+                "Warm Reset still shows an obsolete shortcut");
             var tapeButton = GetField<ToolStripSplitButton>(view, "_tapeButton");
             var opticalButton = GetField<ToolStripSplitButton>(view, "_opticalButton");
             var opticalSettings = GetField<ToolStripMenuItem>(
@@ -554,10 +607,17 @@ internal static class PentEvoProfileProbe
     {
         foreach (Control child in parent.Controls)
         {
+            if (!child.Visible)
+                continue;
+            var scrollable = parent as ScrollableControl;
+            var verticalLimit = scrollable != null && scrollable.AutoScroll
+                ? Math.Max(parent.ClientSize.Height,
+                    scrollable.AutoScrollMinSize.Height)
+                : parent.ClientSize.Height;
             Assert(
                 child.Left >= 0 && child.Top >= 0 &&
                 child.Right <= parent.ClientSize.Width &&
-                child.Bottom <= parent.ClientSize.Height,
+                child.Bottom <= verticalLimit,
                 "Control is clipped: " + child.GetType().Name +
                 " " + child.Bounds + " in " + parent.ClientSize);
             AssertLayoutFits(child);

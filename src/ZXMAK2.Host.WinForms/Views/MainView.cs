@@ -30,6 +30,8 @@ namespace ZXMAK2.Host.WinForms.Views
         private readonly IResolver _resolver;
         private readonly BindingService _binding;
         private readonly ToolStripMenuItem _menuToolsQuickBoot = new ToolStripMenuItem();
+        private readonly ToolStripMenuItem _menuEvoDisplayMode =
+            new ToolStripMenuItem("EVO Display Mode");
         private readonly Timer _quickBootStateTimer = new Timer();
         // This is deliberately the only size constant for all three status dots.
         // It can be adjusted after visual feedback without redrawing the toolbar icons.
@@ -106,6 +108,7 @@ namespace ZXMAK2.Host.WinForms.Views
 
             SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint, true);
             InitializeComponent();
+            InitializeEvoDisplayMenu();
             InitializeMediaToolbar();
             Icon = ResourceImages.IconApp;
             LoadMachineMenu();
@@ -116,6 +119,43 @@ namespace ZXMAK2.Host.WinForms.Views
             _quickBootStateTimer.Tick += QuickBootStateTimer_OnTick;
             _quickBootStateTimer.Start();
             menuTools.DropDownOpening += MenuTools_OnDropDownOpening;
+        }
+
+        private void InitializeEvoDisplayMenu()
+        {
+            var names = new[]
+            {
+                "TV - Normal", "TV - 60 Hz", "TV - 48K", "TV - 128K",
+                "VGA - Normal", "VGA - 60 Hz", "VGA - 48K", "VGA - 128K",
+            };
+            for (var mode = 0; mode < names.Length; mode++)
+            {
+                var item = new ToolStripMenuItem(names[mode]);
+                item.Tag = mode;
+                item.Click += (sender, args) =>
+                {
+                    var model = DataContext as IMainViewModel;
+                    if (model != null)
+                        model.SetEvoDisplayMode((int)((ToolStripMenuItem)sender).Tag);
+                };
+                _menuEvoDisplayMode.DropDownItems.Add(item);
+            }
+            _menuEvoDisplayMode.DropDownOpening += (sender, args) =>
+            {
+                var model = DataContext as IMainViewModel;
+                var selected = model == null ? -1 : model.GetEvoDisplayMode();
+                foreach (ToolStripMenuItem item in _menuEvoDisplayMode.DropDownItems)
+                    item.Checked = (int)item.Tag == selected;
+            };
+            menuView.DropDownOpening += (sender, args) =>
+            {
+                var model = DataContext as IMainViewModel;
+                _menuEvoDisplayMode.Enabled =
+                    model != null && model.GetEvoDisplayMode() >= 0;
+            };
+            menuView.DropDownItems.Insert(
+                menuView.DropDownItems.IndexOf(menuViewVideoFilter) + 1,
+                _menuEvoDisplayMode);
         }
 
 
@@ -850,13 +890,6 @@ namespace ZXMAK2.Host.WinForms.Views
                 e.Handled = true;
                 return;
             }
-            if (e.Alt && e.Control &&
-                (e.KeyCode == Keys.Insert || e.KeyCode == Keys.End))
-            {
-                OnCommand(CommandVmWarmReset, true);
-                e.Handled = true;
-                return;
-            }
             // STOP/RUN
             if (e.KeyCode == Keys.Pause)
             {
@@ -880,19 +913,6 @@ namespace ZXMAK2.Host.WinForms.Views
             if (e.Alt && e.Control && e.KeyCode == Keys.F8)
             {
                 OnCommand(CommandTapePause);
-                e.Handled = true;
-                return;
-            }
-        }
-
-        protected override void OnKeyUp(KeyEventArgs e)
-        {
-            base.OnKeyUp(e);
-            //RESET
-            if (e.Alt && e.Control &&
-                (e.KeyCode == Keys.Insert || e.KeyCode == Keys.End))
-            {
-                OnCommand(CommandVmWarmReset, false);
                 e.Handled = true;
                 return;
             }

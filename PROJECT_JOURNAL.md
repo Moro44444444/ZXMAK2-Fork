@@ -3186,3 +3186,50 @@ ZXM-MoonSound Rev.01 реализована согласно опубликов�
   подтверждены. В публичный ZIP не добавлен Yamaha YRW801-M ROM — для
   MoonSound PCM/wavetable пользователь кладёт рядом с `ZXMAK2.exe` собственную
   законно полученную копию.
+
+## EVO Display Mode и отдельная ZX-MultiSound Max — v51 test — 2026-09-25
+
+Статус: **локальная тестовая сборка, не опубликована на GitHub и ещё не
+принята пользователем по звуку.** Основа — утверждённая Beta 1 (`bdc7241`),
+рабочая ветка `codex/evo-display-multisound-max`. v50 и Beta 1 не изменены.
+
+- В View рядом с Scale Mode и Video Filter появилось подменю `EVO Display
+  Mode`: TV/VGA × Normal, 60 Hz, 48K и 128K, восемь вариантов. Выбранный
+  вариант отмечен; на других машинах пункт недоступен. Значение связано с
+  AVR-видеобитами PentEvo и сохраняется в EEPROM.
+- VM > Warm Reset теперь показывает только `F12`. Старое сочетание
+  `Alt+Ctrl+Insert` удалено и из WinForms, и из XNA; `Ctrl+F12` CMOS Reset и
+  `Ctrl+Alt+F12` Factory Reset оставлены.
+- ZX-MultiSound Max добавлена **как отдельная плата** в любой из двух слотов
+  ZXBUS. Прежняя ZX-MultiSound Rev.A2 сохранена, а не заменена вариантом Max.
+  Max использует 2 МБ GS RAM, оригинальный образ GS ROM 512 КБ и отдельный
+  тракт OPL3 FM. Общие YM/SAA/GS/SoundDrive-порты при двух MultiSound
+  распределяются по приоритету слотов; ручные конфликтные настройки
+  отклоняются. Max OPL3 уступает порты #C4–#C7 MoonSound, если она вставлена.
+- Для обеих MultiSound в настройках есть собственный переключатель
+  совместимости SAA1099 с портами TSFM. Обе платы используют имеющуюся
+  `SAASound.dll`, но имеют отдельные экземпляры состояния звукового чипа.
+- Внешний модуль MIDI SAM2695 физической Max-платы пока не эмулируется:
+  в исследованном CPLD-интерфейсе не найден host-порт управления им. Не
+  считать Max полностью реализованной в части MIDI без дальнейших данных.
+- Оригинальная прошивка из переданного пользователем архива лежит **только**
+  в локальном тестовом пакете как `roms\ZX-MultiSound-Max-GS.bin`. В Git она не
+  внесена из-за непроверенных прав распространения. То же ограничение
+  относится к Yamaha ROM для MoonSound в локальном пакете.
+- Release/AnyCPU сборки WinForms, XNA, EXE и тестов: 0 ошибок. Portable EXE и
+  Test.exe помечены 32-битными для имеющихся нативных звуковых DLL.
+  Из v51-папки прошли `Test.exe /multisoundmax`, `/multisound`, `/tsfm`,
+  `/moonsound`, `/evo-display`, `/zxnetusb`, а также полный тест ULA и
+  500-кадровые прогоны (video 383–385 мс, CPU 244–246 мс). Отдельный
+  BaseConf UI probe проверил оба слота, сохранение XML, конфликтную защиту,
+  расположение меню и надпись F12.
+- Portable-папка:
+  `L:\Work_two\ZX\ZXMAK2-v51-ZXEVO-BC-Beta1-MultiSoundMax-Test-20260925\release`;
+  58 файлов, 12938547 байт, пользовательских `.cmos`/`.vmide`/`.vmz`, PDB и
+  логов нет. Памятка: `docs/releases/README-B51.txt`.
+- SHA-256: Hardware.dll —
+  `F9AE7DA0BC34E57F731833109D907E5C62FD7649872DC1F165FFF9323D20F3F4`;
+  Host.WinForms.dll —
+  `292F64ECE8931569B12DCDF1D0F3AA39A39F0D8F6AD217C41D0BCC55342BD288`;
+  Test.exe —
+  `0D5254D9F35074401FB0FF97521C013B2A37FB5A7E681A14E13AD0A5F5CD21B2`.

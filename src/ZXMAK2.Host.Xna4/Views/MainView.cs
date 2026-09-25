@@ -305,15 +305,10 @@ namespace ZXMAK2.Host.Xna4.Views
             var mouseState = Mouse.GetState();
             UpdateInput(kbdState, mouseState);
             
-            var isAlt = kbdState[Keys.LeftAlt] == KeyState.Down ||
-                kbdState[Keys.RightAlt] == KeyState.Down;
-            var isCtrl = kbdState[Keys.LeftControl] == KeyState.Down ||
-                kbdState[Keys.RightControl] == KeyState.Down;
-            if (isAlt && isCtrl &&
-                CommandVmWarmReset != null &&
+            if (CommandVmWarmReset != null &&
                 CommandVmWarmReset.CanExecute(null))
             {
-                CommandVmWarmReset.Execute(kbdState[Keys.Insert] == KeyState.Down);
+                CommandVmWarmReset.Execute(kbdState[Keys.F12] == KeyState.Down);
             }
         }
 

@@ -532,6 +532,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 if (isPentEvo &&
                     (device is NeoGsDevice ||
                      device is ZxMultiSoundDevice ||
+                     device is ZxMultiSoundMaxDevice ||
                      device is ZxmMoonSoundDevice ||
                      device is ZxNetUsbDevice ||
                      device is AYCHRV ||
@@ -928,6 +929,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     // one of PentEvo's two real ZXBUS slots.
                     additionalIgnoreTypes.Add(typeof(NeoGsDevice));
                     additionalIgnoreTypes.Add(typeof(ZxMultiSoundDevice));
+                    additionalIgnoreTypes.Add(typeof(ZxMultiSoundMaxDevice));
                     additionalIgnoreTypes.Add(typeof(ZxmMoonSoundDevice));
                     additionalIgnoreTypes.Add(typeof(ZxNetUsbDevice));
                     // TSFM Pro replaces an AY/YM socket. Do not offer it to

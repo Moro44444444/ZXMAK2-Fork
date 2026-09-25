@@ -80,6 +80,7 @@
     <Compile Include="Interfaces\IMachineState.cs" />
       <Compile Include="Interfaces\IMediaStatusDevice.cs" />
       <Compile Include="Interfaces\IPersistentStateDevice.cs" />
+      <Compile Include="Interfaces\IEvoDisplayModeDevice.cs" />
     <Compile Include="Interfaces\IMemoryDevice.cs" />
     <Compile Include="Interfaces\IMouseDevice.cs" />
     <Compile Include="Interfaces\IRzxFrameSource.cs" />

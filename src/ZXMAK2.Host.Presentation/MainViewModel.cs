@@ -190,6 +190,21 @@ namespace ZXMAK2.Host.Presentation
             }
         }
 
+        public int GetEvoDisplayMode()
+        {
+            var display = m_vm == null ? null :
+                m_vm.Bus.FindDevice<IEvoDisplayModeDevice>();
+            return display == null ? -1 : display.DisplayMode;
+        }
+
+        public void SetEvoDisplayMode(int mode)
+        {
+            var display = m_vm == null ? null :
+                m_vm.Bus.FindDevice<IEvoDisplayModeDevice>();
+            if (display != null && mode >= 0 && mode < 8)
+                display.DisplayMode = mode;
+        }
+
         public bool ResetCmosState()
         {
             if (m_vm == null)
@@ -654,7 +669,7 @@ namespace ZXMAK2.Host.Presentation
             CommandViewStatusBar.Text = "Status Bar";
             CommandVmPause.Text = "Resume";
             CommandVmMaxSpeed.Text = "Maximum Speed";
-            CommandVmWarmReset.Text = "Warm Reset    Alt+Ctrl+Ins";
+            CommandVmWarmReset.Text = "Warm Reset";
             //CommandVmColdReset.Text = "Cold Reset";
             CommandVmNmi.Text = "NMI";
             CommandVmSettings.Text = "Settings";

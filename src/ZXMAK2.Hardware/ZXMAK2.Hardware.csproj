@@ -71,6 +71,8 @@
     <Compile Include="Evo\AYCHRV.cs" />
     <Compile Include="Evo\TurboSoundFmPro.cs" />
     <Compile Include="Evo\ZxMultiSoundDevice.cs" />
+    <Compile Include="Evo\ZxMultiSoundMaxDevice.cs" />
+    <Compile Include="Evo\ZxMaxOpl3Renderer.cs" />
     <Compile Include="Evo\ZxmMoonSoundDevice.cs" />
     <Compile Include="Evo\ZxNetUsbDevice.cs" />
     <Compile Include="Evo\BeeperPentEvo.cs" />

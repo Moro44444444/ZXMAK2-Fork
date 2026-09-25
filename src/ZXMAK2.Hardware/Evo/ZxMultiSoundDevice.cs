@@ -16,7 +16,7 @@ namespace ZXMAK2.Hardware.Evo
     /// ZX-MultiSound Rev.A2 for ZXBUS/NemoBus.
     /// Address decoding and reset states follow the official CPLD top.v.
     /// </summary>
-    public sealed class ZxMultiSoundDevice : SoundDeviceBase,
+    public abstract class ZxMultiSoundCore : SoundDeviceBase,
         IAdditionalSoundRenderers,
         ISoundMixerConfiguration,
         IPsgDevice
@@ -24,7 +24,7 @@ namespace ZXMAK2.Hardware.Evo
         private const string GsRomResourceName =
             "ZXMAK2.Hardware.Resources.ZX-MultiSound-GS-1.05b.rom";
         private const int GsRomSize = 32 * 1024;
-        private const int GsRamSize = 1024 * 1024;
+        private const int GsRomSizeMax = 512 * 1024;
         private const long GsMasterClock = 48000000L;
         private const long GsMasterTicksPerFrame = GsMasterClock / 50;
         private const long GsMasterTicksPerCpuTact = GsMasterClock / 16000000L;
@@ -57,7 +57,8 @@ namespace ZXMAK2.Hardware.Evo
             new PsgPortState(0xFF), new PsgPortState(0xFF),
         };
         private readonly byte[] m_gsRom = new byte[GsRomSize];
-        private readonly byte[] m_gsRam = new byte[GsRamSize];
+        private readonly byte[] m_gsRam;
+        private readonly bool m_isMax;
         private readonly byte[] m_dacSample = new byte[4];
         private readonly byte[] m_dacVolume = new byte[4];
 
@@ -87,13 +88,18 @@ namespace ZXMAK2.Hardware.Evo
         private bool m_effectiveGs;
         private bool m_effectiveSoundDrive;
 
-        public ZxMultiSoundDevice()
+        protected ZxMultiSoundCore(bool isMax)
         {
-            Name = "ZX-MultiSound Rev.A2";
-            Description =
-                "ZX-MultiSound Rev.A2 for ZXBUS: 2 x YM2203, SAA1099, " +
-                "General Sound 16 MHz/1 MB with ROM 1.05b and SounDrive. " +
-                "The external SAM2695 synthesizer is not emulated.";
+            m_isMax = isMax;
+            m_gsRam = new byte[isMax ? 2 * 1024 * 1024 : 1024 * 1024];
+            Name = isMax ? "ZX-MultiSound Max" : "ZX-MultiSound Rev.A2";
+            Description = isMax
+                ? "ZX-MultiSound Max for ZXBUS: 2 x YM2203, SAA1099, " +
+                  "General Sound 16 MHz/2 MB, SoundDrive and YMF262 OPL3. " +
+                  "External SAM2695 MIDI is not emulated."
+                : "ZX-MultiSound Rev.A2 for ZXBUS: 2 x YM2203, SAA1099, " +
+                  "General Sound 16 MHz/1 MB with ROM 1.05b and SounDrive. " +
+                  "The external SAM2695 synthesizer is not emulated.";
             Category = BusDeviceCategory.Music;
             AutomaticConfiguration = true;
             YmEnabled = true;
@@ -105,10 +111,16 @@ namespace ZXMAK2.Hardware.Evo
             m_effectiveGs = true;
             m_effectiveSoundDrive = true;
             m_volume = 100;
-            m_renderers = new ISoundRenderer[]
-            {
-                m_psg[0], m_psg[1], m_fm, m_saa,
-            };
+            m_renderers = isMax
+                ? new ISoundRenderer[]
+                  {
+                      m_psg[0], m_psg[1], m_fm, m_saa,
+                      new ZxMaxOpl3Renderer(),
+                  }
+                : new ISoundRenderer[]
+                  {
+                      m_psg[0], m_psg[1], m_fm, m_saa,
+                  };
             ResetBoard();
         }
 
@@ -182,6 +194,14 @@ namespace ZXMAK2.Hardware.Evo
             bool neoGsInstalled,
             bool internalMusicInstalled)
         {
+            ResolveConfiguration(neoGsInstalled, internalMusicInstalled, false);
+        }
+
+        public void ResolveConfiguration(
+            bool neoGsInstalled,
+            bool internalMusicInstalled,
+            bool otherMultiSoundHasPriority)
+        {
             if (!AutomaticConfiguration)
             {
                 if (GeneralSoundEnabled && neoGsInstalled)
@@ -192,23 +212,43 @@ namespace ZXMAK2.Hardware.Evo
                     throw new InvalidOperationException(
                         "ZX-MultiSound YM/TSFM conflicts with internal AY/TSFM. " +
                         "Select Music: None or use Automatic mode.");
+                if (otherMultiSoundHasPriority &&
+                    (YmEnabled || SaaEnabled || GeneralSoundEnabled ||
+                        SoundDriveEnabled))
+                    throw new InvalidOperationException(
+                        "Both MultiSound cards decode the same YM, SAA, GS and " +
+                        "SoundDrive ports. Use Automatic mode for the second card.");
             }
 
             m_effectiveYm = YmEnabled &&
-                (!internalMusicInstalled || !AutomaticConfiguration);
-            m_effectiveSaa = SaaEnabled;
+                (!internalMusicInstalled || !AutomaticConfiguration) &&
+                (!otherMultiSoundHasPriority || !AutomaticConfiguration);
+            m_effectiveSaa = SaaEnabled &&
+                (!otherMultiSoundHasPriority || !AutomaticConfiguration);
             m_effectiveGs = GeneralSoundEnabled &&
-                (!neoGsInstalled || !AutomaticConfiguration);
-            m_effectiveSoundDrive = SoundDriveEnabled;
+                (!neoGsInstalled || !AutomaticConfiguration) &&
+                (!otherMultiSoundHasPriority || !AutomaticConfiguration);
+            m_effectiveSoundDrive = SoundDriveEnabled &&
+                (!otherMultiSoundHasPriority || !AutomaticConfiguration);
         }
 
         public override void BusInit(IBusManager bmgr)
         {
             base.BusInit(bmgr);
+            var ula = bmgr.FindDevice<UlaPentEvo>();
+            var otherHasPriority = ula != null &&
+                (m_isMax
+                    ? bmgr.FindDevice<ZxMultiSoundDevice>() != null
+                    : bmgr.FindDevice<ZxMultiSoundMaxDevice>() != null) &&
+                ula.ZxBusSlot1Enabled &&
+                (m_isMax
+                    ? ula.ZxBusSlot1Device == PentEvoZxBusDevice.MultiSound
+                    : ula.ZxBusSlot1Device == PentEvoZxBusDevice.MultiSoundMax);
             ResolveConfiguration(
                 bmgr.FindDevice<NeoGsDevice>() != null,
                 bmgr.FindDevice<AYCHRV>() != null ||
-                    bmgr.FindDevice<TurboSoundFmPro>() != null);
+                    bmgr.FindDevice<TurboSoundFmPro>() != null,
+                otherHasPriority);
 
             foreach (var renderer in m_renderers)
             {
@@ -571,8 +611,10 @@ namespace ZXMAK2.Hardware.Evo
 
         private int GetGsRamAddress(ushort address)
         {
-            var page = address < 0x8000 ? 1 : (m_gsPage & 0x1F);
-            return ((page << 15) | (address & 0x7FFF)) & (GsRamSize - 1);
+            var page = address < 0x8000 ? 1 :
+                (m_gsPage & (m_isMax ? 0x3F : 0x1F));
+            return ((page << 15) | (address & 0x7FFF)) &
+                (m_gsRam.Length - 1);
         }
 
         private byte ReadGsPort(ushort address)
@@ -718,6 +760,27 @@ namespace ZXMAK2.Hardware.Evo
         {
             if (m_gsRomLoaded)
                 return;
+            if (m_isMax)
+            {
+                var appFolder = Utils.GetAppFolder();
+                var path = Path.Combine(appFolder, "roms",
+                    "ZX-MultiSound-Max-GS.bin");
+                if (!File.Exists(path))
+                    path = Path.Combine(appFolder,
+                        "ZX-MultiSound-Max-GS.bin");
+                if (!File.Exists(path))
+                    throw new FileNotFoundException(
+                        "ZX-MultiSound Max GS firmware is required: " +
+                        "copy the supplied AM29F040B@PLCC32.BIN to roms/" +
+                        "ZX-MultiSound-Max-GS.bin", path);
+                var firmware = File.ReadAllBytes(path);
+                if (firmware.Length != GsRomSizeMax)
+                    throw new InvalidDataException(
+                        "ZX-MultiSound Max GS firmware must be 512 KiB");
+                Array.Copy(firmware, m_gsRom, GsRomSize);
+                m_gsRomLoaded = true;
+                return;
+            }
             using (var stream = Assembly.GetExecutingAssembly()
                 .GetManifestResourceStream(GsRomResourceName))
             {
@@ -761,5 +824,11 @@ namespace ZXMAK2.Hardware.Evo
 
         private static void Dummy() { }
         private static void DummyAddress(ushort address) { }
+    }
+
+    /// <summary>The original ZX-MultiSound Rev.A2 remains a distinct board.</summary>
+    public sealed class ZxMultiSoundDevice : ZxMultiSoundCore
+    {
+        public ZxMultiSoundDevice() : base(false) { }
     }
 }

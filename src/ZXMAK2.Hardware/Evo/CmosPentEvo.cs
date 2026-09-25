@@ -9,7 +9,7 @@ using ZXMAK2.Host.Interfaces;
 
 namespace ZXMAK2.Hardware.Evo
 {
-    public class CmosPentEvo : BusDeviceBase, IKeyboardDevice, IFrameDiagnosticProvider, IPersistentStateDevice
+    public class CmosPentEvo : BusDeviceBase, IKeyboardDevice, IFrameDiagnosticProvider, IPersistentStateDevice, IEvoDisplayModeDevice
     {
         #region Fields
 
@@ -30,6 +30,19 @@ namespace ZXMAK2.Hardware.Evo
 
         [HardwareValue("AVRVIDEO", Description = "AVR video bits D0/D4/D5")]
         public byte AvrVideoConfiguration { get { return m_avrVideoConfiguration; } }
+
+        public int DisplayMode
+        {
+            get { return ((m_avrVideoConfiguration & 1) != 0 ? 4 : 0) |
+                ((m_avrVideoConfiguration >> 4) & 3); }
+            set
+            {
+                if (value < 0 || value > 7)
+                    throw new ArgumentOutOfRangeException("value");
+                SetAvrVideoConfiguration((byte)(((value & 3) << 4) |
+                    ((value >> 2) & 1)));
+            }
+        }
 
         [HardwareValue("BEEPERMUX", Description = "AVR D3: false=D4 beeper, true=D3 tape-out")]
         public bool BeeperTapeOutSelected { get { return m_beeperTapeOut; } }
