@@ -533,6 +533,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     (device is NeoGsDevice ||
                      device is ZxMultiSoundDevice ||
                      device is ZxmMoonSoundDevice ||
+                     device is ZxNetUsbDevice ||
                      device is AYCHRV ||
                      device is TurboSoundFmPro))
                     continue;
@@ -928,6 +929,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     additionalIgnoreTypes.Add(typeof(NeoGsDevice));
                     additionalIgnoreTypes.Add(typeof(ZxMultiSoundDevice));
                     additionalIgnoreTypes.Add(typeof(ZxmMoonSoundDevice));
+                    additionalIgnoreTypes.Add(typeof(ZxNetUsbDevice));
                     // TSFM Pro replaces an AY/YM socket. Do not offer it to
                     // profiles which have no compatible PSG to replace.
                     if (m_workBus.FindDevice<AY8910>() == null &&

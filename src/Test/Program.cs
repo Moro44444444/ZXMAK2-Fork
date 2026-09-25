@@ -3,6 +3,8 @@ using System.IO;
 using System.Xml;
 using System.Reflection;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using ZXMAK2.Host.Interfaces;
 using ZXMAK2.Host.Entities;
 using ZXMAK2.Engine;
@@ -46,6 +48,11 @@ namespace Test
             if (args.Length >= 1 && args[0].ToLower() == "/moonsound")
             {
                 TestZxmMoonSound();
+                return;
+            }
+            if (args.Length >= 1 && args[0].ToLower() == "/zxnetusb")
+            {
+                TestZxNetUsb();
                 return;
             }
 
@@ -675,6 +682,252 @@ namespace Test
         {
             AddPortWrite(program, addressPort, register);
             AddPortWrite(program, (ushort)(addressPort + 1), value);
+        }
+
+        private static void TestZxNetUsb()
+        {
+            TestZxNetUsbPortDecode();
+            var board = new ZXMAK2.Hardware.Evo.ZxNetUsbDevice();
+            TcpListener listener = null;
+            TcpClient peer = null;
+            try
+            {
+                board.BusConnect();
+                ZxNetWritePort(board, 0x82AB, 0x10);
+
+                byte idHigh = ZxNetReadRegister(board, 0x00FE);
+                byte idLow = ZxNetReadRegister(board, 0x00FF);
+                if (idHigh != 0x53 || idLow != 0x00)
+                    throw new InvalidOperationException(
+                        "ZXNetUSB did not expose W5300 ID #5300");
+
+                listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                const int socket0 = 0x200;
+                ZxNetWriteRegister(board, socket0 + 0x01, 0x01);
+                ZxNetWriteWord(board, socket0 + 0x0A, 49152);
+                ZxNetWriteRegister(board, socket0 + 0x14, 127);
+                ZxNetWriteRegister(board, socket0 + 0x15, 0);
+                ZxNetWriteRegister(board, socket0 + 0x16, 0);
+                ZxNetWriteRegister(board, socket0 + 0x17, 1);
+                ZxNetWriteWord(board, socket0 + 0x12, port);
+                ZxNetWriteRegister(board, socket0 + 0x03, 0x01);
+                ZxNetWriteRegister(board, socket0 + 0x03, 0x04);
+
+                DateTime deadline = DateTime.UtcNow.AddSeconds(3);
+                while (DateTime.UtcNow < deadline &&
+                    ZxNetReadRegister(board, socket0 + 0x09) != 0x17)
+                    Thread.Sleep(5);
+                if (ZxNetReadRegister(board, socket0 + 0x09) != 0x17)
+                    throw new InvalidOperationException(
+                        "W5300 TCP socket did not connect");
+                peer = listener.AcceptTcpClient();
+                peer.ReceiveTimeout = 2000;
+
+                byte[] request = System.Text.Encoding.ASCII.GetBytes("PING");
+                for (int index = 0; index < request.Length; index++)
+                    ZxNetWriteRegister(board,
+                        socket0 + 0x2E + (index & 1), request[index]);
+                ZxNetWriteWord(board, socket0 + 0x22, request.Length);
+                ZxNetWriteRegister(board, socket0 + 0x03, 0x20);
+                byte[] received = new byte[request.Length];
+                int receivedCount = peer.GetStream().Read(received, 0,
+                    received.Length);
+                if (receivedCount != request.Length ||
+                    System.Text.Encoding.ASCII.GetString(received) != "PING")
+                    throw new InvalidOperationException(
+                        "W5300 TCP transmit path failed");
+
+                byte[] response = System.Text.Encoding.ASCII.GetBytes("PONG");
+                peer.GetStream().Write(response, 0, response.Length);
+                deadline = DateTime.UtcNow.AddSeconds(3);
+                while (DateTime.UtcNow < deadline &&
+                    ZxNetReadWord(board, socket0 + 0x2A) == 0)
+                    Thread.Sleep(5);
+                int packetLength = (ZxNetReadRegister(board,
+                    socket0 + 0x30) << 8) |
+                    ZxNetReadRegister(board, socket0 + 0x31);
+                byte[] reply = new byte[packetLength];
+                for (int index = 0; index < reply.Length; index++)
+                    reply[index] = ZxNetReadRegister(board,
+                        socket0 + 0x30 + (index & 1));
+                ZxNetWriteRegister(board, socket0 + 0x03, 0x40);
+                if (System.Text.Encoding.ASCII.GetString(reply) != "PONG")
+                    throw new InvalidOperationException(
+                        "W5300 TCP receive path failed");
+
+                // NedoOS normally obtains its address through DHCP.  Verify
+                // the built-in host-side DHCP reply without using the PC's
+                // privileged UDP/68 service.
+                const int socket1 = 0x240;
+                ZxNetWriteRegister(board, socket1 + 0x01, 0x02);
+                ZxNetWriteWord(board, socket1 + 0x0A, 68);
+                ZxNetWriteRegister(board, socket1 + 0x14, 255);
+                ZxNetWriteRegister(board, socket1 + 0x15, 255);
+                ZxNetWriteRegister(board, socket1 + 0x16, 255);
+                ZxNetWriteRegister(board, socket1 + 0x17, 255);
+                ZxNetWriteWord(board, socket1 + 0x12, 67);
+                ZxNetWriteRegister(board, socket1 + 0x03, 0x01);
+                byte[] discover = new byte[244];
+                discover[0] = 1; discover[1] = 1; discover[2] = 6;
+                discover[4] = 0x12; discover[5] = 0x34;
+                discover[6] = 0x56; discover[7] = 0x78;
+                discover[236] = 0x63; discover[237] = 0x82;
+                discover[238] = 0x53; discover[239] = 0x63;
+                discover[240] = 53; discover[241] = 1;
+                discover[242] = 1; discover[243] = 255;
+                for (int index = 0; index < discover.Length; index++)
+                    ZxNetWriteRegister(board,
+                        socket1 + 0x2E + (index & 1), discover[index]);
+                ZxNetWriteWord(board, socket1 + 0x22, discover.Length);
+                ZxNetWriteRegister(board, socket1 + 0x03, 0x20);
+                int udpLength = ZxNetReadWord(board, socket1 + 0x2A);
+                byte[] udpHeader = new byte[8];
+                for (int index = 0; index < udpHeader.Length; index++)
+                    udpHeader[index] = ZxNetReadRegister(board,
+                        socket1 + 0x30 + (index & 1));
+                int dhcpLength = (udpHeader[6] << 8) | udpHeader[7];
+                byte[] offer = new byte[dhcpLength];
+                for (int index = 0; index < offer.Length; index++)
+                    offer[index] = ZxNetReadRegister(board,
+                        socket1 + 0x30 + (index & 1));
+                bool dhcpPassed = udpLength >= dhcpLength + 8 &&
+                    offer.Length > 19 && offer[0] == 2 &&
+                    offer[16] == 10 && offer[17] == 0 &&
+                    offer[18] == 2 && offer[19] == 15;
+                if (!dhcpPassed)
+                    throw new InvalidOperationException(
+                        "ZXNetUSB DHCP reply failed");
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine(
+                    "ZXNetUSB Rev.C: Z80 I/O=PASS, W5300 ID=#5300, " +
+                    "TCP TX/RX=PASS, DHCP=10.0.2.15 PASS");
+                Console.ResetColor();
+            }
+            finally
+            {
+                if (peer != null)
+                    peer.Close();
+                if (listener != null)
+                    listener.Stop();
+                board.BusDisconnect();
+            }
+        }
+
+        private static void TestZxNetUsbPortDecode()
+        {
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var board = new ZXMAK2.Hardware.Evo.ZxNetUsbDevice();
+            var machine = GetTestMachine(Resources.machines_test);
+            try
+            {
+                machine.BusManager.Disconnect();
+                machine.BusManager.Clear();
+                machine.BusManager.Add((BusDeviceBase)memory);
+                machine.BusManager.Add((BusDeviceBase)ula);
+                machine.BusManager.Add(board);
+                machine.BusManager.Connect();
+
+                const ushort programAddress = 0x4000;
+                const ushort resultAddress = 0x4300;
+                var program = new System.Collections.Generic.List<byte>();
+                AddPortWrite(program, 0x82AB, 0x10);
+                AddPortWrite(program, 0x81AB, 0x03);
+                AddPortReadAndStore(program, 0x3EAB, resultAddress);
+                AddPortReadAndStore(program, 0x3FAB,
+                    (ushort)(resultAddress + 1));
+                for (int index = 0; index < program.Count; index++)
+                    memory.WRMEM_DBG((ushort)(programAddress + index),
+                        program[index]);
+
+                machine.IsRunning = false;
+                machine.DebugReset();
+                machine.CPU.regs.PC = programAddress;
+                while (machine.CPU.regs.PC <
+                    programAddress + program.Count)
+                    machine.DebugStepInto();
+
+                if (memory.RDMEM_DBG(resultAddress) != 0x53 ||
+                    memory.RDMEM_DBG((ushort)(resultAddress + 1)) != 0x00)
+                    throw new InvalidOperationException(
+                        "ZXNetUSB Z80 I/O decode did not expose W5300 ID");
+            }
+            finally
+            {
+                machine.BusManager.Disconnect();
+                machine.Dispose();
+            }
+        }
+
+        private static void ZxNetWriteWord(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, int address,
+            int value)
+        {
+            ZxNetWriteRegister(board, address, (byte)(value >> 8));
+            ZxNetWriteRegister(board, address + 1, (byte)value);
+        }
+
+        private static int ZxNetReadWord(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, int address)
+        {
+            return (ZxNetReadRegister(board, address) << 8) |
+                ZxNetReadRegister(board, address + 1);
+        }
+
+        private static void ZxNetWriteRegister(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, int address,
+            byte value)
+        {
+            ZxNetWritePort(board, 0x81AB, (byte)(address >> 6));
+            // Use the lower mirror exactly like the current NedoOS driver.
+            ushort port = (ushort)((address & 0x3F) << 8 | 0xAB);
+            ZxNetWritePort(board, port, value);
+        }
+
+        private static byte ZxNetReadRegister(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, int address)
+        {
+            ZxNetWritePort(board, 0x81AB, (byte)(address >> 6));
+            ushort port = (ushort)((address & 0x3F) << 8 | 0xAB);
+            return ZxNetReadPort(board, port);
+        }
+
+        private static void ZxNetWritePort(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, ushort port,
+            byte value)
+        {
+            string name = port == 0x81AB ? "WriteAddress" :
+                port == 0x82AB ? "WriteControl" :
+                port == 0x83AB ? "WriteInterrupt" : "WriteW5300";
+            MethodInfo method = board.GetType().GetMethod(name,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            object[] arguments = { port, value, false };
+            method.Invoke(board, arguments);
+            if (!(bool)arguments[2])
+                throw new InvalidOperationException(
+                    "ZXNetUSB did not handle write to #" +
+                    port.ToString("X4"));
+        }
+
+        private static byte ZxNetReadPort(
+            ZXMAK2.Hardware.Evo.ZxNetUsbDevice board, ushort port)
+        {
+            string name = port == 0x81AB ? "ReadAddress" :
+                port == 0x82AB ? "ReadControl" :
+                port == 0x83AB ? "ReadInterrupt" : "ReadW5300";
+            MethodInfo method = board.GetType().GetMethod(name,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            object[] arguments = { port, (byte)0xFF, false };
+            method.Invoke(board, arguments);
+            if (!(bool)arguments[2])
+                throw new InvalidOperationException(
+                    "ZXNetUSB did not handle read from #" +
+                    port.ToString("X4"));
+            return (byte)arguments[1];
         }
 
         private static void AddMoonSoundWaveWrite(

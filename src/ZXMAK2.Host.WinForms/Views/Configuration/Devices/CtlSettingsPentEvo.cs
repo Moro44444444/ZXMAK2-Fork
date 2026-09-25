@@ -65,6 +65,17 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             }
         }
 
+        public bool IsZxNetUsbBoardEnabled
+        {
+            get
+            {
+                return IsSelected(PentEvoZxBusDevice.ZXNetUSB,
+                        m_slot1Enabled, m_slot1Device) ||
+                    IsSelected(PentEvoZxBusDevice.ZXNetUSB,
+                        m_slot2Enabled, m_slot2Device);
+            }
+        }
+
         public bool IsAutomaticMultiSoundYmActive
         {
             get
@@ -163,6 +174,11 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 {
                     TryRestoreBoard(PentEvoZxBusDevice.MoonSound);
                 }
+                if (m_bmgr.FindDevice<ZxNetUsbDevice>() != null &&
+                    !IsZxNetUsbBoardEnabled)
+                {
+                    TryRestoreBoard(PentEvoZxBusDevice.ZXNetUSB);
+                }
                 m_automatic.Checked = multiSound == null ||
                     multiSound.AutomaticConfiguration;
                 m_ym.Checked = multiSound == null || multiSound.YmEnabled;
@@ -208,6 +224,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 RemoveBoard<NeoGsDevice>();
                 RemoveBoard<ZxMultiSoundDevice>();
                 RemoveBoard<ZxmMoonSoundDevice>();
+                RemoveBoard<ZxNetUsbDevice>();
                 return;
             }
 
@@ -217,6 +234,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             var neoGsSelected = IsNeoGsBoardEnabled;
             var multiSoundSelected = IsMultiSoundBoardEnabled;
             var moonSoundSelected = IsMoonSoundBoardEnabled;
+            var zxNetUsbSelected = IsZxNetUsbBoardEnabled;
 
             // Validate manual switch wiring before changing the bus.  Apply
             // can be rejected safely without adding/removing a board or
@@ -237,6 +255,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
             SetBoardPresence<NeoGsDevice>(neoGsSelected);
             SetBoardPresence<ZxmMoonSoundDevice>(moonSoundSelected);
+            SetBoardPresence<ZxNetUsbDevice>(zxNetUsbSelected);
             var multiSound = m_bmgr.FindDevice<ZxMultiSoundDevice>();
             if (multiSoundSelected && multiSound == null)
             {
@@ -319,6 +338,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 PentEvoZxBusDevice.MultiSound, "ZX-MultiSound Rev.A2"));
             comboBox.Items.Add(new SlotChoice(
                 PentEvoZxBusDevice.MoonSound, "ZXM-MoonSound Rev.01"));
+            comboBox.Items.Add(new SlotChoice(
+                PentEvoZxBusDevice.ZXNetUSB, "ZXNetUSB Rev.C (Ethernet)"));
             comboBox.SelectedIndex = 0;
             parent.Controls.Add(comboBox);
             return comboBox;

@@ -1575,6 +1575,16 @@ namespace ZXMAK2.Host.WinForms.Views
             }
         }
 
+        private void menuVmCmosReset_Click(object sender, EventArgs e)
+        {
+            RequestCmosReset();
+        }
+
+        private void menuVmFactoryReset_Click(object sender, EventArgs e)
+        {
+            RequestFactoryReset();
+        }
+
         private void RequestFactoryReset()
         {
             var query = _resolver.TryResolve<IUserQuery>();

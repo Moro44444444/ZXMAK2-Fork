@@ -77,6 +77,8 @@
             this.menuVmMaximumSpeed = new System.Windows.Forms.ToolStripMenuItem();
             this.menuVmSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.menuVmWarmReset = new System.Windows.Forms.ToolStripMenuItem();
+            this.menuVmCmosReset = new System.Windows.Forms.ToolStripMenuItem();
+            this.menuVmFactoryReset = new System.Windows.Forms.ToolStripMenuItem();
             this.menuVmColdReset = new System.Windows.Forms.ToolStripMenuItem();
             this.menuVmNmi = new System.Windows.Forms.ToolStripMenuItem();
             this.menuVmSeparator2 = new System.Windows.Forms.ToolStripSeparator();
@@ -386,6 +388,8 @@
             this.menuVmMaximumSpeed,
             this.menuVmSeparator1,
             this.menuVmWarmReset,
+            this.menuVmCmosReset,
+            this.menuVmFactoryReset,
             this.menuVmColdReset,
             this.menuVmNmi,
             this.menuVmSeparator2,
@@ -416,9 +420,25 @@
             // menuVmWarmReset
             // 
             this.menuVmWarmReset.Name = "menuVmWarmReset";
-            this.menuVmWarmReset.ShortcutKeyDisplayString = "Alt+Ctrl+Insert";
+            this.menuVmWarmReset.ShortcutKeyDisplayString = "F12";
             this.menuVmWarmReset.Size = new System.Drawing.Size(226, 22);
             this.menuVmWarmReset.Text = "Warm Reset";
+            //
+            // menuVmCmosReset
+            //
+            this.menuVmCmosReset.Name = "menuVmCmosReset";
+            this.menuVmCmosReset.ShortcutKeyDisplayString = "Ctrl+F12";
+            this.menuVmCmosReset.Size = new System.Drawing.Size(226, 22);
+            this.menuVmCmosReset.Text = "CMOS Reset";
+            this.menuVmCmosReset.Click += new System.EventHandler(this.menuVmCmosReset_Click);
+            //
+            // menuVmFactoryReset
+            //
+            this.menuVmFactoryReset.Name = "menuVmFactoryReset";
+            this.menuVmFactoryReset.ShortcutKeyDisplayString = "Ctrl+Alt+F12";
+            this.menuVmFactoryReset.Size = new System.Drawing.Size(226, 22);
+            this.menuVmFactoryReset.Text = "Factory Reset";
+            this.menuVmFactoryReset.Click += new System.EventHandler(this.menuVmFactoryReset_Click);
             // 
             // menuVmColdReset
             // 
@@ -555,6 +575,7 @@
             this.tbrButtonWarmReset.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrButtonWarmReset.Name = "tbrButtonWarmReset";
             this.tbrButtonWarmReset.Size = new System.Drawing.Size(36, 36);
+            this.tbrButtonWarmReset.ToolTipText = "F12";
             // 
             // tbrButtonColdReset
             // 
@@ -701,6 +722,8 @@
         private System.Windows.Forms.ToolStripMenuItem menuVmMaximumSpeed;
         private System.Windows.Forms.ToolStripSeparator menuVmSeparator1;
         private System.Windows.Forms.ToolStripMenuItem menuVmWarmReset;
+        private System.Windows.Forms.ToolStripMenuItem menuVmCmosReset;
+        private System.Windows.Forms.ToolStripMenuItem menuVmFactoryReset;
         private System.Windows.Forms.ToolStripMenuItem menuVmNmi;
         private System.Windows.Forms.ToolStripSeparator menuVmSeparator2;
         private System.Windows.Forms.ToolStripMenuItem menuVmSettings;

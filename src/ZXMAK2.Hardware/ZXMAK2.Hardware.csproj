@@ -72,6 +72,7 @@
     <Compile Include="Evo\TurboSoundFmPro.cs" />
     <Compile Include="Evo\ZxMultiSoundDevice.cs" />
     <Compile Include="Evo\ZxmMoonSoundDevice.cs" />
+    <Compile Include="Evo\ZxNetUsbDevice.cs" />
     <Compile Include="Evo\BeeperPentEvo.cs" />
     <Compile Include="Evo\CmosPentEvo.cs" />
     <Compile Include="Evo\FddPentEvo.cs" />
