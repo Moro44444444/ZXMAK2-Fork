@@ -532,6 +532,7 @@ namespace ZXMAK2.Host.WinForms.Views
                 if (isPentEvo &&
                     (device is NeoGsDevice ||
                      device is ZxMultiSoundDevice ||
+                     device is ZxmMoonSoundDevice ||
                      device is AYCHRV ||
                      device is TurboSoundFmPro))
                     continue;
@@ -922,9 +923,11 @@ namespace ZXMAK2.Host.WinForms.Views
                     wizard.IgnoreList =
                         m_workBus.FindDevices<BusDeviceBase>();
                     var additionalIgnoreTypes = new List<Type>();
-                    // NeoGS is installed only through a real ZXBUS slot.
+                    // Physical expansion boards are installed only through
+                    // one of PentEvo's two real ZXBUS slots.
                     additionalIgnoreTypes.Add(typeof(NeoGsDevice));
                     additionalIgnoreTypes.Add(typeof(ZxMultiSoundDevice));
+                    additionalIgnoreTypes.Add(typeof(ZxmMoonSoundDevice));
                     // TSFM Pro replaces an AY/YM socket. Do not offer it to
                     // profiles which have no compatible PSG to replace.
                     if (m_workBus.FindDevice<AY8910>() == null &&

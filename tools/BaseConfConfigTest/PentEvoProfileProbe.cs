@@ -36,7 +36,7 @@ internal static class PentEvoProfileProbe
             bus.Add(ay);
 
             var control = new CtlSettingsPentEvoZxBus();
-            control.Size = new Size(300, 410);
+            control.Size = new Size(300, 430);
             control.Initialize(bus, null, ula);
             AssertLayoutFits(control);
             var neoGsSd = new CtlSettingsNeoGsSd();
@@ -189,6 +189,45 @@ internal static class PentEvoProfileProbe
             Assert(restored.ZxBusSlot2Enabled &&
                 restored.ZxBusSlot2Device == PentEvoZxBusDevice.NeoGS,
                 "Slot 2 device XML did not reload");
+
+            // ZXM-MoonSound is a third independent board type. It may use
+            // either physical connector, coexist with NeoGS/MultiSound, and
+            // may not be duplicated because both cards would decode the same
+            // fixed #7E/#7F and #C4-#C7 ports.
+            slot1Device.SelectedIndex = 3;
+            slot1.Checked = true;
+            slot2Device.SelectedIndex = 1;
+            slot2.Checked = true;
+            control.Apply();
+            Assert(bus.FindDevice<ZxmMoonSoundDevice>() != null &&
+                bus.FindDevice<NeoGsDevice>() != null &&
+                bus.FindDevice<ZxMultiSoundDevice>() == null,
+                "MoonSound and NeoGS did not coexist in separate slots");
+            Assert(ula.ZxBusSlot1Device == PentEvoZxBusDevice.MoonSound &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.NeoGS,
+                "MoonSound was not stored in Slot 1");
+
+            slot2Device.SelectedIndex = 3;
+            slot2.Checked = true;
+            Assert(!slot1.Checked && slot1Device.SelectedIndex == 0,
+                "Two MoonSound boards were allowed simultaneously");
+            slot1Device.SelectedIndex = 1;
+            slot1.Checked = true;
+            control.Apply();
+            Assert(ula.ZxBusSlot1Device == PentEvoZxBusDevice.NeoGS &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.MoonSound,
+                "MoonSound could not be moved to Slot 2");
+
+            var moonXml = new XmlDocument();
+            var moonNode = moonXml.AppendChild(moonXml.CreateElement("Device"));
+            ula.SaveConfigXml(moonNode);
+            var moonRestored = new UlaPentEvo();
+            moonRestored.LoadConfigXml(moonNode);
+            Assert(moonRestored.ZxBusSlot1Device ==
+                    PentEvoZxBusDevice.NeoGS &&
+                moonRestored.ZxBusSlot2Device ==
+                    PentEvoZxBusDevice.MoonSound,
+                "MoonSound slot selection did not survive XML round-trip");
 
             var init = typeof(CtlSettingsUla).GetMethod(
                 "Init",

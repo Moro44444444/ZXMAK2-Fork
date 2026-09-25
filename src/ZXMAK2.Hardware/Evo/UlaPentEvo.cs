@@ -21,6 +21,7 @@ namespace ZXMAK2.Hardware.Evo
         Empty,
         NeoGS,
         MultiSound,
+        MoonSound,
     }
 
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming

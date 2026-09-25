@@ -71,6 +71,7 @@
     <Compile Include="Evo\AYCHRV.cs" />
     <Compile Include="Evo\TurboSoundFmPro.cs" />
     <Compile Include="Evo\ZxMultiSoundDevice.cs" />
+    <Compile Include="Evo\ZxmMoonSoundDevice.cs" />
     <Compile Include="Evo\BeeperPentEvo.cs" />
     <Compile Include="Evo\CmosPentEvo.cs" />
     <Compile Include="Evo\FddPentEvo.cs" />
@@ -166,6 +167,14 @@
     </None>
     <None Include="..\Libraries\SAASound\SAASound.dll">
       <Link>SAASound.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Libraries\YmfmOpl4\ymfm_opl4.dll">
+      <Link>ymfm_opl4.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Libraries\YmfmOpl4\LICENSE">
+      <Link>ymfm-opl4.LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
