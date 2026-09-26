@@ -1381,9 +1381,10 @@ namespace Test
             int ymFm0Peak, ymFm1Peak;
             double ymFmFrequency;
             bool ymFmTimerOk;
+            bool ymPrescaleOk;
             TestOmniOpn(machine, memory, renderers[2], sampleRate,
                 out ymFm0Peak, out ymFm1Peak, out ymFmFrequency,
-                out ymFmTimerOk);
+                out ymFmTimerOk, out ymPrescaleOk);
             if (sampleRate == 44100)
                 s_omniYmFmFrequency = ymFmFrequency;
             var expectedYmFmFrequency = 617D * 16D * 3500000D /
@@ -1419,7 +1420,7 @@ namespace Test
                 pcmPeak > 256 && gsPending && gsReady && conflictRejected &&
                 frequencyOk && fmRateOk && externalEnvelopeOk &&
                 ymFm0Peak > 256 && ymFm1Peak > 256 &&
-                ymFmRateOk && ymFmTimerOk;
+                ymFmRateOk && ymFmTimerOk && ymPrescaleOk;
             Console.WriteLine("ZX OmniSound: config={0}, owners={1}, " +
                 "YM={2}/{3}, SAA={4}/{5}, Drive={6}, OPL={7}: {8}",
                 configOk, ownershipOk, ym0Peak, ym1Peak,
@@ -1436,9 +1437,9 @@ namespace Test
                 externalEnvelopeOk ? "PASS" : "FAIL");
             Console.WriteLine(
                 "YM2203 FM: D1={0}, D2={1}, pitch={2:F3} Hz, " +
-                "rate invariant={3}, timer={4}",
+                "rate invariant={3}, timer={4}, prescale={5}",
                 ymFm0Peak, ymFm1Peak, ymFmFrequency,
-                ymFmRateOk, ymFmTimerOk);
+                ymFmRateOk, ymFmTimerOk, ymPrescaleOk);
             if (!passed)
                 Environment.ExitCode = 1;
         }
@@ -1446,7 +1447,7 @@ namespace Test
         private static void TestOmniOpn(Spectrum machine,
             IMemoryDevice memory, ISoundRenderer renderer, int sampleRate,
             out int firstPeak, out int secondPeak, out double frequency,
-            out bool timerOk)
+            out bool timerOk, out bool prescaleOk)
         {
             const ushort start = 0x4000;
             var peaks = new int[2];
@@ -1507,6 +1508,37 @@ namespace Test
             }
             firstPeak = peaks[0];
             secondPeak = peaks[1];
+
+            var board = machine.BusManager.FindDevice<
+                ZXMAK2.Hardware.Evo.ZxOmniSoundDevice>();
+            var psgs = (Array)typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore)
+                .GetField("m_psg", BindingFlags.Instance |
+                    BindingFlags.NonPublic).GetValue(board);
+            var frequencyProperty = psgs.GetValue(0).GetType()
+                .GetProperty("ChipFrequency");
+            var prescaleProgram = new System.Collections.Generic.List<byte>();
+            AddPortWrite(prescaleProgram, 0xFFFD, 0xFA);
+            AddPortWrite(prescaleProgram, 0xFFFD, 0x2F);
+            prescaleProgram.Add(0x18); prescaleProgram.Add(0xFE);
+            for (int i = 0; i < prescaleProgram.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), prescaleProgram[i]);
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+            prescaleOk = (int)frequencyProperty.GetValue(psgs.GetValue(0), null)
+                    == 5250000 &&
+                (int)frequencyProperty.GetValue(psgs.GetValue(1), null) == 1750000;
+
+            prescaleProgram.Clear();
+            AddPortWrite(prescaleProgram, 0xFFFD, 0xFA);
+            AddPortWrite(prescaleProgram, 0xFFFD, 0x2D);
+            prescaleProgram.Add(0x18); prescaleProgram.Add(0xFE);
+            for (int i = 0; i < prescaleProgram.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), prescaleProgram[i]);
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+            prescaleOk &= (int)frequencyProperty.GetValue(
+                psgs.GetValue(0), null) == 1750000;
         }
 
         private static bool TestSaaExternalCycles(ISoundRenderer renderer,

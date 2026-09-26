@@ -47,6 +47,7 @@ namespace ZXMAK2.Hardware.Evo
         private readonly TsFmSaa1099Renderer m_saa;
         private readonly ISoundRenderer[] m_renderers;
         private readonly byte[] m_ymRegister = new byte[2];
+        private readonly byte[] m_ymPrescale = { 6, 6 };
         private readonly PsgPortState[] m_ira =
         {
             new PsgPortState(0xFF), new PsgPortState(0xFF),
@@ -377,6 +378,12 @@ namespace ZXMAK2.Hardware.Evo
             m_psg[1].ResetChip();
             m_fm.ResetChip();
             m_fm.Enabled = false;
+            if (m_isOmni)
+            {
+                m_ymPrescale[0] = m_ymPrescale[1] = 6;
+                m_psg[0].SetChipFrequency(1750000);
+                m_psg[1].SetChipFrequency(1750000);
+            }
             m_saa.ResetChip();
             m_saa.ClockEnabled = false;
             m_gsPage = 0;
@@ -426,6 +433,18 @@ namespace ZXMAK2.Hardware.Evo
             m_ymRegister[m_ymChip] = value;
             m_psg[m_ymChip].RegAddr = value;
             m_fm.SetAddress(m_ymChip, value);
+            if (m_isOmni && value >= 0x2D && value <= 0x2F)
+            {
+                int prescale = m_ymPrescale[m_ymChip];
+                if (value == 0x2D)
+                    prescale = 6;
+                else if (value == 0x2E && prescale == 6)
+                    prescale = 3;
+                else if (value == 0x2F)
+                    prescale = 2;
+                m_ymPrescale[m_ymChip] = (byte)prescale;
+                m_psg[m_ymChip].SetChipFrequency(10500000 / prescale);
+            }
         }
 
         private void WriteYmData(ushort address, byte value, ref bool handled)

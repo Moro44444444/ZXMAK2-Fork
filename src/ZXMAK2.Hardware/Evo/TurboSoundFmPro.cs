@@ -400,10 +400,22 @@ namespace ZXMAK2.Hardware.Evo
             m_lastTime = m_chip.SetReg(m_lastTime, GetFrameTime(), index, value);
         }
 
+        public void SetChipFrequency(int frequency)
+        {
+            if (m_chip.ChipFrequency == frequency)
+                return;
+            // Preserve the old clock up to the address write, then change it.
+            m_lastTime = m_chip.Update(m_lastTime, GetFrameTime());
+            m_chip.ChipFrequency = frequency;
+        }
+
+        public int ChipFrequency { get { return m_chip.ChipFrequency; } }
+
         public void ResetChip()
         {
             m_lastTime = 0D;
             m_chip.Reset();
+            m_chip.ChipFrequency = 1750000;
         }
 
         public override void BusConnect()
