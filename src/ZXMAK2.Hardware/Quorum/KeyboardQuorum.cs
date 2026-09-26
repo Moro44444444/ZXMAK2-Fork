@@ -8,7 +8,7 @@ using ZXMAK2.Host.Entities;
 
 namespace ZXMAK2.Hardware.Quorum
 {
-    public class KeyboardQuorum : BusDeviceBase, IKeyboardDevice
+    public class KeyboardQuorum : BusDeviceBase, IKeyboardDevice, IKeyboardJoystickSink
     {
         private long m_intState;
         private UInt64 m_extState;
@@ -16,6 +16,7 @@ namespace ZXMAK2.Hardware.Quorum
         private IBusManager m_busManager;
         private CpuUnit m_cpu;
         private bool m_nmiTriggered;
+        private IKeyboardJoystickProvider joystickProvider;
 
 
         public KeyboardQuorum()
@@ -36,6 +37,7 @@ namespace ZXMAK2.Hardware.Quorum
 
         public override void BusInit(IBusManager bmgr)
         {
+            joystickProvider = bmgr as IKeyboardJoystickProvider;
             m_busManager = bmgr;
             bmgr.Events.SubscribeRdIo(0x99, 0x98, readPortFE);
             bmgr.Events.SubscribeRdIo(0x99, 0x18, readPort7E);
@@ -47,6 +49,7 @@ namespace ZXMAK2.Hardware.Quorum
         {
             value = (byte)(value & 0xe0);
             value = (byte)(value | ((byte)(this.scanFEPort(addr) & 0x1f)));
+            if (joystickProvider != null) value &= (byte)~joystickProvider.GetKeyboardJoystickMask(addr);
         }
 
         private void readPort7E(ushort addr, ref byte value, ref bool handled)

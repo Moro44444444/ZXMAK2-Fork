@@ -17,7 +17,7 @@ using ZXMAK2.Mvvm;
 
 namespace ZXMAK2.Engine
 {
-    public sealed class BusManager : IBus, IBusManager
+    public sealed class BusManager : IBus, IBusManager, IKeyboardJoystickProvider
     {
         private bool m_connected = false;
         private bool m_sandBox = false;
@@ -181,6 +181,17 @@ namespace ZXMAK2.Engine
 
 
         #region Device Add/Remove
+
+        public byte GetKeyboardJoystickMask(ushort address)
+        {
+            byte pressed = 0;
+            foreach (var device in m_deviceList)
+            {
+                var joystick = device as IJoystickKeyboardDevice;
+                if (joystick != null) pressed |= joystick.GetKeyboardMask(address);
+            }
+            return pressed;
+        }
 
         public void Add(BusDeviceBase device)
         {

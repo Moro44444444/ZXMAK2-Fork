@@ -3461,3 +3461,99 @@ ZXM-MoonSound Rev.01 реализована согласно опубликов�
   скрытый диагностический запуск закрыт (только собственный PID).
 - Успешные unit/probe-тесты впредь не считать проверкой настоящего запуска;
   проверять и name-based startup configuration, и главное окно EXE.
+
+## v58 — Joystick Interfaces и идентификация загрузчика — 2026-09-26
+
+### Согласованный объём
+
+- Команда пользователя: ещё раз продумать и реализовать удобный выбор
+  интерфейса джойстика на всех машинах, категория Joystick вместо Other;
+  надписи `BaseConf: BaseConf Emu (ZXMAK2-Fork)` и
+  `AVR Boot: Boot Emu (ZXMAK2-Fork)`, сохранить адрес NedoPC.
+- Отдельная ветка `codex/v58-joystick-standards` в прежнем рабочем worktree.
+  Основной грязный L:\Work_two\ZX\ZXMAK2-Fork не изменялся.
+  Один виртуальный джойстик на машину; два Sinclair — две раскладки,
+  не два одновременно добавляемых устройства.
+
+### Реализация
+
+- Категория `Joystick` добавлена в конец enum: прежние номера категорий
+  не сдвинуты. Класс/XML `KempstonJoystick` сохранён для совместимости.
+  Новый атрибут `interface`: 0 Kempston, 1 Sinclair1, 2 Sinclair2,
+  3 Cursor, 4 Fuller. Отсутствующее/неправильное значение => Kempston.
+- `Emulates` в правой панели: Kempston, Sinclair Joy 1 (6–0),
+  Sinclair Joy 2 (1–5), Cursor (AGF / Protek), Fuller. Выбор сохраняется
+  только при Apply и не стирает профили физического контроллера.
+- Sinclair/Cursor: замыкание контактов #FE, объединённое с обычными
+  клавишами, включая выбор нескольких строк. General/Profi/Quorum keyboards
+  объединяют маску в конце своего чтения, независимо от порядка устройств.
+  У машины без матричной клавиатуры есть внешний контактный #FE-адаптер
+  для эксперимента (проверены Sprinter AT keyboard и отсутствие клавиатуры).
+  Расширенная клавиатура Quorum #7E не изменена: это другая матрица.
+- Fuller #7F: active-low Up/Down/Left/Right/Fire = биты 0/1/2/3/7.
+  Kempston сохранён: прежние маска/порт/5 или 8 бит/NoDos.
+  Sinclair/Cursor не занимают порт #1F и не вводят клавиши в Windows.
+- Общая функция вычисления контактов сохраняет старую логику автоогня
+  по времени машины для всех пяти интерфейсов.
+- Ручные направления показываются только при Custom mapping;
+  Toggle assignment и частота автоогня — только для соответствующего режима.
+  Отмена/тайм-аут обучения больше не оставляет надпись Waiting for input.
+  Refresh, DInput/XInput, live input, сохранённый offline-контроллер остаются.
+
+### Косметический ROM fork, не новая версия BIOS
+
+- Штатные 16-байтные AVR version records содержат имя лишь в 12 байтах:
+  длинное название туда не помещается. Этот аппаратный протокол не менялся.
+- Изучен исходный код NedoPC `rom/page5/source/mainmenu.a80` и
+  `rom/mainmenu/src/main.a80`, доступный в зеркале
+  https://github.com/aaydev/zxevo.pentevo/tree/main/rom.
+  Официальный SVN показывает эти файлы, но отдача исходников требовала
+  браузерной проверки; она не обходилась. Старое зеркало tslabs не содержит
+  актуального FE меню и не использовалось вместо принятого ROM.
+- Принятый v0.61.01 FE, исходный SHA-256:
+  620146534DF8A49C6B9042DF45812D1E7F90683DD8F7B813CA2C5ECAC96DC1CA.
+  Изменена только ROM bank 26 (MNMENU): MegaLZ menu распакован mhmt;
+  два 32-байтных VERS_CONF/VERS_BOOT buffers заполнены названиями;
+  CALL/JP их штатного заполнения заменены NOP/RET. Baseconf -> BaseConf.
+  Адрес www.nedopc.com не изменён. Остальные 31 ROM страницы побайтно прежние.
+- Buffer адреса #7F79/#7FAA, formatter #65DE. Исходный packed menu 14480,
+  новый 14498 байт; свободно 1607 байт. Проверено повторное распаковывание.
+  `tools/BaseConfConfigTest/BuildForkBootRom.ps1` воспроизводит изменение
+  только для точного SHA исходного ROM и проверяет сигнатуры/ёмкость.
+- Fork ROM SHA-256:
+  03DD20E21BFC72FE87A523172C225E517CDEEFDF97C568A11FAEE4841856AA46.
+  В исходниках/portable изменён свободный roms/EVO/zxevo.rom;
+  ROMS.PAK и предыдущие сборки сохраняют официальный оригинал.
+  Этот ROM для эмулятора, не для прошивки физической EVO.
+
+### Проверки и выдача
+
+- Release build PASS, только две прежние missing ruleset warnings.
+- JoystickProbe 3478 PASS: предыдущие проверки, все комбинации контактов
+  пяти стандартов, реальная клавиатура + контроллер, выбранные/невыбранные
+  строки #FE, General/Profi/Quorum/Sprinter/без клавиатуры, XML,
+  staged Apply, автоогонь ON/OFF и сброс во всех режимах, Unity startup.
+- BootRomProbe PASS: настоящий Z80 boot 300 frames + reset 100 frames,
+  названия и NedoPC credit в RAM после распаковки; 31 страницы неизменны.
+  Снимок вывода ULA просмотрен: полные обе строки помещаются и читаются.
+- PentEvoProfileProbe PASS, UlaPlusProbe 33579 PASS.
+  /master-volume, /evo-display, /multisound, /multisoundmax, /tsfm,
+  /moonsound, /zxnetusb PASS. Native audio библиотеки не заменялись.
+- Portable-папка:
+  L:\Work_two\ZX\ZXMAK2-v58-ZXEVO-BC-Beta1-Joystick-Interfaces-Test-20260926\release.
+  Копия v57 hotfix; заменены только Engine.dll / Hardware.dll /
+  Host.WinForms.dll / свободный EVO ROM / JOYSTICKS.md;
+  добавлен README-B58.txt. Остальные старые файлы до запуска совпали SHA-256.
+- Пробы повторно прошли из этой папки (3478 + boot + profile + 33579,
+  master volume, MultiSound Max, ZXNetUSB). Удалены только восемь временно
+  скопированных V58-*.exe/config проб; пользовательские Test.exe не удалялись.
+- Настоящий ZXMAK2.exe этой папки запущен: PID 29328, окно ZXMAK2,
+  MainWindowHandle=329136, Responding=true. Оставлен для проверки пользователю.
+- SHA Engine.dll: 81D684C805434006F784BD7F4F7213A992D8061DBF778F13247A0EA08346510A.
+  Hardware.dll: 9A3219AF381DA349B91994D90735B6140569E07A03AAC3110DA766885A7A6250.
+  Host.WinForms.dll: E32C763D94C5471B49B759E370C9BB14F19AA6BD053C2859A39AE25F8A8CBD23.
+- Документация: docs/JOYSTICKS.md и README-B58.txt. Новых глобальных
+  горячих клавиш нет; список docs/HOTKEYS.md сохранён без изменения.
+- Физические контроллеры при сборке не обнаружены. Ручная приёмка геймпада,
+  HOTAS и игр остаётся пользователю. v58 пока тестовая; GitHub не публиковался,
+  новая стабильная точка без подтверждения пользователя не объявлялась.

@@ -6,13 +6,14 @@ using ZXMAK2.Host.Entities;
 
 namespace ZXMAK2.Hardware.Profi
 {
-    public class KeyboardProfi : BusDeviceBase, IKeyboardDevice
+    public class KeyboardProfi : BusDeviceBase, IKeyboardDevice, IKeyboardJoystickSink
     {
         #region Fields
 
         private const long ExtKeyMask = 0x10000000000;
 
         private IMemoryDevice m_memory;
+        private IKeyboardJoystickProvider joystickProvider;
         private IKeyboardState m_keyboardState;
 
         /// <summary>
@@ -36,6 +37,7 @@ namespace ZXMAK2.Hardware.Profi
 
         public override void BusInit(IBusManager bmgr)
         {
+            joystickProvider = bmgr as IKeyboardJoystickProvider;
             m_memory = bmgr.FindDevice<IMemoryDevice>();
             bmgr.Events.SubscribeRdIo(0x67, 0xFE & 0x67, ReadPortFE);
         }
@@ -78,6 +80,7 @@ namespace ZXMAK2.Hardware.Profi
                 (byte)0xC0 :
                 (byte)0xE0;
             value |= (byte)(ScanKbdPort(addr) & 0x1F);
+            if (joystickProvider != null) value &= (byte)~joystickProvider.GetKeyboardJoystickMask(addr);
         }
 
         #endregion

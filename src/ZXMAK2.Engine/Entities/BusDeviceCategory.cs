@@ -14,5 +14,6 @@ namespace ZXMAK2.Engine.Entities
         Mouse,
         Debugger,
         Other,
+        Joystick,
     }
 }

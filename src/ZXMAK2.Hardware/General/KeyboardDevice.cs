@@ -15,7 +15,7 @@ using System.Xml;
 
 namespace ZXMAK2.Hardware.General
 {
-    public class KeyboardDevice : BusDeviceBase, IKeyboardDevice
+    public class KeyboardDevice : BusDeviceBase, IKeyboardDevice, IKeyboardJoystickSink
     {
         #region Fields
 
@@ -118,6 +118,7 @@ namespace ZXMAK2.Hardware.General
 
         public override void BusInit(IBusManager bmgr)
         {
+            joystickProvider = bmgr as IKeyboardJoystickProvider;
             m_memory = m_noDos ? bmgr.FindDevice<IMemoryDevice>() : null;
             bmgr.Events.SubscribeRdIo(Mask, Port & Mask, ReadPortFe);
         }
@@ -150,6 +151,7 @@ namespace ZXMAK2.Hardware.General
 		
         #region Private
 
+        private IKeyboardJoystickProvider joystickProvider;
         private void ReadPortFe(ushort addr, ref byte value, ref bool handled)
 		{
             if (handled || (m_memory != null && m_memory.DOSEN))
@@ -157,6 +159,7 @@ namespace ZXMAK2.Hardware.General
             //handled = true;
 			value &= 0xE0;
 			value |= (byte)(~KeyboardMatrix.ScanPort(_rows, addr) & 0x1F);
+            if (joystickProvider != null) value &= (byte)~joystickProvider.GetKeyboardJoystickMask(addr);
 		}
 		
 		#endregion Private

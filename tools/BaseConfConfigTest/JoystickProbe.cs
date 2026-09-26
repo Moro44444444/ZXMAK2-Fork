@@ -56,7 +56,7 @@ internal static class JoystickProbe
                 rglSlider0=32768,rglSlider1=32768,rgdwPOV0=13500,rgdwPOV1=uint.MaxValue,rgdwPOV2=uint.MaxValue,rgdwPOV3=uint.MaxValue,rgbButtons31=128});
             Check(di.Axes[0]==32767 && di.Axes[1]==0 && di.Buttons[31],"DInput axes and button32");
             Check(di.Hat(0,1) && di.Hat(0,2),"DInput diagonal");
-            TestLearn(); TestAutoFire(); TestPersistence(); TestHardwarePort(); TestMachineClock(); TestWindow(args);
+            TestLearn(); TestAutoFire(); TestPersistence(); TestHardwarePort(); TestInterfaces(); TestKeyboardVariants(); TestMachineClock(); TestWindow(args);
             using(var form=new Form()) using(var native=new DirectJoystick(form))
             {
                 foreach(var d in native.GetAvailableJoysticks()) Console.WriteLine("Detected: "+d.Name+" / "+d.HostId);
@@ -186,6 +186,107 @@ internal static class JoystickProbe
         j.JoystickState=JoystickInput.Empty; Check(Read(j)==0,"Disconnected port neutral");
     }
     private static T Field<T>(object o,string name) { return (T)o.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(o); }
+    private static void TestKeyboardVariants()
+    {
+        Func<ZXMAK2.Engine.Entities.BusDeviceBase>[] keyboards={
+            delegate{return new KeyboardDevice();},
+            delegate{return new ZXMAK2.Hardware.Profi.KeyboardProfi();},
+            delegate{return new ZXMAK2.Hardware.Quorum.KeyboardQuorum();},
+            delegate{return new ZXMAK2.Hardware.Sprinter.SprinterKeyboard();},
+            delegate{return null;}
+        };
+        foreach(var create in keyboards) foreach(var mode in new[] {JoystickInterface.Sinclair1,JoystickInterface.Sinclair2,JoystickInterface.Cursor})
+        {
+            var bus=new BusManager(); bus.Init(null,true); bus.Disconnect(); bus.Clear();
+            bus.Add(new MemoryPentEvo()); bus.Add(new UlaPentEvo());
+            var keyboard=create(); if(keyboard!=null) bus.Add(keyboard);
+            var j=new KempstonJoystick {InterfaceType=mode}; bus.Add(j); Check(bus.Connect(),"Keyboard variant connects");
+            j.JoystickState=Sample(0,0,4500,0);
+            int first=mode==JoystickInterface.Sinclair2 ? 26 : 0;
+            int second=mode==JoystickInterface.Sinclair1 ? 11 : mode==JoystickInterface.Cursor ? 13 : 0;
+            Check((bus.Cpu.RDPORT(0xF7FE)&31)==(31^first),"Keyboard variant 1-5 contacts");
+            Check((bus.Cpu.RDPORT(0xEFFE)&31)==(31^second),"Keyboard variant 6-0 contacts");
+            if(keyboard is IKeyboardJoystickSink)
+            {
+                ((IKeyboardDevice)keyboard).KeyboardState=new DigitKeyboard();
+                Check((bus.Cpu.RDPORT(0xE7FE)&31)==(31^(first|second|1)),"Keyboard variant physical contacts merge");
+            }
+            bus.Disconnect();
+        }
+    }
+    private sealed class DigitKeyboard : IKeyboardState
+    { public bool this[ZXMAK2.Host.Entities.Key key] { get { return key==ZXMAK2.Host.Entities.Key.D1 || key==ZXMAK2.Host.Entities.Key.D0; } } }
+    private static void TestInterfaces()
+    {
+        // Independent expected contacts, in Right / Left / Down / Up / Fire order.
+        byte[][] contacts={new byte[] {0,0,0,0,0},new byte[] {8,16,4,2,1},new byte[] {2,1,4,8,16},new byte[] {4,16,16,8,1},new byte[] {8,4,2,1,128}};
+        foreach(JoystickInterface mode in Enum.GetValues(typeof(JoystickInterface)))
+        {
+            var bus=new BusManager(); bus.Init(null,true); bus.Disconnect(); bus.Clear();
+            bus.Add(new MemoryPentEvo()); bus.Add(new UlaPentEvo());
+            var j=new KempstonJoystick {NoDos=false,HostId="interfaces",InterfaceType=mode};
+            var keyboard=new KeyboardDevice(); bus.Add(keyboard); bus.Add(j);
+            Check(bus.Connect(),"Interface bus connects "+mode);
+            Check(j.Category==ZXMAK2.Engine.Entities.BusDeviceCategory.Joystick,"Joystick category");
+            for(int state=0;state<32;state++)
+            {
+                var map=new JoystickMapping {Directions=JoystickDirections.Custom};
+                var input=Sample(0,0,uint.MaxValue);
+                for(int bit=0;bit<5;bit++)
+                {
+                    // Mapping indices are Up, Down, Left, Right, Fire.
+                    map.Bindings[new[] {3,2,1,0,4}[bit]]="b:"+bit;
+                    input.Buttons[bit]=(state&(1<<bit))!=0;
+                }
+                j.Profiles=new Dictionary<string,JoystickMapping> {{j.HostId,map}};
+                j.JoystickState=input;
+                int expected=state;
+                if((expected&3)==3) expected&=~3;
+                if((expected&12)==12) expected&=~12;
+                if(mode==JoystickInterface.Kempston) Check(bus.Cpu.RDPORT(31)==expected,"Kempston contact combination");
+                else if(mode==JoystickInterface.Fuller)
+                {
+                    int pressed=0; for(int bit=0;bit<5;bit++) if((expected&(1<<bit))!=0) pressed|=contacts[4][bit];
+                    Check(bus.Cpu.RDPORT(0xAB7F)==(byte)~pressed,"Fuller active-low combination");
+                }
+                else
+                {
+                    int first=0,second=0;
+                    for(int bit=0;bit<5;bit++) if((expected&(1<<bit))!=0)
+                    {
+                        if(mode==JoystickInterface.Sinclair2 || (mode==JoystickInterface.Cursor && bit==1)) first|=contacts[(int)mode][bit];
+                        else second|=contacts[(int)mode][bit];
+                    }
+                    Check((bus.Cpu.RDPORT(0xF7FE)&31)==(31^first),"1-5 matrix combination "+mode);
+                    Check((bus.Cpu.RDPORT(0xEFFE)&31)==(31^second),"6-0 matrix combination "+mode);
+                    Check((bus.Cpu.RDPORT(0xE7FE)&31)==(31^(first|second)),"Simultaneous keyboard rows "+mode);
+                    Check((bus.Cpu.RDPORT(0xFFFE)&31)==31,"Unselected rows idle");
+                    keyboard.KeyboardState=new DigitKeyboard();
+                    Check((bus.Cpu.RDPORT(0xF7FE)&31)==(31^(first|1)),"Real key 1 combined with controller");
+                    Check((bus.Cpu.RDPORT(0xEFFE)&31)==(31^(second|1)),"Real key 0 combined with controller");
+                    keyboard.KeyboardState=null;
+                }
+                var xml=Node(); j.SaveConfigXml(xml); var restored=new KempstonJoystick(); restored.LoadConfigXml(xml);
+                Check(restored.InterfaceType==mode && restored.Name==j.Name,"Interface XML round-trip");
+            }
+            j.JoystickState=JoystickInput.Empty;
+            Check(j.GetKeyboardMask(0)==0,"Disconnected keyboard joystick releases contacts");
+            j.Profiles=new Dictionary<string,JoystickMapping> {{j.HostId,new JoystickMapping {AutoFire=JoystickAutoFire.Hold,FireRate=10}}};
+            j.JoystickState=Sample(0,0,uint.MaxValue,0);
+            ushort firePort=mode==JoystickInterface.Kempston ? (ushort)31 : mode==JoystickInterface.Fuller ? (ushort)127 : (ushort)0x00FE;
+            byte fireBit=mode==JoystickInterface.Kempston || mode==JoystickInterface.Sinclair2 ? (byte)16 : mode==JoystickInterface.Fuller ? (byte)128 : (byte)1;
+            bool activeHigh=mode==JoystickInterface.Kempston;
+            Check(((bus.Cpu.RDPORT(firePort)&fireBit)!=0)==activeHigh,"Auto-fire ON phase "+mode);
+            var events=Field<EventManager>(bus,"m_eventManager");
+            for(int frame=0;frame<3;frame++){bus.Cpu.Tact+=bus.FrameTactCount;events.EndFrame();events.BeginFrame();}
+            Check(((bus.Cpu.RDPORT(firePort)&fireBit)!=0)!=activeHigh,"Auto-fire OFF phase "+mode);
+            bus.Cpu.RESET();
+            Check(((bus.Cpu.RDPORT(firePort)&fireBit)!=0)!=activeHigh,"Reset releases Fire "+mode);
+            bus.Disconnect();
+        }
+        var legacy=new KempstonJoystick {InterfaceType=JoystickInterface.Cursor}; legacy.LoadConfigXml(Node());
+        Check(legacy.InterfaceType==JoystickInterface.Kempston,"Old XML defaults to Kempston");
+    }
     private static void TestWindow(string[] args)
     {
         using(var f=new Form {ClientSize=new Size(440,580),StartPosition=FormStartPosition.Manual,Location=new Point(-30000,-30000)})
@@ -196,6 +297,9 @@ internal static class JoystickProbe
             var combo=Field<ComboBox>(ui,"cbxType"); Check(((IHostDeviceInfo)combo.SelectedItem).HostId=="saved-offline","UI preserves missing device");
             Field<Button>(ui,"refresh").PerformClick(); Check(host.Controller.Refreshes==1,"Refresh is explicit");
             ui.Apply(); Check(j.HostId=="saved-offline","Apply does not replace missing device");
+            var emulates=Field<ComboBox>(ui,"emulates"); Check(emulates.Items.Count==5,"Five emulated interfaces");
+            emulates.SelectedIndex=2; Check(j.InterfaceType==JoystickInterface.Kempston,"Interface selection staged until Apply");
+            ui.Apply(); Check(j.InterfaceType==JoystickInterface.Sinclair2,"UI applies selected interface");
             combo.SelectedIndex=2;
             Field<ComboBox>(ui,"directions").SelectedIndex=1; Field<ComboBox>(ui,"autoFire").SelectedIndex=1;
             Field<NumericUpDown>(ui,"rate").Value=15;

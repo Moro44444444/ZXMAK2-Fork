@@ -19,7 +19,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private IHostJoystickPreview preview;
         private Dictionary<string,JoystickMapping> profiles=new Dictionary<string,JoystickMapping>();
         private JoystickMapping mapping=new JoystickMapping();
-        private ComboBox cbxType,directions,autoFire;
+        private ComboBox cbxType,directions,autoFire,emulates;
+        private readonly Label[] bindingLabels=new Label[6];
+        private Label rateLabel;
         private NumericUpDown deadZone,rate;
         private Button refresh,defaults;
         private readonly Button[] bindings=new Button[6];
@@ -36,6 +38,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             var scroll=new Panel { Dock=DockStyle.Fill,AutoScroll=true };
             var table=new TableLayoutPanel { Dock=DockStyle.Top,AutoSize=true,ColumnCount=2,Padding=new Padding(0,4,0,4) };
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,40)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,60));
+            emulates=new ComboBox { Name="emulates",DropDownStyle=ComboBoxStyle.DropDownList,Dock=DockStyle.Fill };
+            emulates.Items.AddRange(new object[] {"Kempston","Sinclair Joy 1 (6-0)","Sinclair Joy 2 (1-5)","Cursor (AGF / Protek)","Fuller"});
+            emulates.SelectedIndex=0;
             cbxType=new ComboBox { Name="cbxType",DropDownStyle=ComboBoxStyle.DropDownList,Dock=DockStyle.Fill,DropDownWidth=360 };
             refresh=new Button { Name="refreshControllers",Text="Refresh controllers",Height=26,Dock=DockStyle.Top };
             directions=new ComboBox { Name="directions",DropDownStyle=ComboBoxStyle.DropDownList,Dock=DockStyle.Fill };
@@ -47,6 +52,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             live=new Label { Name="liveInput",Text="No device",Dock=DockStyle.Fill,AutoSize=true,MinimumSize=new Size(0,28) };
             hint=new Label { Text="Click an action, then press a button or move a stick / D-pad. Esc cancels.",Dock=DockStyle.Fill,AutoSize=true,MaximumSize=new Size(350,0) };
             defaults=new Button { Text="Restore mapping defaults",AutoSize=true,Dock=DockStyle.Fill };
+            AddRow(table,"Emulates",emulates);
             AddRow(table,"PC controller",cbxType); AddWide(table,refresh);
             AddRow(table,"Directions",directions); AddRow(table,"Dead zone (%)",deadZone);
             string[] names={"Up","Down","Left","Right","Fire","Auto-fire toggle"};
@@ -57,14 +63,15 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 bindings[i].Click+=delegate { StartLearn(action); };
                 bindings[i].ContextMenuStrip.Items.Add("Clear assignment",null,delegate { CancelLearn(); mapping.Bindings[action]="none"; if(action<4) mapping.Directions=JoystickDirections.Custom; ShowMapping(); });
                 if(i==4) bindings[i].ContextMenuStrip.Items.Add("Any button",null,delegate { mapping.Bindings[4]="any"; ShowMapping(); });
-                AddRow(table,names[i],bindings[i]);
+                bindingLabels[i]=AddRow(table,names[i],bindings[i]);
             }
-            AddRow(table,"Auto-fire",autoFire); AddRow(table,"Shots / second",rate);
+            AddRow(table,"Auto-fire",autoFire); rateLabel=AddRow(table,"Shots / second",rate);
             AddWide(table,live); AddWide(table,hint); AddWide(table,defaults);
             hardware=new Label { Name="hardwareInfo",Text="Kempston interface",AutoSize=true,Dock=DockStyle.Fill };
             AddWide(table,hardware);
             scroll.Controls.Add(table); group.Controls.Add(scroll); Controls.Add(group);
             cbxType.SelectedIndexChanged+=DeviceChanged;
+            emulates.SelectedIndexChanged+=delegate { UpdateHardwareInfo(); };
             directions.SelectedIndexChanged+=delegate { if(!updating) { mapping.Directions=(JoystickDirections)Math.Max(0,directions.SelectedIndex); UpdateEnabled(); } };
             autoFire.SelectedIndexChanged+=delegate { if(!updating) { mapping.AutoFire=(JoystickAutoFire)Math.Max(0,autoFire.SelectedIndex); UpdateEnabled(); } };
             deadZone.ValueChanged+=delegate { if(!updating) mapping.DeadZone=(int)deadZone.Value; };
@@ -75,11 +82,13 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             VisibleChanged+=delegate { if(Visible) timer.Start(); else StopPreview(); };
             ShowMapping();
         }
-        private static void AddRow(TableLayoutPanel table,string text,Control control)
+        private static Label AddRow(TableLayoutPanel table,string text,Control control)
         {
             int row=table.RowCount++; table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            table.Controls.Add(new Label { Text=text,Dock=DockStyle.Fill,AutoSize=true,TextAlign=ContentAlignment.MiddleLeft },0,row);
+            var label=new Label { Text=text,Dock=DockStyle.Fill,AutoSize=true,TextAlign=ContentAlignment.MiddleLeft };
+            table.Controls.Add(label,0,row);
             table.Controls.Add(control,1,row);
+            return label;
         }
         private static void AddWide(TableLayoutPanel table,Control control)
         { int row=table.RowCount++; table.RowStyles.Add(new RowStyle(SizeType.AutoSize)); table.Controls.Add(control,0,row); table.SetColumnSpan(control,2); }
@@ -89,7 +98,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             preview=host!=null ? host.Joystick as IHostJoystickPreview : null;
             profiles=kempston!=null ? kempston.Profiles : new Dictionary<string,JoystickMapping>();
             selectedId=device.HostId??""; mapping=GetMapping(selectedId);
-            hardware.Text=kempston!=null ? string.Format("Kempston: port #{0:X4}, mask #{1:X4}, {2} bits",kempston.Port,kempston.Mask,kempston.BitWidth) : ((BusDeviceBase)device).Description;
+            emulates.Enabled=kempston!=null;
+            emulates.SelectedIndex=kempston!=null ? (int)kempston.InterfaceType : 0;
+            UpdateHardwareInfo();
             FillDevices(selectedId); ShowMapping(); if(Visible) timer.Start();
         }
         private JoystickMapping GetMapping(string id)
@@ -137,6 +148,21 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             directions.Enabled=deadZone.Enabled=autoFire.Enabled=defaults.Enabled=available;
             for(int i=0;i<6;i++) bindings[i].Enabled=available && preview!=null && (i!=5 || mapping.AutoFire==JoystickAutoFire.Toggle);
             rate.Enabled=available && mapping.AutoFire!=JoystickAutoFire.Off;
+            for(int i=0;i<4;i++) bindingLabels[i].Visible=bindings[i].Visible=mapping.Directions==JoystickDirections.Custom;
+            bindingLabels[5].Visible=bindings[5].Visible=mapping.AutoFire==JoystickAutoFire.Toggle;
+            rateLabel.Visible=rate.Visible=mapping.AutoFire!=JoystickAutoFire.Off;
+        }
+        private void UpdateHardwareInfo()
+        {
+            if(hardware==null) return;
+            switch(emulates.SelectedIndex)
+            {
+                case 1: hardware.Text="Sinclair Joy 1: Left 6, Right 7, Down 8, Up 9, Fire 0"; break;
+                case 2: hardware.Text="Sinclair Joy 2: Left 1, Right 2, Down 3, Up 4, Fire 5"; break;
+                case 3: hardware.Text="Cursor: Left 5, Down 6, Up 7, Right 8, Fire 0"; break;
+                case 4: hardware.Text="Fuller: port #007F, active-low directions and Fire"; break;
+                default: hardware.Text=kempston!=null ? string.Format("Kempston: port #{0:X4}, mask #{1:X4}, {2} bits",kempston.Port,kempston.Mask,kempston.BitWidth) : "Kempston interface"; break;
+            }
         }
         private void StartLearn(int action)
         {
@@ -149,7 +175,12 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         }
         private void CancelLearn()
         {
-            if(learning>=0) { bindings[learning].BackColor=SystemColors.Control; bindings[learning].Text=JoystickMapping.Caption(mapping.Bindings[learning]); }
+            if(learning>=0)
+            {
+                bindings[learning].BackColor=SystemColors.Control;
+                bindings[learning].Text=JoystickMapping.Caption(mapping.Bindings[learning]);
+                hint.Text="Assignment cancelled. Click an action to try again; Esc cancels.";
+            }
             learning=-1;
         }
         protected override bool ProcessCmdKey(ref Message msg,Keys keyData)
@@ -195,7 +226,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         public override void Apply()
         {
             CancelLearn(); profiles[selectedId]=mapping.Copy();
-            device.HostId=selectedId; if(kempston!=null) kempston.Profiles=profiles;
+            device.HostId=selectedId;
+            if(kempston!=null) { kempston.Profiles=profiles; kempston.InterfaceType=(JoystickInterface)Math.Max(0,emulates.SelectedIndex); }
         }
     }
 }
