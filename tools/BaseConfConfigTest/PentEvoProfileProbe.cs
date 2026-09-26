@@ -426,18 +426,45 @@ internal static class PentEvoProfileProbe
                 Assert(image.Size == new Size(52, 36) &&
                     image.GetPixel(0, 0).A == 0,
                     "Media artwork has an opaque background: " + kind);
-                if (kind == MediaStatusKind.Tape ||
-                    kind == MediaStatusKind.OpticalDisc)
-                    continue; // Their original artwork contains pink accents.
                 for (var y = 0; y < image.Height; y++)
                 for (var x = 0; x < image.Width; x++)
                 {
+                    if (kind == MediaStatusKind.OpticalDisc)
+                        continue; // The disc itself contains a rainbow reflection.
                     var pixel = image.GetPixel(x, y);
                     Assert(pixel.A == 0 || pixel.R < 150 ||
                         pixel.B < 150 || pixel.G >= 100,
                         "Magenta scaling fringe remains on " + kind);
                 }
             }
+            foreach (var state in new[] { MediaState.Empty, MediaState.Mounted,
+                MediaState.Unavailable })
+            using (var image = (Bitmap)factory.Invoke(null, new object[] { kind, state }))
+            {
+                var expected = state == MediaState.Mounted ? Color.FromArgb(35,180,70) :
+                    state == MediaState.Empty ? Color.FromArgb(215,55,50) :
+                    Color.FromArgb(135,135,135);
+                Assert(image.GetPixel(46,30).ToArgb() == expected.ToArgb(),
+                    "Media status dot changed: " + kind + "/" + state);
+                for (var y = 0; y < 20; y++)
+                    Assert(image.GetPixel(51,y).A == 0,
+                        "Artwork encroaches on the menu arrow side: " + kind);
+            }
+        }
+        if (Environment.GetCommandLineArgs().Length > 4)
+        using (var preview = new Bitmap(520,216))
+        using (var graphics = Graphics.FromImage(preview))
+        {
+            graphics.Clear(Color.WhiteSmoke);
+            var kinds = new[] { MediaStatusKind.Tape, MediaStatusKind.Floppy,
+                MediaStatusKind.HardDisk, MediaStatusKind.SecureDigital,
+                MediaStatusKind.OpticalDisc };
+            var states = new[] { MediaState.Empty, MediaState.Mounted, MediaState.Unavailable };
+            for (var row = 0; row < states.Length; row++)
+            for (var column = 0; column < kinds.Length; column++)
+            using (var icon = (Bitmap)factory.Invoke(null, new object[] { kinds[column], states[row] }))
+                graphics.DrawImage(icon, new Rectangle(column*104,row*72,104,72));
+            preview.Save(Environment.GetCommandLineArgs()[4], ImageFormat.Png);
         }
     }
 
