@@ -483,7 +483,7 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             var button = new ToolStripSplitButton();
             button.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            button.ImageTransparentColor = Color.Magenta;
+            button.ImageTransparentColor = Color.Transparent;
             button.ImageScaling = ToolStripItemImageScaling.None;
             button.AutoSize = false;
             button.Size = new Size(
@@ -533,7 +533,7 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             var button = new ToolStripDropDownButton();
             button.DisplayStyle = ToolStripItemDisplayStyle.Image;
-            button.ImageTransparentColor = Color.Magenta;
+            button.ImageTransparentColor = Color.Transparent;
             button.ImageScaling = ToolStripItemImageScaling.None;
             button.AutoSize = false;
             button.Size = new Size(
@@ -847,8 +847,33 @@ namespace ZXMAK2.Host.WinForms.Views
             Relayout(true);
         }
 
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // DirectInput independently reads physical keys; its Alt+P gate
+            // prevents the guest from seeing P. This path opens the host UI.
+            if (IsMachineSettingsShortcut(keyData))
+            {
+                if (menuVmSettings.Enabled)
+                {
+                    menuVmSettings.PerformClick();
+                }
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
+            if (IsMachineSettingsShortcut(e.KeyData))
+            {
+                if (menuVmSettings.Enabled)
+                {
+                    menuVmSettings.PerformClick();
+                }
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+                return;
+            }
             base.OnKeyDown(e);
             if (_host.IsCaptured)
             {
@@ -916,6 +941,21 @@ namespace ZXMAK2.Host.WinForms.Views
                 e.Handled = true;
                 return;
             }
+        }
+
+        private static bool IsMachineSettingsShortcut(Keys keyData)
+        {
+            var modifiers = keyData & Keys.Modifiers;
+            if ((keyData & Keys.KeyCode) != Keys.P ||
+                (modifiers & Keys.Alt) == 0 ||
+                (modifiers & Keys.Shift) != 0)
+            {
+                return false;
+            }
+            // On Windows, right Alt (AltGr) can also report Ctrl. Do not
+            // treat a real left Ctrl+Alt+P as this shortcut.
+            return (modifiers & Keys.Control) == 0 ||
+                (NativeMethods.GetKeyState(0xA5) & 0x8000) != 0;
         }
 
         protected override void OnDeactivate(EventArgs e)
@@ -1550,7 +1590,7 @@ namespace ZXMAK2.Host.WinForms.Views
             var image = new Bitmap(size, size);
             using (var graphics = Graphics.FromImage(image))
             {
-                graphics.Clear(Color.Magenta);
+                graphics.Clear(Color.Transparent);
                 graphics.SmoothingMode =
                     System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 using (var brush = new SolidBrush(GetMediaStateColor(state)))
@@ -1558,7 +1598,6 @@ namespace ZXMAK2.Host.WinForms.Views
                     graphics.FillEllipse(brush, 0, 0, size - 1, size - 1);
                 }
             }
-            image.MakeTransparent(Color.Magenta);
             return image;
         }
 
@@ -1648,7 +1687,7 @@ namespace ZXMAK2.Host.WinForms.Views
             var image = new Bitmap(MediaToolbarArtworkWidth, MediaToolbarArtworkHeight);
             using (var graphics = Graphics.FromImage(image))
             {
-                graphics.Clear(Color.Magenta);
+                graphics.Clear(Color.Transparent);
                 graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                 graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
                 graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
@@ -1702,7 +1741,6 @@ namespace ZXMAK2.Host.WinForms.Views
                         MediaStatusDotDiameter);
                 }
             }
-            image.MakeTransparent(Color.Magenta);
             return image;
         }
 

@@ -9,6 +9,7 @@ using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Hardware.Evo;
 using ZXMAK2.Hardware.General;
 using ZXMAK2.Host.WinForms.Views;
+using ZXMAK2.Host.WinForms.Mdx;
 using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
 using ZXMAK2.Mvvm;
 
@@ -21,9 +22,12 @@ internal static class PentEvoProfileProbe
         try
         {
             VerifyFloppyIndicators();
+            VerifyMediaArtworkTransparency();
             VerifySecureDigitalMenu();
+            VerifyMachineSettingsKeyboardIsolation();
             VerifyPentEvoMusicSelector();
             VerifyMachineSettingsNavigation();
+            VerifyUlaMasterVolume();
 
             var bus = new BusManager();
             bus.Init(null, true);
@@ -401,6 +405,84 @@ internal static class PentEvoProfileProbe
         }
     }
 
+    private static void VerifyMediaArtworkTransparency()
+    {
+        var factory = typeof(MainView).GetMethod(
+            "CreateMediaToolbarImage",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert(factory != null, "Media toolbar image factory is missing");
+        foreach (var kind in new[]
+        {
+            MediaStatusKind.Tape,
+            MediaStatusKind.Floppy,
+            MediaStatusKind.HardDisk,
+            MediaStatusKind.SecureDigital,
+            MediaStatusKind.OpticalDisc,
+        })
+        {
+            using (var image = (Bitmap)factory.Invoke(
+                null, new object[] { kind, MediaState.Empty }))
+            {
+                Assert(image.Size == new Size(52, 36) &&
+                    image.GetPixel(0, 0).A == 0,
+                    "Media artwork has an opaque background: " + kind);
+                if (kind == MediaStatusKind.Tape ||
+                    kind == MediaStatusKind.OpticalDisc)
+                    continue; // Their original artwork contains pink accents.
+                for (var y = 0; y < image.Height; y++)
+                for (var x = 0; x < image.Width; x++)
+                {
+                    var pixel = image.GetPixel(x, y);
+                    Assert(pixel.A == 0 || pixel.R < 150 ||
+                        pixel.B < 150 || pixel.G >= 100,
+                        "Magenta scaling fringe remains on " + kind);
+                }
+            }
+        }
+    }
+
+    private static void VerifyUlaMasterVolume()
+    {
+        var bus = new BusManager();
+        bus.Init(null, true);
+        bus.Disconnect();
+        bus.Clear();
+        var ula = new UlaPentEvo();
+        bus.Add(ula);
+        using (var control = new CtlSettingsUla())
+        {
+            control.Size = new Size(284, 332);
+            control.Init(bus, null, ula);
+            AssertLayoutFits(control);
+            var slider = GetField<TrackBar>(control, "trkMasterVolume");
+            var audio = GetField<GroupBox>(control, "groupBoxAudio");
+            Assert(audio.Bottom > control.Height / 2 &&
+                slider.Minimum == 0 && slider.Maximum == 200 &&
+                slider.Value == 100,
+                "Master volume is not at the bottom of the ULA page");
+            if (Environment.GetCommandLineArgs().Length > 2)
+            {
+                using (var bitmap = new Bitmap(control.Width, control.Height))
+                {
+                    control.DrawToBitmap(bitmap,
+                        new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                    bitmap.Save(Environment.GetCommandLineArgs()[2],
+                        ImageFormat.Png);
+                }
+            }
+            slider.Value = 145;
+            control.Apply();
+            Assert(bus.MasterVolume == 145,
+                "ULA page did not apply master volume");
+            var xml = new XmlDocument();
+            var root = xml.AppendChild(xml.CreateElement("Bus"));
+            bus.SaveConfigXml(root);
+            Assert(root.Attributes["masterVolume"] != null &&
+                root.Attributes["masterVolume"].Value == "145",
+                "Master volume was not saved in the machine profile");
+        }
+    }
+
     private static void VerifyPentEvoMusicSelector()
     {
         var bus = new BusManager();
@@ -475,18 +557,76 @@ internal static class PentEvoProfileProbe
             Assert(warmReset.Text == "Warm Reset" &&
                 warmReset.ShortcutKeyDisplayString == "F12",
                 "Warm Reset still shows an obsolete shortcut");
+            var settings = GetField<ToolStripMenuItem>(view,
+                "menuVmSettings");
+            var settingsButton = GetField<ToolStripButton>(view,
+                "tbrButtonSettings");
+            Assert(settings.ShortcutKeys == (Keys.Alt | Keys.P) &&
+                settingsButton.ToolTipText.Contains("Alt+P"),
+                "Machine Settings has no Alt+P shortcut/tooltip");
+            settings.Enabled = true;
+            var settingsClicks = 0;
+            settings.Click += (sender, args) => settingsClicks++;
+            var processCmdKey = typeof(MainView).GetMethod(
+                "ProcessCmdKey", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert(processCmdKey != null, "MainView has no command-key handler");
+            var altP = new object[]
+            {
+                Message.Create(IntPtr.Zero, 0x0104, IntPtr.Zero, IntPtr.Zero),
+                Keys.Alt | Keys.P
+            };
+            Assert((bool)processCmdKey.Invoke(view, altP) && settingsClicks == 1,
+                "Alt+P did not invoke Machine Settings through ProcessCmdKey");
+            var onKeyDown = typeof(MainView).GetMethod(
+                "OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert(onKeyDown != null, "MainView has no key-down handler");
+            var keyEvent = new KeyEventArgs(Keys.Alt | Keys.P);
+            onKeyDown.Invoke(view, new object[] { keyEvent });
+            Assert(settingsClicks == 2 && keyEvent.Handled &&
+                keyEvent.SuppressKeyPress,
+                "Alt+P key-down fallback did not open Machine Settings");
+            foreach (var name in new[]
+            {
+                "tbrButtonOpen", "tbrButtonSave", "tbrButtonWarmReset"
+            })
+            {
+                var button = GetField<ToolStripButton>(view, name);
+                using (var icon = new Bitmap(button.Image))
+                {
+                    Assert(icon.Size == new Size(32, 32) &&
+                        icon.GetPixel(0, 0).A == 0,
+                        "Replacement toolbar icon is not 32x32 transparent: " +
+                        name);
+                }
+            }
             var tapeButton = GetField<ToolStripSplitButton>(view, "_tapeButton");
             var opticalButton = GetField<ToolStripSplitButton>(view, "_opticalButton");
             var opticalSettings = GetField<ToolStripMenuItem>(
                 view,
                 "_opticalSettingsMenuItem");
             var toolbar = GetField<ToolStrip>(view, "tbrStrip");
+            if (Environment.GetCommandLineArgs().Length > 3)
+            {
+                view.Width = 1300;
+                toolbar.Size = new Size(1200, toolbar.Height);
+                using (var bitmap = new Bitmap(toolbar.Width, toolbar.Height))
+                {
+                    toolbar.DrawToBitmap(bitmap,
+                        new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                    bitmap.Save(Environment.GetCommandLineArgs()[3],
+                        ImageFormat.Png);
+                }
+            }
             Assert(tapeButton.Width == 74 && opticalButton.Width == 74,
                 "Tape/CD buttons do not reserve room for the drop-down arrow");
             Assert(tapeButton.Image != null && tapeButton.Image.Size == new Size(52, 36),
                 "Tape artwork does not fit the common toolbar canvas");
+            Assert(((Bitmap)tapeButton.Image).GetPixel(0, 0).A == 0,
+                "Tape artwork retained the magenta background");
             Assert(opticalButton.Image != null && opticalButton.Image.Size == new Size(52, 36),
                 "CD artwork does not fit the common toolbar canvas");
+            Assert(((Bitmap)opticalButton.Image).GetPixel(0, 0).A == 0,
+                "CD artwork retained the magenta background");
             Assert(toolbar.Items.IndexOf(opticalButton) == toolbar.Items.Count - 1,
                 "CD button is not the rightmost toolbar item");
             Assert((string)opticalSettings.Tag == "IDE PentEvo",
@@ -535,6 +675,33 @@ internal static class PentEvoProfileProbe
             Assert(zControllerRed.R > zControllerRed.G,
                 "Available empty Z-controller indicator is not red");
         }
+    }
+
+    private static void VerifyMachineSettingsKeyboardIsolation()
+    {
+        var method = typeof(DirectKeyboard).GetMethod(
+            "IsMachineSettingsShortcutPressed",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert(method != null,
+            "DirectInput keyboard does not isolate the Alt+P host shortcut");
+        var state = new byte[256];
+        state[25] = 0x80; // DirectInput P
+        Assert(!(bool)method.Invoke(null, new object[] { state }),
+            "Plain P was blocked from the guest keyboard");
+        state[56] = 0x80; // Left Alt
+        Assert((bool)method.Invoke(null, new object[] { state }),
+            "Left Alt+P was not blocked from the guest keyboard");
+        state[56] = 0;
+        state[184] = 0x80; // Right Alt
+        Assert((bool)method.Invoke(null, new object[] { state }),
+            "Right Alt+P was not blocked from the guest keyboard");
+        state[29] = 0x80; // Left Ctrl
+        Assert((bool)method.Invoke(null, new object[] { state }),
+            "AltGr+P was not blocked from the guest keyboard");
+        state[184] = 0;
+        state[56] = 0x80;
+        Assert(!(bool)method.Invoke(null, new object[] { state }),
+            "Left Ctrl+Alt+P was unexpectedly blocked from the guest keyboard");
     }
 
     private sealed class ProbeMachine : IVirtualMachine

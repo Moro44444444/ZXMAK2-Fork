@@ -121,9 +121,11 @@ namespace ZXMAK2.Host.WinForms.Mdx
             var hr = _device.GetDeviceState(_diState);
             if (hr.IsSuccess)
             {
+                var suppressGuestP = IsMachineSettingsShortcutPressed(_diState);
                 foreach (var key in _mapper.Keys)
                 {
-                    _state[key] = _diState[(int)_mapper[key]] != 0;
+                    _state[key] = _diState[(int)_mapper[key]] != 0 &&
+                        !(suppressGuestP && key == ZxmakKey.P);
                 }
             }
             else if (hr == ErrorCode.DIERR_NOTACQUIRED)
@@ -145,6 +147,19 @@ namespace ZXMAK2.Host.WinForms.Mdx
 
 
         #region Private
+
+        private static bool IsMachineSettingsShortcutPressed(byte[] state)
+        {
+            var alt = state[(int)MdxKey.LeftAlt] != 0 ||
+                state[(int)MdxKey.RightAlt] != 0;
+            var control = state[(int)MdxKey.LeftControl] != 0 ||
+                state[(int)MdxKey.RightControl] != 0;
+            var shift = state[(int)MdxKey.LeftShift] != 0 ||
+                state[(int)MdxKey.RightShift] != 0;
+            // Windows reports AltGr as right Alt plus a synthetic Ctrl.
+            return alt && (!control || state[(int)MdxKey.RightAlt] != 0) &&
+                !shift && state[(int)MdxKey.P] != 0;
+        }
 
         private bool TryAcquire()
         {

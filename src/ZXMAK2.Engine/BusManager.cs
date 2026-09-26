@@ -56,6 +56,7 @@ namespace ZXMAK2.Engine
         public ModelId ModelId { get; set; }
         public string Name { get; set; }
         public int SampleRate { get; set; }
+        public int MasterVolume { get; set; }
 
         public RzxHandler RzxHandler 
         {
@@ -80,6 +81,7 @@ namespace ZXMAK2.Engine
             m_eventManager.ApplyPortTiming = ApplyCpuPortTiming;
             m_cpu.REFRESH = RefreshCpuClock;
             SampleRate = 44100;
+            MasterVolume = 100;
             m_eventManager.ScanSig += EventManager_ScanSig;
         }
 
@@ -328,7 +330,8 @@ namespace ZXMAK2.Engine
                 soundRenderers.Select(sr => sr.AudioBuffer),
                 m_deviceList
                     .OfType<ISoundMixerConfiguration>()
-                    .Any(configuration => configuration.RejectDc));
+                    .Any(configuration => configuration.RejectDc),
+                MasterVolume);
             OnBusConnected();
             return success;
         }
@@ -642,6 +645,13 @@ namespace ZXMAK2.Engine
             {
                 Name = busNode.Attributes["name"].InnerText;
             }
+            MasterVolume = 100;
+            int masterVolume;
+            if (int.TryParse(GetAttrString(busNode, "masterVolume"), out masterVolume) &&
+                masterVolume >= 0 && masterVolume <= 200)
+            {
+                MasterVolume = masterVolume;
+            }
             ModelId = ModelId.None;
             if (busNode.Attributes["modelId"] != null)
             {
@@ -801,6 +811,11 @@ namespace ZXMAK2.Engine
             {
                 var el = (XmlElement)busNode;
                 el.SetAttribute("modelId", ModelId.ToString());
+            }
+            if (MasterVolume != 100)
+            {
+                var el = (XmlElement)busNode;
+                el.SetAttribute("masterVolume", MasterVolume.ToString());
             }
             foreach (var device in m_deviceList)
             {

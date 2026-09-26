@@ -460,8 +460,9 @@
             // menuVmSettings
             // 
             this.menuVmSettings.Name = "menuVmSettings";
+            this.menuVmSettings.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Alt | System.Windows.Forms.Keys.P)));
             this.menuVmSettings.Size = new System.Drawing.Size(226, 22);
-            this.menuVmSettings.Text = "Settings";
+            this.menuVmSettings.Text = "Machine Settings";
             // 
             // menuTools
             // 
@@ -614,6 +615,7 @@
             this.tbrButtonSettings.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrButtonSettings.Name = "tbrButtonSettings";
             this.tbrButtonSettings.Size = new System.Drawing.Size(36, 36);
+            this.tbrButtonSettings.ToolTipText = "Machine Settings (Alt+P)";
             //
             // toolStripSeparatorMachines
             //

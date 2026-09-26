@@ -37,6 +37,10 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             m_bmgr = bmgr;
             m_host = host;
             m_device = device;
+            trkMasterVolume.Value = Math.Max(
+                trkMasterVolume.Minimum,
+                Math.Min(trkMasterVolume.Maximum, m_bmgr.MasterVolume));
+            UpdateMasterVolumeLabel();
 
             cbxType.SelectedIndex = -1;
             if (m_device != null)
@@ -60,6 +64,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
         public override void Apply()
         {
+            m_bmgr.MasterVolume = trkMasterVolume.Value;
             var bdd = (BusDeviceDescriptor)cbxType.SelectedItem;
 
             var ula = (IUlaDevice)Activator.CreateInstance(bdd.Type);
@@ -81,6 +86,16 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 m_bmgr.Add(busNewUla);
             }
             Init(m_bmgr, m_host, (UlaDeviceBase)ula);
+        }
+
+        private void trkMasterVolume_ValueChanged(object sender, EventArgs e)
+        {
+            UpdateMasterVolumeLabel();
+        }
+
+        private void UpdateMasterVolumeLabel()
+        {
+            lblMasterPercent.Text = trkMasterVolume.Value + "%";
         }
     }
 }

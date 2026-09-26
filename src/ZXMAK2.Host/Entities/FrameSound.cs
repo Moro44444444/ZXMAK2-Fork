@@ -10,6 +10,7 @@ namespace ZXMAK2.Host.Entities
     {
         private readonly uint[] _mixBuffer;
         private readonly bool _rejectDc;
+        private readonly int _masterVolume;
         private uint[] _buffer;
         private uint[][] _sources;
         private short _dcPreviousInputLeft;
@@ -27,11 +28,21 @@ namespace ZXMAK2.Host.Entities
             int sampleRate,
             IEnumerable<uint[]> sources,
             bool rejectDc)
+            : this(sampleRate, sources, rejectDc, 100)
+        {
+        }
+
+        public FrameSound(
+            int sampleRate,
+            IEnumerable<uint[]> sources,
+            bool rejectDc,
+            int masterVolume)
         {
             _mixBuffer = new uint[(int)(sampleRate / 50D + 0.5D)];
             SampleRate = sampleRate;
             _sources = sources.ToArray();
             _rejectDc = rejectDc;
+            _masterVolume = Math.Max(0, Math.Min(200, masterVolume));
         }
 
         #region ISoundFrame
@@ -54,6 +65,10 @@ namespace ZXMAK2.Host.Entities
             if (_rejectDc)
             {
                 RejectDc(_buffer);
+            }
+            if (_masterVolume != 100)
+            {
+                ApplyMasterVolume(_buffer);
             }
             return _buffer;
         }
@@ -142,6 +157,38 @@ namespace ZXMAK2.Host.Entities
                 return short.MinValue;
             }
             return (short)value;
+        }
+
+        private unsafe void ApplyMasterVolume(uint[] buffer)
+        {
+            // Apply once to the final stereo mix, after DC rejection. A soft
+            // knee avoids the hard clipping caused by boosting loud material.
+            fixed (uint* puiBuffer = buffer)
+            {
+                var samples = (short*)puiBuffer;
+                for (var i = 0; i < buffer.Length * 2; i++)
+                {
+                    var scaled = (int)Math.Round(
+                        samples[i] * _masterVolume / 100.0);
+                    if (_masterVolume > 100)
+                    {
+                        const int knee = 24576;
+                        var magnitude = Math.Abs(scaled);
+                        if (magnitude > knee)
+                        {
+                            var excess = magnitude - knee;
+                            var headroom = short.MaxValue - knee;
+                            magnitude = knee +
+                                (int)((long)headroom * excess /
+                                    (headroom + excess));
+                            scaled = scaled < 0 ? -magnitude : magnitude;
+                        }
+                    }
+                    samples[i] = (short)Math.Max(
+                        short.MinValue,
+                        Math.Min(short.MaxValue, scaled));
+                }
+            }
         }
 
         #endregion Private

@@ -672,7 +672,7 @@ namespace ZXMAK2.Host.Presentation
             CommandVmWarmReset.Text = "Warm Reset";
             //CommandVmColdReset.Text = "Cold Reset";
             CommandVmNmi.Text = "NMI";
-            CommandVmSettings.Text = "Settings";
+            CommandVmSettings.Text = "Machine Settings";
             CommandHelpViewHelp.Text = "View Help";
             CommandHelpKeyboardHelp.Text = "Keyboard Help";
             CommandHelpAbout.Text = "About...";

@@ -55,6 +55,11 @@ namespace Test
                 TestEvoDisplayModes();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/master-volume")
+            {
+                TestMasterVolume();
+                return;
+            }
             if (args.Length >= 1 && args[0].ToLower() == "/moonsound")
             {
                 TestZxmMoonSound();
@@ -1273,6 +1278,51 @@ namespace Test
                         "EVO display mode mapping failed at " + mode);
             }
             Console.WriteLine("EVO TV/VGA x 4 raster modes: PASS");
+        }
+
+        private static void TestMasterVolume()
+        {
+            var source = new uint[] { PackStereoSample(10000) };
+            var sources = new uint[][] { source, source };
+            if (ReadLeftSample(new FrameSound(50, sources, false, 0)) != 0 ||
+                ReadLeftSample(new FrameSound(50, sources, false, 50)) != 5000 ||
+                ReadLeftSample(new FrameSound(50, sources, false, 100)) != 10000 ||
+                ReadLeftSample(new FrameSound(50, sources, false, 150)) != 15000)
+                throw new InvalidOperationException(
+                    "Master volume must scale the final mix exactly once");
+
+            var loud = new uint[] { PackStereoSample(30000) };
+            var boosted = ReadLeftSample(new FrameSound(
+                50, new uint[][] { loud }, false, 200));
+            if (boosted <= 30000 || boosted >= short.MaxValue)
+                throw new InvalidOperationException(
+                    "Master volume soft limiter is not active");
+
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.MasterVolume = 150;
+            var xml = new XmlDocument();
+            var root = xml.AppendChild(xml.CreateElement("Bus"));
+            machine.BusManager.SaveConfigXml(root);
+            machine.BusManager.LoadConfigXml(root);
+            var persisted = machine.BusManager.MasterVolume == 150 &&
+                machine.BusManager.SoundFrame != null;
+            machine.BusManager.Disconnect();
+            machine.Dispose();
+            if (!persisted)
+                throw new InvalidOperationException(
+                    "Master volume configuration did not survive reload");
+            Console.WriteLine("Master volume: mix, boost, soft limit, XML: PASS");
+        }
+
+        private static uint PackStereoSample(short sample)
+        {
+            var packed = (uint)(ushort)sample;
+            return packed | (packed << 16);
+        }
+
+        private static short ReadLeftSample(FrameSound frame)
+        {
+            return (short)(frame.GetBuffer()[0] & 0xFFFF);
         }
 
         private static bool TestMultiSoundTsFmSaaCompatibility()
