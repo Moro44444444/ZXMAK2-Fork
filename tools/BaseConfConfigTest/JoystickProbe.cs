@@ -13,6 +13,7 @@ using ZXMAK2.Host.WinForms.Views.Configuration.Devices;
 using ZXMAK2.DirectX.DirectInput;
 using ZXMAK2.Hardware.Evo;
 using ZXMAK2.Engine.Interfaces;
+using ZXMAK2.Dependency;
 
 internal static class JoystickProbe
 {
@@ -24,6 +25,7 @@ internal static class JoystickProbe
     {
         try
         {
+            TestBootstrap();
             var m=new JoystickMapping(); var neutral=Sample(0,0,uint.MaxValue);
             Check(m.Map(neutral)==0,"Neutral");
             byte[] hatValues={8,9,1,5,4,6,2,10};
@@ -73,6 +75,19 @@ internal static class JoystickProbe
             Console.WriteLine("JoystickProbe PASS: "+checks+" checks"); return 0;
         }
         catch(Exception ex) { Console.WriteLine(ex); return 1; }
+    }
+    private static void TestBootstrap()
+    {
+        // Do not construct the backend directly: reproduce the real launcher's
+        // XML/name-based constructor binding, including all View registrations.
+        using(var root=new ResolverUnity())
+        {
+            var view=root.Resolve<IResolver>("View");
+            Check(view!=null,"Launcher's View container loads from unity.config");
+            using(var form=new Form())
+            using(var controller=view.Resolve<IHostJoystick>(new Argument("form",form)))
+                Check(controller is DirectJoystick,"Configured joystick constructor resolves through Unity");
+        }
     }
     private sealed class HeldKeyboard : IKeyboardState
     { public bool this[ZXMAK2.Host.Entities.Key key] { get { return key==ZXMAK2.Host.Entities.Key.NumPad0; } } }

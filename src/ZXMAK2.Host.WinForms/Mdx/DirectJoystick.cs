@@ -23,9 +23,10 @@ namespace ZXMAK2.Host.WinForms.Mdx
         private bool focused, releasePending, disposed;
         private string previewId = "";
         private int lastRetry;
-        public DirectJoystick(Form owner)
+        // unity.config binds this parameter by NAME, not just by its type.
+        public DirectJoystick(Form form)
         {
-            form=owner; hwnd=owner.Handle; focused=owner.ContainsFocus;
+            this.form=form; hwnd=form.Handle; focused=form.ContainsFocus;
             form.Activated+=Activated; form.Deactivate+=Deactivated;
         }
         public IKeyboardState KeyboardState { get; set; }
