@@ -974,6 +974,11 @@ namespace ZXMAK2.Hardware.Evo
                 EntryPoint = "SAASNDSetOversample")]
             internal static extern void SetOversample(IntPtr sound,
                 uint oversample);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDSetHighpass")]
+            internal static extern void SetHighpass(IntPtr sound,
+                [MarshalAs(UnmanagedType.I1)] bool enabled);
         }
     }
 

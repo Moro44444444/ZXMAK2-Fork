@@ -35,6 +35,10 @@ namespace ZXMAK2.Hardware.Evo
         private bool m_rendering;
         private string m_loadedRomPath = string.Empty;
         private MemoryPentEvo m_hostMemory;
+        private double m_resamplePhase;
+        private int m_resampleRate;
+        private int m_previousLeft, m_previousRight;
+        private int m_currentLeft, m_currentRight;
 
         public ZxmMoonSoundDevice()
         {
@@ -49,6 +53,9 @@ namespace ZXMAK2.Hardware.Evo
         public bool RejectDc { get { return true; } }
         public bool CoreAvailable { get { return m_core != IntPtr.Zero; } }
         public string LoadedRomPath { get { return m_loadedRomPath; } }
+        // Experimental OmniSound output adapter; legacy MoonSound remains
+        // bit-identical at its accepted 44.1 kHz path.
+        public bool ResampleHostOutput { get; set; }
 
         public override void BusInit(IBusManager bmgr)
         {
@@ -119,6 +126,7 @@ namespace ZXMAK2.Hardware.Evo
                 if (m_core == IntPtr.Zero)
                     throw new InvalidOperationException(
                         "ymfm could not create a YMF278B instance");
+                ResetResampler();
             }
             catch (Exception ex)
             {
@@ -155,6 +163,15 @@ namespace ZXMAK2.Hardware.Evo
             RenderToCurrentTime();
             if (m_core != IntPtr.Zero)
                 NativeMethods.Reset(m_core);
+            ResetResampler();
+        }
+
+        private void ResetResampler()
+        {
+            m_resamplePhase = 0;
+            m_resampleRate = SampleRate;
+            m_previousLeft = m_previousRight = 0;
+            m_currentLeft = m_currentRight = 0;
         }
 
         private void WriteWavePort(ushort address, byte value,
@@ -241,12 +258,51 @@ namespace ZXMAK2.Hardware.Evo
                 return;
             }
 
+            if (ResampleHostOutput && SampleRate != 44100)
+            {
+                RenderResampled(count);
+                return;
+            }
             NativeMethods.Generate(m_core, m_nativeBuffer, (uint)count);
             for (int index = 0; index < count; ++index)
             {
                 UpdateDac((double)m_renderSample / m_frameSamples,
                     m_nativeBuffer[index * 2],
                     m_nativeBuffer[index * 2 + 1]);
+                m_renderSample++;
+            }
+        }
+
+        private void RenderResampled(int count)
+        {
+            if (m_resampleRate != SampleRate)
+                ResetResampler();
+            var ratio = 44100D / Math.Max(1, SampleRate);
+            var required = (int)Math.Floor(m_resamplePhase + count * ratio + 1e-10);
+            if (m_nativeBuffer.Length < required * 2)
+                m_nativeBuffer = new short[required * 2];
+            if (required > 0)
+                NativeMethods.Generate(m_core, m_nativeBuffer, (uint)required);
+            var nativeIndex = 0;
+            for (var index = 0; index < count; index++)
+            {
+                m_resamplePhase += ratio;
+                while (m_resamplePhase >= 1D - 1e-10)
+                {
+                    m_resamplePhase = Math.Max(0D, m_resamplePhase - 1D);
+                    m_previousLeft = m_currentLeft;
+                    m_previousRight = m_currentRight;
+                    m_currentLeft = m_nativeBuffer[nativeIndex * 2];
+                    m_currentRight = m_nativeBuffer[nativeIndex * 2 + 1];
+                    nativeIndex++;
+                }
+                // Causal interpolation: never generate future chip samples
+                // across a register write. State continues across frame chunks.
+                var left = (short)Math.Round(m_previousLeft +
+                    (m_currentLeft - m_previousLeft) * m_resamplePhase);
+                var right = (short)Math.Round(m_previousRight +
+                    (m_currentRight - m_previousRight) * m_resamplePhase);
+                UpdateDac((double)m_renderSample / m_frameSamples, left, right);
                 m_renderSample++;
             }
         }

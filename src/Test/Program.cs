@@ -53,6 +53,8 @@ namespace Test
             if (args.Length >= 1 && args[0].ToLower() == "/omnisound")
             {
                 TestZxOmniSound();
+                TestZxOmniSound(48000);
+                TestZxOmniSound(96000);
                 return;
             }
             if (args.Length >= 1 && args[0].ToLower() == "/evo-display")
@@ -1168,7 +1170,9 @@ namespace Test
                 Environment.ExitCode = 1;
         }
 
-        private static void TestZxOmniSound()
+        private static double s_omniFmFrequency;
+
+        private static void TestZxOmniSound(int sampleRate = 44100)
         {
             TestOmniPsgEnvelopes();
             var board = new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice();
@@ -1191,6 +1195,7 @@ namespace Test
             machine.BusManager.Add((BusDeviceBase)memory);
             machine.BusManager.Add((BusDeviceBase)ula);
             machine.BusManager.Add(board);
+            machine.BusManager.SampleRate = sampleRate;
             if (!machine.BusManager.Connect())
                 throw new InvalidOperationException("OmniSound connect failed");
 
@@ -1263,6 +1268,16 @@ namespace Test
             var directSaaPeak = GetStereoPeak(renderers[3].AudioBuffer);
             var drivePeak = GetStereoPeak(board.AudioBuffer);
             var oplPeak = GetStereoPeak(board.MoonSound.AudioBuffer);
+            var fmSamples = new System.Collections.Generic.List<short>();
+            for (var frame = 0; frame < 100; frame++)
+            {
+                machine.ExecuteFrame();
+                foreach (var sample in board.MoonSound.AudioBuffer)
+                    fmSamples.Add(GetLeft(sample));
+            }
+            var fmFrequency = MeasureToneFrequency(fmSamples, sampleRate);
+            if (sampleRate == 44100) s_omniFmFrequency = fmFrequency;
+            var fmRateOk = Math.Abs(fmFrequency - s_omniFmFrequency) < 1;
 
             // A fresh reset proves the TSFM alias works independently of
             // the preceding native SAA writes.
@@ -1338,9 +1353,15 @@ namespace Test
             for (var i = 0; i < program.Count; i++)
                 memory.WRMEM_DBG((ushort)(0x4600 + i), program[i]);
             machine.CPU.regs.PC = 0x4600;
+            while (machine.CPU.regs.PC < 0x4607)
+                machine.DebugStepInto();
+            // Observe the latch at the write boundary. A subsequent status
+            // read is allowed to advance NeoGS and consume a fast command.
+            var gsPending = ((byte)typeof(ZXMAK2.Hardware.Evo.NeoGsDevice)
+                .GetField("m_status", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(board.NeoGs) & 1) != 0;
             while (machine.CPU.regs.PC < 0x4600 + program.Count)
                 machine.DebugStepInto();
-            var gsPending = (memory.RDMEM_DBG(0x4700) & 1) != 0;
             memory.WRMEM_DBG(0x4800, 0x18);
             memory.WRMEM_DBG(0x4801, 0xFE);
             machine.CPU.regs.PC = 0x4800;
@@ -1354,6 +1375,8 @@ namespace Test
             while (machine.CPU.regs.PC < 0x4600 + program.Count)
                 machine.DebugStepInto();
             var gsReady = (memory.RDMEM_DBG(0x4701) & 1) == 0;
+            var externalEnvelopeOk = TestSaaExternalCycles(renderers[3]) &&
+                !TestSaaExternalCycles(renderers[3], true);
             machine.BusManager.Disconnect();
 
             var conflictRejected = true;
@@ -1379,7 +1402,8 @@ namespace Test
             var passed = configOk && ownershipOk && ym0Peak > 256 &&
                 ym1Peak > 256 && directSaaPeak > 256 &&
                 tsFmSaaPeak > 256 && drivePeak > 0 && oplPeak > 256 &&
-                pcmPeak > 256 && gsPending && gsReady && conflictRejected && frequencyOk;
+                pcmPeak > 256 && gsPending && gsReady && conflictRejected &&
+                frequencyOk && fmRateOk && externalEnvelopeOk;
             Console.WriteLine("ZX OmniSound: config={0}, owners={1}, " +
                 "YM={2}/{3}, SAA={4}/{5}, Drive={6}, OPL={7}: {8}",
                 configOk, ownershipOk, ym0Peak, ym1Peak,
@@ -1390,8 +1414,87 @@ namespace Test
                 conflictRejected);
             Console.WriteLine("SAA frequency measured/expected={0:F3}/{1:F3} Hz",
                 saaFrequency, expectedSaaFrequency);
+            Console.WriteLine("Host rate={0}, OPL FM pitch={1:F3} Hz, invariant={2}",
+                sampleRate, fmFrequency, fmRateOk);
+            Console.WriteLine("SAA external envelope address/data cycles: {0}",
+                externalEnvelopeOk ? "PASS" : "FAIL");
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static bool TestSaaExternalCycles(ISoundRenderer renderer,
+            bool repeatAddress = false)
+        {
+            var type = renderer.GetType();
+            var native = type.GetNestedType("SaaSoundNative", BindingFlags.NonPublic);
+            Func<string, object[], object> call = (name, args) =>
+                native.GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, args);
+            var reference = (IntPtr)call("Create", new object[0]);
+            var actual = (IntPtr)type.GetField("m_externalSound",
+                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(renderer);
+            try
+            {
+                foreach (var sound in new IntPtr[] { reference, actual })
+                {
+                    call("SetSoundParameters", new object[] { sound, (uint)0x3F });
+                    call("SetClockRate", new object[] { sound, (uint)8000000 });
+                    call("SetSampleRate", new object[] { sound, (uint)44100 });
+                    call("SetOversample", new object[] { sound, (uint)6 });
+                    call("SetHighpass", new object[] { sound, false });
+                    call("Clear", new object[] { sound });
+                }
+                type.GetMethod("ResetChip").Invoke(renderer, null);
+                var address = type.GetProperty("RegAddr");
+                var writeData = type.GetMethod("SetData");
+                var passed = true;
+                // Externally clocked repeating decay on envelope channel 2.
+                byte[] registers = { 2, 0x14, 0x18, 0x1C };
+                byte[] values = { 0xFF, 0, 0xA6, 1 };
+                for (var i = 0; i < registers.Length; i++)
+                {
+                    address.SetValue(renderer, registers[i], null);
+                    writeData.Invoke(renderer, new object[] { values[i] });
+                    call("WriteAddress", new object[] { reference, registers[i] });
+                    call("WriteData", new object[] { reference, values[i] });
+                }
+                for (var pulse = 0; pulse < 40; pulse++)
+                {
+                    address.SetValue(renderer, (byte)0x18, null);
+                    if (repeatAddress)
+                        type.GetMethod("SetReg").Invoke(renderer,
+                            new object[] { 0x18, (byte)0xA6 });
+                    else
+                        writeData.Invoke(renderer, new object[] { (byte)0xA6 });
+                    call("WriteAddress", new object[] { reference, (byte)0x18 });
+                    call("WriteData", new object[] { reference, (byte)0xA6 });
+                    var expected = new byte[256];
+                    var observed = new byte[256];
+                    call("GenerateMany", new object[] { reference, expected, (uint)64 });
+                    call("GenerateMany", new object[] { actual, observed, (uint)64 });
+                    for (var i = 0; i < expected.Length; i++)
+                        passed &= expected[i] == observed[i];
+                }
+                return passed;
+            }
+            finally
+            {
+                call("SetHighpass", new object[] { actual, true });
+                call("SetSampleRate", new object[] { actual, (uint)renderer.SampleRate });
+                call("Destroy", new object[] { reference });
+            }
+        }
+
+        private static double MeasureToneFrequency(
+            System.Collections.Generic.List<short> samples, int sampleRate)
+        {
+            long sum = 0;
+            foreach (var sample in samples) sum += sample;
+            var mean = (double)sum / samples.Count;
+            var edges = 0;
+            for (var i = 1; i < samples.Count; i++)
+                if (samples[i - 1] < mean && samples[i] >= mean) edges++;
+            return (double)edges * sampleRate / samples.Count;
         }
 
         private static void TestOmniPsgEnvelopes()
