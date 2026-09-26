@@ -15,6 +15,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         private ISoundRenderer m_device;
         private BusDeviceBase m_busDevice;
         private bool m_isPentEvoSelector;
+        private bool m_omniSoundOverride;
 
 
         public CtlSettingsGenericSound()
@@ -72,10 +73,28 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             UpdatePentEvoDescription();
         }
 
-        public void SetMultiSoundYmOverride(bool enabled)
+        public void SetMultiSoundYmOverride(bool enabled,
+            bool omniSoundEnabled = false)
         {
             if (!m_isPentEvoSelector)
                 return;
+            var ula = m_bmgr.FindDevice<UlaPentEvo>();
+            if (omniSoundEnabled && !m_omniSoundOverride && ula != null &&
+                cbxPentEvoDevice.SelectedIndex > 0)
+                ula.OmniSoundPreviousMusic = cbxPentEvoDevice.SelectedIndex == 2
+                    ? PentEvoInternalSound.TurboSoundFmPro
+                    : PentEvoInternalSound.AY8910CHRV;
+            if (!omniSoundEnabled && !enabled && ula != null &&
+                ula.OmniSoundPreviousMusic != PentEvoInternalSound.None)
+            {
+                cbxPentEvoDevice.SelectedIndex =
+                    ula.OmniSoundPreviousMusic ==
+                        PentEvoInternalSound.TurboSoundFmPro ? 2 :
+                    ula.OmniSoundPreviousMusic ==
+                        PentEvoInternalSound.AY8910CHRV ? 1 : 0;
+                ula.OmniSoundPreviousMusic = PentEvoInternalSound.None;
+            }
+            m_omniSoundOverride = omniSoundEnabled;
             if (enabled)
                 cbxPentEvoDevice.SelectedIndex = 0;
             cbxPentEvoDevice.Enabled = !enabled;

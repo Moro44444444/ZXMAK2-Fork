@@ -542,6 +542,7 @@ namespace ZXMAK2.Host.WinForms.Views
                      device is ZxMultiSoundDevice ||
                      device is ZxMultiSoundMaxDevice ||
                      device is ZxmMoonSoundDevice ||
+                     device is ZxOmniSoundDevice ||
                      device is ZxNetUsbDevice ||
                      device is AYCHRV ||
                      device is TurboSoundFmPro))
@@ -620,7 +621,8 @@ namespace ZXMAK2.Host.WinForms.Views
         {
             if (m_pentEvoZxBusControl == null || m_neoGsSdControl == null)
                 return;
-            var enabled = m_pentEvoZxBusControl.IsNeoGsBoardEnabled;
+            var enabled = m_pentEvoZxBusControl.IsNeoGsBoardEnabled ||
+                m_pentEvoZxBusControl.IsOmniSoundBoardEnabled;
             m_neoGsSdControl.SetBoardEnabled(enabled);
             if (m_neoGsSdItem != null)
             {
@@ -631,7 +633,8 @@ namespace ZXMAK2.Host.WinForms.Views
             if (m_pentEvoMusicControl != null)
             {
                 m_pentEvoMusicControl.SetMultiSoundYmOverride(
-                    m_pentEvoZxBusControl.IsAutomaticMultiSoundYmActive);
+                    m_pentEvoZxBusControl.IsAutomaticMultiSoundYmActive,
+                    m_pentEvoZxBusControl.IsOmniSoundBoardEnabled);
             }
         }
 
@@ -776,8 +779,8 @@ namespace ZXMAK2.Host.WinForms.Views
                     m_vm.Bus.FindDevice<ZsdPentEvo>(),
                     m_workBus.FindDevice<ZsdPentEvo>());
                 var neoGsSdMediaChanged = IsNeoGsSdMediaChanged(
-                    m_vm.Bus.FindDevice<NeoGsDevice>(),
-                    m_workBus.FindDevice<NeoGsDevice>());
+                    GetNeoGsMediaDevice(m_vm.Bus),
+                    GetNeoGsMediaDevice(m_workBus));
 
                 if (!m_workBus.Connect())
                 {
@@ -889,6 +892,15 @@ namespace ZXMAK2.Host.WinForms.Views
                 StringComparison.OrdinalIgnoreCase);
         }
 
+        private static NeoGsDevice GetNeoGsMediaDevice(IBus bus)
+        {
+            var standalone = bus.FindDevice<NeoGsDevice>();
+            if (standalone != null)
+                return standalone;
+            var omni = bus.FindDevice<ZxOmniSoundDevice>();
+            return omni != null ? omni.NeoGs : null;
+        }
+
         private static string NormalizeMediaPath(string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -944,6 +956,7 @@ namespace ZXMAK2.Host.WinForms.Views
                     additionalIgnoreTypes.Add(typeof(ZxMultiSoundDevice));
                     additionalIgnoreTypes.Add(typeof(ZxMultiSoundMaxDevice));
                     additionalIgnoreTypes.Add(typeof(ZxmMoonSoundDevice));
+                    additionalIgnoreTypes.Add(typeof(ZxOmniSoundDevice));
                     additionalIgnoreTypes.Add(typeof(ZxNetUsbDevice));
                     // TSFM Pro replaces an AY/YM socket. Do not offer it to
                     // profiles which have no compatible PSG to replace.

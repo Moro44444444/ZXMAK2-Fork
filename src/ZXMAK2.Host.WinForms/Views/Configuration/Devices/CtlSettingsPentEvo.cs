@@ -96,6 +96,17 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             }
         }
 
+        public bool IsOmniSoundBoardEnabled
+        {
+            get
+            {
+                return IsSelected(PentEvoZxBusDevice.OmniSound,
+                        m_slot1Enabled, m_slot1Device) ||
+                    IsSelected(PentEvoZxBusDevice.OmniSound,
+                        m_slot2Enabled, m_slot2Device);
+            }
+        }
+
         public bool IsAutomaticMultiSoundYmActive
         {
             get
@@ -103,7 +114,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 return (IsMultiSoundBoardEnabled &&
                         m_automatic.Checked && m_ym.Checked) ||
                     (IsMultiSoundMaxBoardEnabled &&
-                        m_maxAutomatic.Checked && m_maxYm.Checked);
+                        m_maxAutomatic.Checked && m_maxYm.Checked) ||
+                    IsOmniSoundBoardEnabled;
             }
         }
 
@@ -231,6 +243,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 {
                     TryRestoreBoard(PentEvoZxBusDevice.MoonSound);
                 }
+                if (m_bmgr.FindDevice<ZxOmniSoundDevice>() != null &&
+                    !IsOmniSoundBoardEnabled)
+                    TryRestoreBoard(PentEvoZxBusDevice.OmniSound);
                 if (m_bmgr.FindDevice<ZxNetUsbDevice>() != null &&
                     !IsZxNetUsbBoardEnabled)
                 {
@@ -292,6 +307,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 RemoveBoard<ZxMultiSoundDevice>();
                 RemoveBoard<ZxMultiSoundMaxDevice>();
                 RemoveBoard<ZxmMoonSoundDevice>();
+                RemoveBoard<ZxOmniSoundDevice>();
                 RemoveBoard<ZxNetUsbDevice>();
                 return;
             }
@@ -303,7 +319,14 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             var multiSoundSelected = IsMultiSoundBoardEnabled;
             var maxSelected = IsMultiSoundMaxBoardEnabled;
             var moonSoundSelected = IsMoonSoundBoardEnabled;
+            var omniSoundSelected = IsOmniSoundBoardEnabled;
             var zxNetUsbSelected = IsZxNetUsbBoardEnabled;
+
+            if (omniSoundSelected && (neoGsSelected || multiSoundSelected ||
+                maxSelected || moonSoundSelected))
+                throw new InvalidOperationException(
+                    "ZX OmniSound already owns NeoGS, YM/SAA/SoundDrive and " +
+                    "OPL4 ports. Use the other slot for a non-audio board.");
 
             // Validate manual switch wiring before changing the bus.  Apply
             // can be rejected safely without adding/removing a board or
@@ -349,6 +372,7 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             SetBoardPresence<ZxmMoonSoundDevice>(moonSoundSelected);
             SetBoardPresence<ZxNetUsbDevice>(zxNetUsbSelected);
             SetBoardPresence<ZxMultiSoundMaxDevice>(maxSelected);
+            SetBoardPresence<ZxOmniSoundDevice>(omniSoundSelected);
             var multiSound = m_bmgr.FindDevice<ZxMultiSoundDevice>();
             if (multiSoundSelected && multiSound == null)
             {
@@ -414,6 +438,16 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                     slot1Device == PentEvoZxBusDevice.MultiSound);
             }
 
+            if (omniSoundSelected)
+            {
+                foreach (var ay in m_bmgr.FindDevices<AYCHRV>().ToArray())
+                    m_bmgr.Remove(ay);
+                foreach (var tsfm in m_bmgr
+                    .FindDevices<TurboSoundFmPro>().ToArray())
+                    m_bmgr.Remove(tsfm);
+                m_device.InternalSound = PentEvoInternalSound.None;
+            }
+
             m_device.ZxBusSlot1Enabled = m_slot1Enabled.Checked;
             m_device.ZxBusSlot1Device = slot1Device;
             m_device.ZxBusSlot2Enabled = m_slot2Enabled.Checked;
@@ -463,6 +497,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 PentEvoZxBusDevice.ZXNetUSB, "ZXNetUSB Rev.C (Ethernet)"));
             comboBox.Items.Add(new SlotChoice(
                 PentEvoZxBusDevice.MultiSoundMax, "ZX-MultiSound Max"));
+            comboBox.Items.Add(new SlotChoice(
+                PentEvoZxBusDevice.OmniSound, "ZX OmniSound"));
             comboBox.SelectedIndex = 0;
             parent.Controls.Add(comboBox);
             return comboBox;

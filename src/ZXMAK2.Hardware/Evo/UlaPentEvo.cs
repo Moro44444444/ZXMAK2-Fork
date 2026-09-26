@@ -25,6 +25,7 @@ namespace ZXMAK2.Hardware.Evo
         MoonSound,
         ZXNetUSB,
         MultiSoundMax,
+        OmniSound,
     }
 
     public class UlaPentEvo : UlaAtm450, IUlaFrameTiming, IUlaPlusDevice
@@ -80,6 +81,7 @@ namespace ZXMAK2.Hardware.Evo
         internal EvoRasterTiming ActiveRaster { get { return EvoRasterTiming.ForMode(m_activeRaster); } }
 
         public PentEvoInternalSound InternalSound { get; set; }
+        public PentEvoInternalSound OmniSoundPreviousMusic { get; set; }
         public int InternalSoundVolume { get; set; }
         public bool ZxBusSlot1Enabled { get; set; }
         public PentEvoZxBusDevice ZxBusSlot1Device { get; set; }
@@ -444,6 +446,7 @@ namespace ZXMAK2.Hardware.Evo
             for (var i = 0; i < m_ulaPlusColors.Length; i++)
                 m_ulaPlusColors[i] = DecodeUlaPlusColor(0);
             InternalSound = PentEvoInternalSound.AY8910CHRV;
+            OmniSoundPreviousMusic = PentEvoInternalSound.None;
             InternalSoundVolume = 100;
             ZxBusSlot1Enabled = false;
             ZxBusSlot1Device = PentEvoZxBusDevice.Empty;
@@ -459,6 +462,9 @@ namespace ZXMAK2.Hardware.Evo
                 itemNode,
                 "internalSound",
                 InternalSound);
+            OmniSoundPreviousMusic = Utils.GetXmlAttributeAsEnum(
+                itemNode, "omniSoundPreviousMusic",
+                PentEvoInternalSound.None);
             InternalSoundVolume = Utils.GetXmlAttributeAsInt32(
                 itemNode,
                 "internalSoundVolume",
@@ -486,6 +492,8 @@ namespace ZXMAK2.Hardware.Evo
             base.OnConfigSave(itemNode);
             Utils.SetXmlAttribute(itemNode, "ulaPlusEnabled", UlaPlusEnabled);
             Utils.SetXmlAttributeAsEnum(itemNode, "internalSound", InternalSound);
+            Utils.SetXmlAttributeAsEnum(itemNode,
+                "omniSoundPreviousMusic", OmniSoundPreviousMusic);
             Utils.SetXmlAttribute(
                 itemNode, "internalSoundVolume", InternalSoundVolume);
             Utils.SetXmlAttribute(itemNode, "zxBusSlot1Enabled", ZxBusSlot1Enabled);

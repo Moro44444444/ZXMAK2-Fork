@@ -28,6 +28,7 @@ internal static class PentEvoProfileProbe
             VerifyPentEvoMusicSelector();
             VerifyMachineSettingsNavigation();
             VerifyUlaMasterVolume();
+            VerifyOmniSoundSlots();
 
             var bus = new BusManager();
             bus.Init(null, true);
@@ -853,6 +854,79 @@ internal static class PentEvoProfileProbe
             add { }
             remove { }
         }
+    }
+
+    private static void VerifyOmniSoundSlots()
+    {
+        var bus = new BusManager();
+        bus.Init(null, true);
+        bus.Disconnect();
+        bus.Clear();
+        var ula = new UlaPentEvo();
+        var ay = new AYCHRV();
+        bus.Add(ula);
+        bus.Add(ay);
+        using (var music = new CtlSettingsGenericSound())
+        using (var slots = new CtlSettingsPentEvoZxBus())
+        using (var sd = new CtlSettingsNeoGsSd())
+        {
+            music.InitPentEvo(bus, null, ay);
+            slots.Initialize(bus, null, ula);
+            sd.Initialize(bus, null);
+            slots.ConfigurationChanged += delegate
+            {
+                music.SetMultiSoundYmOverride(
+                    slots.IsAutomaticMultiSoundYmActive,
+                    slots.IsOmniSoundBoardEnabled);
+                sd.SetBoardEnabled(slots.IsNeoGsBoardEnabled ||
+                    slots.IsOmniSoundBoardEnabled);
+            };
+            var enabled1 = GetField<CheckBox>(slots, "m_slot1Enabled");
+            var choice1 = GetField<ComboBox>(slots, "m_slot1Device");
+            var enabled2 = GetField<CheckBox>(slots, "m_slot2Enabled");
+            var choice2 = GetField<ComboBox>(slots, "m_slot2Device");
+            var selector = GetField<ComboBox>(music, "cbxPentEvoDevice");
+            choice1.SelectedIndex = 6;
+            enabled1.Checked = true;
+            Assert(!selector.Enabled && selector.SelectedIndex == 0,
+                "OmniSound did not automatically disable internal Music");
+            music.Apply();
+            slots.Apply();
+            Assert(bus.FindDevice<ZxOmniSoundDevice>() != null &&
+                bus.FindDevice<AYCHRV>() == null &&
+                ula.ZxBusSlot1Device == PentEvoZxBusDevice.OmniSound,
+                "OmniSound slot 1 Apply failed");
+            Assert(GetField<CheckBox>(sd, "m_connected").Enabled,
+                "OmniSound NeoGS SD settings were disabled");
+            var card = bus.FindDevice<ZxOmniSoundDevice>();
+            card.SdImageFileName = "omnisound-preserved.img";
+            choice2.SelectedIndex = 6;
+            enabled2.Checked = true;
+            music.Apply();
+            slots.Apply();
+            Assert(!enabled1.Checked &&
+                ula.ZxBusSlot2Device == PentEvoZxBusDevice.OmniSound &&
+                bus.FindDevice<ZxOmniSoundDevice>() == card &&
+                card.SdImageFileName == "omnisound-preserved.img",
+                "Moving OmniSound to slot 2 lost the board/media");
+            var xml = new XmlDocument();
+            var node = xml.AppendChild(xml.CreateElement("Device"));
+            ula.SaveConfigXml(node);
+            var restored = new UlaPentEvo();
+            restored.LoadConfigXml(node);
+            Assert(restored.ZxBusSlot2Device == PentEvoZxBusDevice.OmniSound &&
+                restored.OmniSoundPreviousMusic == PentEvoInternalSound.AY8910CHRV,
+                "OmniSound slot/previous Music did not survive XML");
+            enabled2.Checked = false;
+            Assert(selector.Enabled && selector.SelectedIndex == 1,
+                "Removing OmniSound did not restore previous Music");
+            music.Apply();
+            slots.Apply();
+            Assert(bus.FindDevice<ZxOmniSoundDevice>() == null &&
+                bus.FindDevice<AYCHRV>() != null,
+                "OmniSound removal Apply failed");
+        }
+        Console.WriteLine("OmniSound: slots 1/2, Music restore, SD and XML: PASS");
     }
 
     private static T GetField<T>(object target, string name)

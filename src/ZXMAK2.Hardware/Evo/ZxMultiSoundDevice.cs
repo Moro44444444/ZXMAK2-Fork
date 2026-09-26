@@ -59,6 +59,7 @@ namespace ZXMAK2.Hardware.Evo
         private readonly byte[] m_gsRom = new byte[GsRomSize];
         private readonly byte[] m_gsRam;
         private readonly bool m_isMax;
+        private readonly bool m_isOmni;
         private readonly byte[] m_dacSample = new byte[4];
         private readonly byte[] m_dacVolume = new byte[4];
 
@@ -88,10 +89,16 @@ namespace ZXMAK2.Hardware.Evo
         private bool m_effectiveGs;
         private bool m_effectiveSoundDrive;
 
-        protected ZxMultiSoundCore(bool isMax)
+        protected ZxMultiSoundCore(bool isMax) : this(isMax, false)
+        {
+        }
+
+        protected ZxMultiSoundCore(bool isMax, bool isOmni)
         {
             m_isMax = isMax;
-            m_gsRam = new byte[isMax ? 2 * 1024 * 1024 : 1024 * 1024];
+            m_isOmni = isOmni;
+            m_gsRam = new byte[isOmni ? 0 :
+                (isMax ? 2 * 1024 * 1024 : 1024 * 1024)];
             Name = isMax ? "ZX-MultiSound Max" : "ZX-MultiSound Rev.A2";
             Description = isMax
                 ? "ZX-MultiSound Max for ZXBUS: 2 x YM2203, SAA1099, " +
@@ -111,7 +118,7 @@ namespace ZXMAK2.Hardware.Evo
             m_effectiveGs = true;
             m_effectiveSoundDrive = true;
             m_volume = 100;
-            m_renderers = isMax
+            m_renderers = isMax && !isOmni
                 ? new ISoundRenderer[]
                   {
                       m_psg[0], m_psg[1], m_fm, m_saa,
@@ -143,7 +150,7 @@ namespace ZXMAK2.Hardware.Evo
 
         public bool RejectDc { get { return true; } }
 
-        public IEnumerable<ISoundRenderer> SoundRenderers
+        public virtual IEnumerable<ISoundRenderer> SoundRenderers
         {
             get { return m_renderers; }
         }
@@ -225,7 +232,7 @@ namespace ZXMAK2.Hardware.Evo
                 (!otherMultiSoundHasPriority || !AutomaticConfiguration);
             m_effectiveSaa = SaaEnabled &&
                 (!otherMultiSoundHasPriority || !AutomaticConfiguration);
-            m_effectiveGs = GeneralSoundEnabled &&
+            m_effectiveGs = !m_isOmni && GeneralSoundEnabled &&
                 (!neoGsInstalled || !AutomaticConfiguration) &&
                 (!otherMultiSoundHasPriority || !AutomaticConfiguration);
             m_effectiveSoundDrive = SoundDriveEnabled &&

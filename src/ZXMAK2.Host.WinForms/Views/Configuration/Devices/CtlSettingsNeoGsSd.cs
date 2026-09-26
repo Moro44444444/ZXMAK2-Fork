@@ -90,9 +90,10 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
         {
             m_bmgr = bmgr;
             var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
-            SetImagePath(neoGs == null
-                ? string.Empty
-                : neoGs.ConfiguredSdImageFileName);
+            var omni = m_bmgr.FindDevice<ZxOmniSoundDevice>();
+            SetImagePath(neoGs != null
+                ? neoGs.ConfiguredSdImageFileName
+                : omni != null ? omni.SdImageFileName : string.Empty);
         }
 
         public void SetBoardEnabled(bool enabled)
@@ -109,8 +110,14 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
 
             var neoGs = m_bmgr.FindDevice<NeoGsDevice>();
             if (neoGs == null)
+            {
+                var omni = m_bmgr.FindDevice<ZxOmniSoundDevice>();
+                if (omni != null)
+                    neoGs = omni.NeoGs;
+            }
+            if (neoGs == null)
                 throw new InvalidOperationException(
-                    "NeoGS must be active in a ZXBUS slot");
+                    "NeoGS or ZX OmniSound must be active in a ZXBUS slot");
             if (!m_connected.Checked)
             {
                 neoGs.ConfigureSdCard(string.Empty);

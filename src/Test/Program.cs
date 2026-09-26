@@ -50,6 +50,11 @@ namespace Test
                 TestZxMultiSoundMax();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/omnisound")
+            {
+                TestZxOmniSound();
+                return;
+            }
             if (args.Length >= 1 && args[0].ToLower() == "/evo-display")
             {
                 TestEvoDisplayModes();
@@ -1159,6 +1164,194 @@ namespace Test
                 "Optional TSFM #FFFD/#BFFD SAA ports: {0}",
                 tsFmPortCompatibility ? "PASS" : "FAIL");
             Console.ResetColor();
+            if (!passed)
+                Environment.ExitCode = 1;
+        }
+
+        private static void TestZxOmniSound()
+        {
+            var board = new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice();
+            board.SdImageFileName = "omnisound-test.img";
+            var xml = new XmlDocument();
+            var node = xml.AppendChild(xml.CreateElement("Device"));
+            board.SaveConfigXml(node);
+            var restored = new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice();
+            restored.LoadConfigXml(node);
+            var configOk = restored.SdImageFileName ==
+                "omnisound-test.img" && restored.TsFmSaaPortCompatibility &&
+                !restored.GeneralSoundEnabled;
+
+            IMemoryDevice memory =
+                new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+            var ula = new ZXMAK2.Hardware.Spectrum.UlaSpectrum48();
+            var machine = GetTestMachine(Resources.machines_test);
+            machine.BusManager.Disconnect();
+            machine.BusManager.Clear();
+            machine.BusManager.Add((BusDeviceBase)memory);
+            machine.BusManager.Add((BusDeviceBase)ula);
+            machine.BusManager.Add(board);
+            if (!machine.BusManager.Connect())
+                throw new InvalidOperationException("OmniSound connect failed");
+
+            var renderers = new System.Collections.Generic.List<ISoundRenderer>(
+                board.SoundRenderers);
+            var core = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore);
+            var gsRam = (byte[])core.GetField("m_gsRam",
+                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(board);
+            var ownershipOk = renderers.Count == 6 &&
+                gsRam.Length == 0 && !board.EffectiveGeneralSoundEnabled &&
+                board.EffectiveYmEnabled && board.EffectiveSaaEnabled &&
+                board.EffectiveSoundDriveEnabled && board.MoonSound.CoreAvailable;
+
+            const ushort start = 0x4000;
+            var program = new System.Collections.Generic.List<byte>();
+            // Both independent YM2203 SSG sections must produce audio.
+            AddPortWrite(program, 0xFFFD, 0xF6);
+            AddAyWrite(program, 0x00, 0x34);
+            AddAyWrite(program, 0x01, 0x01);
+            AddAyWrite(program, 0x07, 0x3E);
+            AddAyWrite(program, 0x08, 0x0F);
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0x62);
+            AddAyWrite(program, 0x01, 0x02);
+            AddAyWrite(program, 0x07, 0x3E);
+            AddAyWrite(program, 0x08, 0x0F);
+            // Preload SAA through the native MultiSound #1FF/#FF ports.
+            AddPortWrite(program, 0x01FF, 0x00);
+            AddPortWrite(program, 0x00FF, 0xFF);
+            AddPortWrite(program, 0x01FF, 0x08);
+            AddPortWrite(program, 0x00FF, 0x80);
+            AddPortWrite(program, 0x01FF, 0x10);
+            AddPortWrite(program, 0x00FF, 0x03);
+            AddPortWrite(program, 0x01FF, 0x14);
+            AddPortWrite(program, 0x00FF, 0x01);
+            AddPortWrite(program, 0x01FF, 0x1C);
+            AddPortWrite(program, 0x00FF, 0x01);
+            // SoundDrive's four DACs are owned by the MultiSound half.
+            AddPortWrite(program, 0x000F, 0x20);
+            AddPortWrite(program, 0x001F, 0x60);
+            AddPortWrite(program, 0x004F, 0xA0);
+            AddPortWrite(program, 0x005F, 0xE0);
+            // The OPL4 FM port must remain available without a second OPL3.
+            AddMoonSoundFmWrite(program, 0x34C4, 0x20, 0x01);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x23, 0x01);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x40, 0x10);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x43, 0x00);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x60, 0xF0);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x63, 0xF0);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x80, 0x77);
+            AddMoonSoundFmWrite(program, 0x34C4, 0x83, 0x77);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xC0, 0x30);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xA0, 0x98);
+            AddMoonSoundFmWrite(program, 0x34C4, 0xB0, 0x31);
+            program.Add(0x18);
+            program.Add(0xFE);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.IsRunning = false;
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+            var ym0Peak = GetStereoPeak(renderers[0].AudioBuffer);
+            var ym1Peak = GetStereoPeak(renderers[1].AudioBuffer);
+            var directSaaPeak = GetStereoPeak(renderers[3].AudioBuffer);
+            var drivePeak = GetStereoPeak(board.AudioBuffer);
+            var oplPeak = GetStereoPeak(board.MoonSound.AudioBuffer);
+
+            // A fresh reset proves the TSFM alias works independently of
+            // the preceding native SAA writes.
+            program.Clear();
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0xFF);
+            AddAyWrite(program, 0x08, 0x80);
+            AddAyWrite(program, 0x10, 0x03);
+            AddAyWrite(program, 0x14, 0x01);
+            AddAyWrite(program, 0x1C, 0x01);
+            program.Add(0x18);
+            program.Add(0xFE);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+            var tsFmSaaPeak = GetStereoPeak(renderers[3].AudioBuffer);
+
+            program.Clear();
+            AddMoonSoundFmWrite(program, 0x78C6, 0x05, 0x03);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0xF9, 0x00);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0x08, 0x00);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0x20, 0xFE);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0x38, 0x07);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0x50, 0x01);
+            AddMoonSoundWaveWrite(program, 0x9A7E, 0x68, 0x80);
+            program.Add(0x18); program.Add(0xFE);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            machine.ExecuteFrame();
+            var pcmPeak = GetStereoPeak(board.MoonSound.AudioBuffer);
+
+            // The composed NeoGS must actually consume a host command,
+            // not merely exist as a silent renderer in the device list.
+            for (var frame = 0; frame < 200; frame++)
+                machine.ExecuteFrame();
+            program.Clear();
+            AddPortWrite(program, 0x00BB, 0x00);
+            AddPortReadAndStore(program, 0x00BB, 0x4700);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(0x4600 + i), program[i]);
+            machine.CPU.regs.PC = 0x4600;
+            while (machine.CPU.regs.PC < 0x4600 + program.Count)
+                machine.DebugStepInto();
+            var gsPending = (memory.RDMEM_DBG(0x4700) & 1) != 0;
+            memory.WRMEM_DBG(0x4800, 0x18);
+            memory.WRMEM_DBG(0x4801, 0xFE);
+            machine.CPU.regs.PC = 0x4800;
+            for (var frame = 0; frame < 200; frame++)
+                machine.ExecuteFrame();
+            program.Clear();
+            AddPortReadAndStore(program, 0x00BB, 0x4701);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(0x4600 + i), program[i]);
+            machine.CPU.regs.PC = 0x4600;
+            while (machine.CPU.regs.PC < 0x4600 + program.Count)
+                machine.DebugStepInto();
+            var gsReady = (memory.RDMEM_DBG(0x4701) & 1) == 0;
+            machine.BusManager.Disconnect();
+
+            var conflictRejected = true;
+            BusDeviceBase[] conflicts = {
+                new ZXMAK2.Hardware.Evo.NeoGsDevice(),
+                new ZXMAK2.Hardware.Evo.ZxmMoonSoundDevice(),
+                new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice(),
+                new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice(),
+                new ZXMAK2.Hardware.Evo.TurboSoundFmPro(),
+                new ZXMAK2.Hardware.Evo.AYCHRV(),
+            };
+            foreach (var conflict in conflicts)
+            {
+                machine.BusManager.Add(conflict);
+                var rejected = false;
+                try { board.BusInit(machine.BusManager); }
+                catch (InvalidOperationException) { rejected = true; }
+                conflictRejected &= rejected;
+                machine.BusManager.Remove(conflict);
+            }
+            machine.Dispose();
+
+            var passed = configOk && ownershipOk && ym0Peak > 256 &&
+                ym1Peak > 256 && directSaaPeak > 256 &&
+                tsFmSaaPeak > 256 && drivePeak > 0 && oplPeak > 256 &&
+                pcmPeak > 256 && gsPending && gsReady && conflictRejected;
+            Console.WriteLine("ZX OmniSound: config={0}, owners={1}, " +
+                "YM={2}/{3}, SAA={4}/{5}, Drive={6}, OPL={7}: {8}",
+                configOk, ownershipOk, ym0Peak, ym1Peak,
+                directSaaPeak, tsFmSaaPeak, drivePeak, oplPeak,
+                passed ? "PASS" : "FAIL");
+            Console.WriteLine("OPL4 PCM={0}, NeoGS pending/ready={1}/{2}, " +
+                "conflict guard={3}", pcmPeak, gsPending, gsReady,
+                conflictRejected);
             if (!passed)
                 Environment.ExitCode = 1;
         }
