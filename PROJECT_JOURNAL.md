@@ -3266,3 +3266,23 @@ ZXM-MoonSound Rev.01 реализована согласно опубликов�
   CPU 244–251 мс.
   Ручную проверку настоящего нажатия Alt+P в этой папке ещё должен выполнить
   пользователь.
+
+## Изоляция Alt+Enter и Maximum Speed Ctrl+S — v54 test — 2026-09-26
+
+- Точечная правка на основе v53; папка v53 и её ветка сохранены. Из runtime
+  файлов заменена только `ZXMAK2.Host.WinForms.dll`, звук/платы не менялись.
+- Alt+Enter вызывает ту же команду Full Screen из меню. DirectInput
+  отфильтровывает обычный Enter и NumPadEnter во время сочетания, чтобы
+  одновременно не подтверждать выбор внутри ZX Evolution.
+- Maximum Speed перенесён на Ctrl+S; надпись в меню и подсказка кнопки
+  обновлены. Старый обработчик Alt+Scroll удалён (в меню ранее ошибочно
+  показывался Ctrl+Scroll). DirectInput не передаёт S во время Ctrl+S.
+- Сохранён перехват Alt+P из v53. Обычные P/S/Enter, а также сочетания
+  Ctrl+Shift+S не резервируются этими командами. Правый Alt/AltGr учитывается.
+- Release-сборка: 0 ошибок, прежние два ruleset warning. WinForms probe
+  проверил обе ветки команд (`ProcessCmdKey`/`OnKeyDown`), обновлённые
+  подписи, отсутствие старой привязки Scroll и фильтры DirectInput для
+  Enter/NumPadEnter и обоих Ctrl. Ручная проверка физических клавиш ожидается.
+  Из portable-папки также прошли `/master-volume` и `/evo-display`.
+- Папка: `L:\Work_two\ZX\ZXMAK2-v54-ZXEVO-BC-Beta1-HostShortcuts-Test-20260926\release`.
+  Публикации GitHub нет.

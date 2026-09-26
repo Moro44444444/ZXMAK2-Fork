@@ -408,7 +408,7 @@
             // menuVmMaximumSpeed
             // 
             this.menuVmMaximumSpeed.Name = "menuVmMaximumSpeed";
-            this.menuVmMaximumSpeed.ShortcutKeyDisplayString = "Ctrl+Scroll";
+            this.menuVmMaximumSpeed.ShortcutKeyDisplayString = "Ctrl+S";
             this.menuVmMaximumSpeed.Size = new System.Drawing.Size(226, 22);
             this.menuVmMaximumSpeed.Text = "Maximum Speed";
             // 
@@ -568,6 +568,7 @@
             this.tbrButtonMaxSpeed.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrButtonMaxSpeed.Name = "tbrButtonMaxSpeed";
             this.tbrButtonMaxSpeed.Size = new System.Drawing.Size(36, 36);
+            this.tbrButtonMaxSpeed.ToolTipText = "Maximum Speed (Ctrl+S)";
             // 
             // tbrButtonWarmReset
             // 

@@ -849,27 +849,17 @@ namespace ZXMAK2.Host.WinForms.Views
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            // DirectInput independently reads physical keys; its Alt+P gate
-            // prevents the guest from seeing P. This path opens the host UI.
-            if (IsMachineSettingsShortcut(keyData))
-            {
-                if (menuVmSettings.Enabled)
-                {
-                    menuVmSettings.PerformClick();
-                }
+            // DirectInput independently reads physical keys; its shortcut
+            // filters prevent guest input. This path executes host commands.
+            if (TryExecuteHostShortcut(keyData))
                 return true;
-            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
-            if (IsMachineSettingsShortcut(e.KeyData))
+            if (TryExecuteHostShortcut(e.KeyData))
             {
-                if (menuVmSettings.Enabled)
-                {
-                    menuVmSettings.PerformClick();
-                }
                 e.SuppressKeyPress = true;
                 e.Handled = true;
                 return;
@@ -882,16 +872,6 @@ namespace ZXMAK2.Host.WinForms.Views
             if (e.Alt && e.Control)
             {
                 _host.Uncapture();
-            }
-            // FULLSCREEN
-            if (e.Alt && e.KeyCode == Keys.Enter)
-            {
-                if (e.Alt)
-                {
-                    OnCommand(CommandViewFullScreen);
-                }
-                e.Handled = true;
-                return;
             }
             //RESET
             if (e.KeyCode == Keys.F12)
@@ -922,13 +902,6 @@ namespace ZXMAK2.Host.WinForms.Views
                 e.Handled = true;
                 return;
             }
-            // Max Speed
-            if (e.Alt && e.KeyCode == Keys.Scroll)
-            {
-                OnCommand(CommandVmMaxSpeed);
-                e.Handled = true;
-                return;
-            }
             if (e.Alt && e.Control && e.KeyCode == Keys.F1)
             {
                 OnCommand(CommandQuickLoad);
@@ -943,10 +916,26 @@ namespace ZXMAK2.Host.WinForms.Views
             }
         }
 
-        private static bool IsMachineSettingsShortcut(Keys keyData)
+        private bool TryExecuteHostShortcut(Keys keyData)
+        {
+            ToolStripMenuItem item;
+            if (IsAltHostShortcut(keyData, Keys.P))
+                item = menuVmSettings;
+            else if (IsAltHostShortcut(keyData, Keys.Enter))
+                item = menuViewFullScreen;
+            else if (keyData == (Keys.Control | Keys.S))
+                item = menuVmMaximumSpeed;
+            else
+                return false;
+            if (item.Enabled)
+                item.PerformClick();
+            return true;
+        }
+
+        private static bool IsAltHostShortcut(Keys keyData, Keys key)
         {
             var modifiers = keyData & Keys.Modifiers;
-            if ((keyData & Keys.KeyCode) != Keys.P ||
+            if ((keyData & Keys.KeyCode) != key ||
                 (modifiers & Keys.Alt) == 0 ||
                 (modifiers & Keys.Shift) != 0)
             {

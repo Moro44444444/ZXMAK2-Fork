@@ -585,6 +585,43 @@ internal static class PentEvoProfileProbe
             Assert(settingsClicks == 2 && keyEvent.Handled &&
                 keyEvent.SuppressKeyPress,
                 "Alt+P key-down fallback did not open Machine Settings");
+            var hostMenus = new[]
+            {
+                GetField<ToolStripMenuItem>(view, "menuViewFullScreen"),
+                GetField<ToolStripMenuItem>(view, "menuVmMaximumSpeed")
+            };
+            var hostKeys = new[] { Keys.Alt | Keys.Enter, Keys.Control | Keys.S };
+            for (var i = 0; i < hostMenus.Length; i++)
+            {
+                hostMenus[i].Enabled = true;
+                var clicks = 0;
+                EventHandler countClick = (sender, args) => clicks++;
+                hostMenus[i].Click += countClick;
+                var message = new object[]
+                {
+                    Message.Create(IntPtr.Zero, 0x0100, IntPtr.Zero, IntPtr.Zero),
+                    hostKeys[i]
+                };
+                Assert((bool)processCmdKey.Invoke(view, message) && clicks == 1,
+                    "Host shortcut did not invoke its menu command: " + hostKeys[i]);
+                var keyDown = new KeyEventArgs(hostKeys[i]);
+                onKeyDown.Invoke(view, new object[] { keyDown });
+                Assert(clicks == 2 && keyDown.Handled && keyDown.SuppressKeyPress,
+                    "Host shortcut fallback leaked to guest: " + hostKeys[i]);
+                hostMenus[i].Click -= countClick;
+            }
+            Assert(hostMenus[1].ShortcutKeyDisplayString == "Ctrl+S" &&
+                GetField<ToolStripButton>(view, "tbrButtonMaxSpeed").ToolTipText ==
+                    "Maximum Speed (Ctrl+S)",
+                "Maximum Speed menu/button retained the old shortcut");
+            var dispatcher = typeof(MainView).GetMethod("TryExecuteHostShortcut",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            foreach (var oldKey in new[] { Keys.Control | Keys.Scroll,
+                Keys.Alt | Keys.Scroll, Keys.S, Keys.Control | Keys.Shift | Keys.S })
+            {
+                Assert(!(bool)dispatcher.Invoke(view, new object[] { oldKey }),
+                    "Unexpected host shortcut: " + oldKey);
+            }
             foreach (var name in new[]
             {
                 "tbrButtonOpen", "tbrButtonSave", "tbrButtonWarmReset"
@@ -702,6 +739,36 @@ internal static class PentEvoProfileProbe
         state[56] = 0x80;
         Assert(!(bool)method.Invoke(null, new object[] { state }),
             "Left Ctrl+Alt+P was unexpectedly blocked from the guest keyboard");
+        var fullScreen = typeof(DirectKeyboard).GetMethod(
+            "IsFullScreenShortcutPressed", BindingFlags.Static | BindingFlags.NonPublic);
+        var maximumSpeed = typeof(DirectKeyboard).GetMethod(
+            "IsMaximumSpeedShortcutPressed", BindingFlags.Static | BindingFlags.NonPublic);
+        state = new byte[256];
+        state[28] = 0x80; // Enter
+        Assert(!(bool)fullScreen.Invoke(null, new object[] { state }),
+            "Plain Enter was blocked from the guest keyboard");
+        state[56] = 0x80;
+        Assert((bool)fullScreen.Invoke(null, new object[] { state }),
+            "Alt+Enter leaked to the guest keyboard");
+        state[28] = 0;
+        state[156] = 0x80; // Keypad Enter
+        Assert((bool)fullScreen.Invoke(null, new object[] { state }),
+            "Alt+keypad Enter leaked to the guest keyboard");
+        state = new byte[256];
+        state[31] = 0x80; // S
+        Assert(!(bool)maximumSpeed.Invoke(null, new object[] { state }),
+            "Plain S was blocked from the guest keyboard");
+        foreach (var ctrl in new[] { 29, 157 })
+        {
+            state[ctrl] = 0x80;
+            Assert((bool)maximumSpeed.Invoke(null, new object[] { state }),
+                "Ctrl+S leaked to the guest keyboard");
+            state[42] = 0x80;
+            Assert(!(bool)maximumSpeed.Invoke(null, new object[] { state }),
+                "Ctrl+Shift+S was unexpectedly reserved by the host");
+            state[42] = 0;
+            state[ctrl] = 0;
+        }
     }
 
     private sealed class ProbeMachine : IVirtualMachine

@@ -122,10 +122,15 @@ namespace ZXMAK2.Host.WinForms.Mdx
             if (hr.IsSuccess)
             {
                 var suppressGuestP = IsMachineSettingsShortcutPressed(_diState);
+                var suppressGuestEnter = IsFullScreenShortcutPressed(_diState);
+                var suppressGuestS = IsMaximumSpeedShortcutPressed(_diState);
                 foreach (var key in _mapper.Keys)
                 {
                     _state[key] = _diState[(int)_mapper[key]] != 0 &&
-                        !(suppressGuestP && key == ZxmakKey.P);
+                        !(suppressGuestP && key == ZxmakKey.P) &&
+                        !(suppressGuestEnter && (key == ZxmakKey.Return ||
+                            key == ZxmakKey.NumPadEnter)) &&
+                        !(suppressGuestS && key == ZxmakKey.S);
                 }
             }
             else if (hr == ErrorCode.DIERR_NOTACQUIRED)
@@ -150,6 +155,29 @@ namespace ZXMAK2.Host.WinForms.Mdx
 
         private static bool IsMachineSettingsShortcutPressed(byte[] state)
         {
+            return IsAltShortcutPressed(state) && state[(int)MdxKey.P] != 0;
+        }
+
+        private static bool IsFullScreenShortcutPressed(byte[] state)
+        {
+            return IsAltShortcutPressed(state) &&
+                (state[(int)MdxKey.Return] != 0 ||
+                 state[(int)MdxKey.NumPadEnter] != 0);
+        }
+
+        private static bool IsMaximumSpeedShortcutPressed(byte[] state)
+        {
+            var control = state[(int)MdxKey.LeftControl] != 0 ||
+                state[(int)MdxKey.RightControl] != 0;
+            var alt = state[(int)MdxKey.LeftAlt] != 0 ||
+                state[(int)MdxKey.RightAlt] != 0;
+            var shift = state[(int)MdxKey.LeftShift] != 0 ||
+                state[(int)MdxKey.RightShift] != 0;
+            return control && !alt && !shift && state[(int)MdxKey.S] != 0;
+        }
+
+        private static bool IsAltShortcutPressed(byte[] state)
+        {
             var alt = state[(int)MdxKey.LeftAlt] != 0 ||
                 state[(int)MdxKey.RightAlt] != 0;
             var control = state[(int)MdxKey.LeftControl] != 0 ||
@@ -158,7 +186,7 @@ namespace ZXMAK2.Host.WinForms.Mdx
                 state[(int)MdxKey.RightShift] != 0;
             // Windows reports AltGr as right Alt plus a synthetic Ctrl.
             return alt && (!control || state[(int)MdxKey.RightAlt] != 0) &&
-                !shift && state[(int)MdxKey.P] != 0;
+                !shift;
         }
 
         private bool TryAcquire()
