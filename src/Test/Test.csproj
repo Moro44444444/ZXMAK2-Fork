@@ -91,6 +91,10 @@
       <Name>ZXMAK2.Dependency</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\ZXMAK2.Hardware.Circuits\ZXMAK2.Hardware.Circuits.csproj">
+      <Name>ZXMAK2.Hardware.Circuits</Name>
+      <Private>False</Private>
+    </ProjectReference>
     <ProjectReference Include="..\ZXMAK2.Engine.Cpu\ZXMAK2.Engine.Cpu.csproj">
       <Project>{DA58F7C5-8365-4483-AAE4-0C6A90D42C35}</Project>
       <Name>ZXMAK2.Engine.Cpu</Name>

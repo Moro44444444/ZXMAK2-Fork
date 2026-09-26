@@ -11,6 +11,8 @@ namespace ZXMAK2.Host.Entities
         private readonly uint[] _mixBuffer;
         private readonly bool _rejectDc;
         private readonly int _masterVolume;
+        private readonly int[] _sourceGains;
+        private readonly bool _hasSourceGain;
         private uint[] _buffer;
         private uint[][] _sources;
         private short _dcPreviousInputLeft;
@@ -37,12 +39,28 @@ namespace ZXMAK2.Host.Entities
             IEnumerable<uint[]> sources,
             bool rejectDc,
             int masterVolume)
+            : this(sampleRate, sources, rejectDc, masterVolume, null)
+        {
+        }
+
+        public FrameSound(
+            int sampleRate,
+            IEnumerable<uint[]> sources,
+            bool rejectDc,
+            int masterVolume,
+            IEnumerable<int> sourceGains)
         {
             _mixBuffer = new uint[(int)(sampleRate / 50D + 0.5D)];
             SampleRate = sampleRate;
             _sources = sources.ToArray();
             _rejectDc = rejectDc;
             _masterVolume = Math.Max(0, Math.Min(200, masterVolume));
+            _sourceGains = sourceGains != null
+                ? sourceGains.Select(gain => Math.Max(0, Math.Min(200, gain))).ToArray()
+                : Enumerable.Repeat(100, _sources.Length).ToArray();
+            if (_sourceGains.Length != _sources.Length)
+                throw new ArgumentException("One gain is required for each source", "sourceGains");
+            _hasSourceGain = _sourceGains.Any(gain => gain != 100);
         }
 
         #region ISoundFrame
@@ -78,7 +96,7 @@ namespace ZXMAK2.Host.Entities
 
         #region Private
 
-        private unsafe static void Mix(uint[] dst, uint[][] sources)
+        private unsafe void Mix(uint[] dst, uint[][] sources)
         {
             fixed (uint* puidst = dst)
             {
@@ -88,22 +106,23 @@ namespace ZXMAK2.Host.Entities
                     var index = i * 2;
                     var left = 0;
                     var right = 0;
-                    foreach (var src in sources)
+                    for (var sourceIndex = 0; sourceIndex < sources.Length; sourceIndex++)
                     {
+                        var src = sources[sourceIndex];
                         fixed (uint* puisrc = src)
                         {
                             var psrc = (short*)puisrc;
-                            left += psrc[index];
-                            right += psrc[index + 1];
+                            left += psrc[index] * _sourceGains[sourceIndex];
+                            right += psrc[index + 1] * _sourceGains[sourceIndex];
                         }
                     }
-                    if (sources.Length > 1)
-                    {
-                        left /= sources.Length;
-                        right /= sources.Length;
-                    }
-                    pdst[index] = (short)left;
-                    pdst[index + 1] = (short)right;
+                    var divisor = 100 * Math.Max(1, sources.Length);
+                    left /= divisor;
+                    right /= divisor;
+                    // Limiting occurs only after the sources have been mixed.
+                    // 100% sources retain the previous bit-exact arithmetic.
+                    pdst[index] = _hasSourceGain ? SoftLimit(left) : (short)left;
+                    pdst[index + 1] = _hasSourceGain ? SoftLimit(right) : (short)right;
                 }
             }
         }
@@ -170,25 +189,26 @@ namespace ZXMAK2.Host.Entities
                 {
                     var scaled = (int)Math.Round(
                         samples[i] * _masterVolume / 100.0);
-                    if (_masterVolume > 100)
-                    {
-                        const int knee = 24576;
-                        var magnitude = Math.Abs(scaled);
-                        if (magnitude > knee)
-                        {
-                            var excess = magnitude - knee;
-                            var headroom = short.MaxValue - knee;
-                            magnitude = knee +
-                                (int)((long)headroom * excess /
-                                    (headroom + excess));
-                            scaled = scaled < 0 ? -magnitude : magnitude;
-                        }
-                    }
-                    samples[i] = (short)Math.Max(
+                    samples[i] = _masterVolume > 100 ? SoftLimit(scaled) : (short)Math.Max(
                         short.MinValue,
                         Math.Min(short.MaxValue, scaled));
                 }
             }
+        }
+
+        private static short SoftLimit(int value)
+        {
+            const int knee = 24576;
+            var magnitude = Math.Abs(value);
+            if (magnitude > knee)
+            {
+                var excess = magnitude - knee;
+                var headroom = short.MaxValue - knee;
+                magnitude = knee + (int)((long)headroom * excess /
+                    (headroom + excess));
+                value = value < 0 ? -magnitude : magnitude;
+            }
+            return (short)Math.Max(short.MinValue, Math.Min(short.MaxValue, value));
         }
 
         #endregion Private

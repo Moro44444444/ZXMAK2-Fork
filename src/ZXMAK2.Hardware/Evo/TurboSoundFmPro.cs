@@ -450,7 +450,7 @@ namespace ZXMAK2.Hardware.Evo
         // afterwards, so register writes retain their exact video-frame time.
         private const uint ExternalSoundParameters = 0x03U | 0x0CU | 0x30U;
         private const uint ExternalClockRate = 8000000U;
-        private const uint ExternalOversample = 64U;
+        private readonly uint m_externalOversample;
 
         private readonly byte[] m_registers = new byte[0x20];
         private readonly double[] m_toneCounter = new double[ChannelCount];
@@ -477,8 +477,12 @@ namespace ZXMAK2.Hardware.Evo
         private int m_externalSampleRate;
         private byte[] m_externalPcm;
 
-        public TsFmSaa1099Renderer()
+        public TsFmSaa1099Renderer(uint oversamplePower = 64U)
         {
+            // SAASound's API takes log2(factor), not the factor itself.
+            // Keep the accepted legacy board setting until listening tests;
+            // OmniSound explicitly supplies 6 for real 64x oversampling.
+            m_externalOversample = oversamplePower;
             Name = "TSFM SAA1099";
             Description = "Philips SAA1099, 8 MHz, 6 tone/noise channels";
             ResetChip();
@@ -523,6 +527,14 @@ namespace ZXMAK2.Hardware.Evo
         {
             RenderToCurrentTime();
             WriteRegister(index & 0x1F, value);
+        }
+
+        public void SetData(byte value)
+        {
+            RenderToCurrentTime();
+            // RegAddr already delivered the address pulse. Repeating that
+            // pulse here would clock an external envelope a second time.
+            WriteRegister(m_register, value, true);
         }
 
         public void ResetChip()
@@ -746,14 +758,20 @@ namespace ZXMAK2.Hardware.Evo
             return InternalClock * 2D / (1 << parameter);
         }
 
-        private void WriteRegister(int index, byte value)
+        private void WriteRegister(int index, byte value,
+            bool addressAlreadyWritten = false)
         {
             if (index > 0x1C)
                 return;
             m_registers[index] = value;
             if (m_externalSound != IntPtr.Zero)
-                SaaSoundNative.WriteAddressData(m_externalSound, (byte)index,
-                    value);
+            {
+                if (addressAlreadyWritten)
+                    SaaSoundNative.WriteData(m_externalSound, value);
+                else
+                    SaaSoundNative.WriteAddressData(m_externalSound, (byte)index,
+                        value);
+            }
 
             if (index == 0x18 || index == 0x19)
             {
@@ -890,7 +908,7 @@ namespace ZXMAK2.Hardware.Evo
                 ExternalSoundParameters);
             SaaSoundNative.SetClockRate(m_externalSound, ExternalClockRate);
             SaaSoundNative.SetSampleRate(m_externalSound, (uint)sampleRate);
-            SaaSoundNative.SetOversample(m_externalSound, ExternalOversample);
+            SaaSoundNative.SetOversample(m_externalSound, m_externalOversample);
             m_externalSampleRate = sampleRate;
         }
 
@@ -924,6 +942,10 @@ namespace ZXMAK2.Hardware.Evo
             [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
                 EntryPoint = "SAASNDWriteAddress")]
             internal static extern void WriteAddress(IntPtr sound, byte address);
+
+            [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
+                EntryPoint = "SAASNDWriteData")]
+            internal static extern void WriteData(IntPtr sound, byte data);
 
             [DllImport(LibraryName, CallingConvention = CallingConvention.StdCall,
                 EntryPoint = "SAASNDWriteAddressData")]

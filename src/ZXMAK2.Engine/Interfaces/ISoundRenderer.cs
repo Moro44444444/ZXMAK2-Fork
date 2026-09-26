@@ -21,4 +21,13 @@ namespace ZXMAK2.Engine.Interfaces
     {
         bool RejectDc { get; }
     }
+
+    /// <summary>
+    /// Gain for a device and its additional renderers, applied with wide
+    /// accumulators in the final mixer, never clipped at individual sources.
+    /// </summary>
+    public interface ISoundSourceGainConfiguration
+    {
+        int OutputGainPercent { get; }
+    }
 }

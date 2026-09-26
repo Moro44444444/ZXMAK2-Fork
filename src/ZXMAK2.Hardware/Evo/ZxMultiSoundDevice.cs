@@ -44,8 +44,7 @@ namespace ZXMAK2.Hardware.Evo
             new TsFmPsgRenderer("MultiSound YM2203 D2 SSG", PanType.Cba),
         };
         private readonly TsFmFmRenderer m_fm = new TsFmFmRenderer();
-        private readonly TsFmSaa1099Renderer m_saa =
-            new TsFmSaa1099Renderer();
+        private readonly TsFmSaa1099Renderer m_saa;
         private readonly ISoundRenderer[] m_renderers;
         private readonly byte[] m_ymRegister = new byte[2];
         private readonly PsgPortState[] m_ira =
@@ -97,6 +96,7 @@ namespace ZXMAK2.Hardware.Evo
         {
             m_isMax = isMax;
             m_isOmni = isOmni;
+            m_saa = new TsFmSaa1099Renderer(isOmni ? 6U : 64U);
             m_gsRam = new byte[isOmni ? 0 :
                 (isMax ? 2 * 1024 * 1024 : 1024 * 1024)];
             Name = isMax ? "ZX-MultiSound Max" : "ZX-MultiSound Rev.A2";
@@ -430,7 +430,10 @@ namespace ZXMAK2.Hardware.Evo
             if (m_effectiveSaa && TsFmSaaPortCompatibility &&
                 m_tsFmSaaSelected)
             {
-                m_saa.SetReg(m_saa.RegAddr, value);
+                if (m_isOmni)
+                    m_saa.SetData(value);
+                else
+                    m_saa.SetReg(m_saa.RegAddr, value);
                 return;
             }
             if (!m_effectiveYm)
@@ -485,7 +488,12 @@ namespace ZXMAK2.Hardware.Evo
             if ((address & 0x0100) != 0)
                 m_saa.RegAddr = value;
             else
-                m_saa.SetReg(m_saa.RegAddr, value);
+            {
+                if (m_isOmni)
+                    m_saa.SetData(value);
+                else
+                    m_saa.SetReg(m_saa.RegAddr, value);
+            }
         }
 
         private void WriteSoundDrive(

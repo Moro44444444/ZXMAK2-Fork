@@ -1170,6 +1170,7 @@ namespace Test
 
         private static void TestZxOmniSound()
         {
+            TestOmniPsgEnvelopes();
             var board = new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice();
             board.SdImageFileName = "omnisound-test.img";
             var xml = new XmlDocument();
@@ -1202,6 +1203,11 @@ namespace Test
                 gsRam.Length == 0 && !board.EffectiveGeneralSoundEnabled &&
                 board.EffectiveYmEnabled && board.EffectiveSaaEnabled &&
                 board.EffectiveSoundDriveEnabled && board.MoonSound.CoreAvailable;
+            var mixerGains = (int[])typeof(FrameSound).GetField("_sourceGains",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(machine.BusManager.SoundFrame);
+            ownershipOk &= mixerGains.Length == 7;
+            foreach (var gain in mixerGains) ownershipOk &= gain == 140;
 
             const ushort start = 0x4000;
             var program = new System.Collections.Generic.List<byte>();
@@ -1292,6 +1298,36 @@ namespace Test
             machine.ExecuteFrame();
             var pcmPeak = GetStereoPeak(board.MoonSound.AudioBuffer);
 
+            program.Clear();
+            AddPortWrite(program, 0xFFFD, 0xF7);
+            AddAyWrite(program, 0x00, 0xFF);
+            AddAyWrite(program, 0x08, 0x80);
+            AddAyWrite(program, 0x10, 0x03);
+            AddAyWrite(program, 0x14, 0x01);
+            AddAyWrite(program, 0x1C, 0x01);
+            program.Add(0x18); program.Add(0xFE);
+            for (var i = 0; i < program.Count; i++)
+                memory.WRMEM_DBG((ushort)(start + i), program[i]);
+            machine.DebugReset();
+            machine.CPU.regs.PC = start;
+            for (var frame = 0; frame < 10; frame++) machine.ExecuteFrame();
+            var toneSamples = new System.Collections.Generic.List<short>();
+            for (var frame = 0; frame < 100; frame++)
+            {
+                machine.ExecuteFrame();
+                foreach (var sample in renderers[3].AudioBuffer)
+                    toneSamples.Add(GetLeft(sample));
+            }
+            long toneSum = 0;
+            foreach (var sample in toneSamples) toneSum += sample;
+            var mean = (double)toneSum / toneSamples.Count;
+            var edges = 0;
+            for (var i = 1; i < toneSamples.Count; i++)
+                if (toneSamples[i - 1] < mean && toneSamples[i] >= mean) edges++;
+            var saaFrequency = (double)edges * renderers[3].SampleRate / toneSamples.Count;
+            var expectedSaaFrequency = 8000000D * 8 / (512D * (511 - 128));
+            var frequencyOk = Math.Abs(saaFrequency - expectedSaaFrequency) < 1;
+
             // The composed NeoGS must actually consume a host command,
             // not merely exist as a silent renderer in the device list.
             for (var frame = 0; frame < 200; frame++)
@@ -1343,7 +1379,7 @@ namespace Test
             var passed = configOk && ownershipOk && ym0Peak > 256 &&
                 ym1Peak > 256 && directSaaPeak > 256 &&
                 tsFmSaaPeak > 256 && drivePeak > 0 && oplPeak > 256 &&
-                pcmPeak > 256 && gsPending && gsReady && conflictRejected;
+                pcmPeak > 256 && gsPending && gsReady && conflictRejected && frequencyOk;
             Console.WriteLine("ZX OmniSound: config={0}, owners={1}, " +
                 "YM={2}/{3}, SAA={4}/{5}, Drive={6}, OPL={7}: {8}",
                 configOk, ownershipOk, ym0Peak, ym1Peak,
@@ -1352,8 +1388,56 @@ namespace Test
             Console.WriteLine("OPL4 PCM={0}, NeoGS pending/ready={1}/{2}, " +
                 "conflict guard={3}", pcmPeak, gsPending, gsReady,
                 conflictRejected);
+            Console.WriteLine("SAA frequency measured/expected={0:F3}/{1:F3} Hz",
+                saaFrequency, expectedSaaFrequency);
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static void TestOmniPsgEnvelopes()
+        {
+            var chip = new ZXMAK2.Hardware.Circuits.Sound.PsgChip();
+            chip.ChipFrequency = 1750000;
+            chip.AmpType = ZXMAK2.Hardware.Circuits.Sound.AmpType.Ym2203;
+            var envelope = chip.GetType().GetField("m_env",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            for (var shape = 0; shape < 16; shape++)
+            {
+                chip.Reset();
+                chip.SetReg(7, 0x3F);
+                chip.SetReg(8, 0x10);
+                chip.SetReg(11, 1);
+                chip.SetReg(13, (byte)shape);
+                var step = 0;
+                chip.UpdateHandler = delegate(double time, ushort left, ushort right)
+                {
+                    step++;
+                    int expected;
+                    if (shape < 4 || shape == 9)
+                        expected = Math.Max(0, 31 - step);
+                    else if (shape < 8 || shape == 15)
+                        expected = step < 32 ? step : 0;
+                    else if (shape == 8)
+                        expected = 31 - step % 32;
+                    else if (shape == 10)
+                        expected = step % 64 < 32 ? 31 - step % 64 : step % 64 - 32;
+                    else if (shape == 11)
+                        expected = step < 32 ? 31 - step : 31;
+                    else if (shape == 12)
+                        expected = step % 32;
+                    else if (shape == 13)
+                        expected = Math.Min(31, step);
+                    else
+                        expected = step % 64 < 32 ? step % 64 : 63 - step % 64;
+                    if ((int)envelope.GetValue(chip) != expected)
+                        throw new InvalidOperationException("YM envelope shape " + shape +
+                            " diverged at step " + step);
+                };
+                chip.Update(0, 96 * 50D * 8 / chip.ChipFrequency - 1e-12);
+                if (step != 96)
+                    throw new InvalidOperationException("YM envelope clock divider changed");
+            }
+            Console.WriteLine("YM2203 SSG: all 16 envelope shapes, 96 steps each: PASS");
         }
 
         private static void TestZxMultiSoundMax()
@@ -1475,6 +1559,27 @@ namespace Test
 
         private static void TestMasterVolume()
         {
+            var weighted = new FrameSound(50,
+                new uint[][] { new uint[] { PackStereoSample(10000) },
+                    new uint[] { PackStereoSample(2000) } },
+                false, 100, new int[] { 140, 100 });
+            if (ReadLeftSample(weighted) != 8000)
+                throw new InvalidOperationException("Card gain changed the unrelated source");
+            var cancelled = new FrameSound(50,
+                new uint[][] { new uint[] { PackStereoSample(30000) },
+                    new uint[] { PackStereoSample(-30000) } },
+                false, 100, new int[] { 140, 140 });
+            if (ReadLeftSample(cancelled) != 0)
+                throw new InvalidOperationException("Sources were limited before mixing");
+            for (var sample = -32768; sample <= 32767; sample += 127)
+            {
+                var result = ReadLeftSample(new FrameSound(50,
+                    new uint[][] { new uint[] { PackStereoSample((short)sample) } },
+                    false, 100, new int[] { 140 }));
+                if (Math.Sign(result) != Math.Sign(sample) ||
+                    (Math.Abs(sample) < 17000 && result != sample * 140 / 100))
+                    throw new InvalidOperationException("Wide card gain wrapped or distorted low levels");
+            }
             var source = new uint[] { PackStereoSample(10000) };
             var sources = new uint[][] { source, source };
             if (ReadLeftSample(new FrameSound(50, sources, false, 0)) != 0 ||

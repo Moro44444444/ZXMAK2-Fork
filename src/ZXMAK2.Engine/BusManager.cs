@@ -336,13 +336,26 @@ namespace ZXMAK2.Engine
                 if (jtag != null)
                     jtag.Attach(m_debuggable);
             }
+            var sourceGains = soundRenderers.Select(renderer =>
+            {
+                var owner = m_deviceList.FirstOrDefault(device =>
+                    device is ISoundSourceGainConfiguration &&
+                    (ReferenceEquals(device, renderer) ||
+                     (device is IAdditionalSoundRenderers &&
+                      ((IAdditionalSoundRenderers)device).SoundRenderers
+                          .Any(source => ReferenceEquals(source, renderer)))));
+                return owner != null
+                    ? ((ISoundSourceGainConfiguration)owner).OutputGainPercent
+                    : 100;
+            }).ToArray();
             m_soundFrame = new FrameSound(
                 SampleRate,
                 soundRenderers.Select(sr => sr.AudioBuffer),
                 m_deviceList
                     .OfType<ISoundMixerConfiguration>()
                     .Any(configuration => configuration.RejectDc),
-                MasterVolume);
+                MasterVolume,
+                sourceGains);
             OnBusConnected();
             return success;
         }
