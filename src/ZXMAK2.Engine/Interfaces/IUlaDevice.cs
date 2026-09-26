@@ -4,6 +4,16 @@ using ZXMAK2.Host.Interfaces;
 
 namespace ZXMAK2.Engine.Interfaces
 {
+    // Optional ULAplus state; host permission must not be overridden by a file.
+    public interface IUlaPlusDevice
+    {
+        bool UlaPlusEnabled { get; set; }
+        bool UlaPlusActive { get; }
+        byte UlaPlusRegister { get; }
+        byte[] GetUlaPlusPalette();
+        void RestoreUlaPlusState(byte register, byte mode, byte[] palette);
+    }
+
     // Optional per-frame diagnostic text exposed by a machine device.
     // Hosts that do not display diagnostics can ignore this contract.
     public interface IFrameDiagnosticProvider

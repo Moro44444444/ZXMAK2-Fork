@@ -3317,3 +3317,37 @@ ZXM-MoonSound Rev.01 реализована согласно опубликов�
   Пересборки и публикации GitHub не было; стабильный снимок не менять.
 - SHA-256 `ZXMAK2.Host.WinForms.dll`:
   `2A075BDDD05E095B1FBCC176A48881DA0D8F9EBBBB3E0961C627DCB2300A115D`.
+
+## ULAplus — отдельная v55 test на базе стабильной v54 — 2026-09-26
+
+- Пользователь разрешил попробовать ULAplus с откатом на v54 при неудаче.
+  Ветка `codex/v55-ulaplus-compatibility` от `stable-v54-20260926`;
+  стабильная папка v54 не изменяется. Старый неудачный совмещённый
+  эксперимент B39 не использован: палитры ATM/EVO 4:4:4 не переделываются.
+- Сверены спецификация https://zxdesign.itch.io/ulaplus и официальный
+  локальный RTL BaseConf r1364 (`fpga/base/z80/zports.v`). Реализованы
+  64 цвета GRB, четыре CLUT по атрибутам FLASH/BRIGHT, бордюр PAPER CLUT0,
+  отключение FLASH в расширенном режиме, регистры BF3B/FF3B и A14-алиасы.
+- Machine Settings -> ULA/PENTEVO: `Enable ULAplus (automatic)`, default OFF.
+  ON только разрешает программную активацию; OFF блокирует порты и
+  восстановление SCR/SZX. Сброс отключает программный режим, разрешение
+  сохраняется в XML. При выходе из программы её регистры не угадываются
+  и не сбрасываются автоматически. Новых горячих клавиш нет.
+- Явное отличие от физической платы: опциональная программная
+  совместимость работает при любом TV/VGA-растре (RTL разрешает порты
+  только при 128K-растре), чтение возвращает выбранный регистр согласно
+  спецификации ULAplus. Timex/grayscale не реализованы. Палитра влияет
+  только на стандартный SpectrumRenderer, не на расширенные EVO/ATM.
+- Добавлены SCR 6976 с палитрой, обычный SCR возвращает стандартный режим;
+  SZX PLTT хранит палитру/выбранный регистр/активность, но не обходит OFF.
+- Release: 0 ошибок, прежние два missing-ruleset warning. UlaPlusProbe:
+  33 579 проверок портов/GRB/атрибутов/FLASH/бордюра/изоляции/SCR/SZX/
+  сброса/XML/сегментации кадра/алиасов. Прежние probes: 7 golden-renderer,
+  9 mid-frame, 132 867 palette444, 46 contention/open-bus проверок PASS.
+  WinForms profile probe PASS (галочка/размещение/звук/медиа/горячие клавиши).
+  `/master-volume`, `/evo-display`, `/multisoundmax`, `/multisound`, `/tsfm`,
+  `/moonsound`, `/zxnetusb` PASS. Это не ручная приёмка реальных ULAplus-программ.
+- Папка: `L:\Work_two\ZX\ZXMAK2-v55-ZXEVO-BC-Beta1-ULAplus-Test-20260926\release`.
+  Runtime — копия v54 с заменой Engine/Hardware/Host.WinForms DLL;
+  EXE, нативные звуковые библиотеки и прошивки взяты из стабильной v54.
+  В `tests` помещены SCR и ожидаемый PNG. GitHub не публиковался.

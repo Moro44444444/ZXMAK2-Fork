@@ -194,12 +194,12 @@ namespace ZXMAK2.Hardware
             get { return false; }
         }
 
-        public void LoadScreenData(Stream stream)
+        public virtual void LoadScreenData(Stream stream)
         {
             Renderer.LoadScreenData(stream);
         }
 
-        public void SaveScreenData(Stream stream)
+        public virtual void SaveScreenData(Stream stream)
         {
             Renderer.SaveScreenData(stream);
         }

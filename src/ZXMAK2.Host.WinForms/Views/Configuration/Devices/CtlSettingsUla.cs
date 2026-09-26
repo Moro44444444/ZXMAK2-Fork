@@ -55,6 +55,9 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                     }
                 }
             }
+            var pentEvo = m_device as UlaPentEvo;
+            chkUlaPlus.Checked = pentEvo != null && pentEvo.UlaPlusEnabled;
+            UpdateUlaPlusAvailability();
         }
 
         public void Init(BusManager bmgr, IHostService host, UlaPentEvo device)
@@ -71,6 +74,8 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
             var oldUla = m_bmgr.FindDevice<IUlaDevice>();
             if (oldUla != null && oldUla.GetType() == ula.GetType())
             {
+                var pentEvo = oldUla as UlaPentEvo;
+                if (pentEvo != null) pentEvo.UlaPlusEnabled = chkUlaPlus.Checked;
                 Init(m_bmgr, m_host, (UlaDeviceBase)oldUla);
                 return;
             }
@@ -85,7 +90,21 @@ namespace ZXMAK2.Host.WinForms.Views.Configuration.Devices
                 }
                 m_bmgr.Add(busNewUla);
             }
+            var newPentEvo = ula as UlaPentEvo;
+            if (newPentEvo != null) newPentEvo.UlaPlusEnabled = chkUlaPlus.Checked;
             Init(m_bmgr, m_host, (UlaDeviceBase)ula);
+        }
+
+        private void cbxType_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdateUlaPlusAvailability();
+        }
+
+        private void UpdateUlaPlusAvailability()
+        {
+            var descriptor = cbxType.SelectedItem as BusDeviceDescriptor;
+            chkUlaPlus.Enabled = descriptor != null && descriptor.Type == typeof(UlaPentEvo);
+            lblUlaPlus.Enabled = chkUlaPlus.Enabled;
         }
 
         private void trkMasterVolume_ValueChanged(object sender, EventArgs e)

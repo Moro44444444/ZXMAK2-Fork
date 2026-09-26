@@ -35,6 +35,8 @@
             this.trkMasterVolume = new System.Windows.Forms.TrackBar();
             this.lblType = new System.Windows.Forms.Label();
             this.cbxType = new System.Windows.Forms.ComboBox();
+            this.chkUlaPlus = new System.Windows.Forms.CheckBox();
+            this.lblUlaPlus = new System.Windows.Forms.Label();
             this.groupBox.SuspendLayout();
             this.groupBoxAudio.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trkMasterVolume)).BeginInit();
@@ -44,11 +46,13 @@
             // 
             this.groupBox.Controls.Add(this.lblType);
             this.groupBox.Controls.Add(this.cbxType);
+            this.groupBox.Controls.Add(this.chkUlaPlus);
+            this.groupBox.Controls.Add(this.lblUlaPlus);
             this.groupBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox.Location = new System.Drawing.Point(0, 0);
             this.groupBox.Name = "groupBox";
-            this.groupBox.Size = new System.Drawing.Size(300, 90);
+            this.groupBox.Size = new System.Drawing.Size(300, 150);
             this.groupBox.TabIndex = 0;
             this.groupBox.TabStop = false;
             this.groupBox.Text = "ULA Settings:";
@@ -114,6 +118,24 @@
             this.cbxType.Name = "cbxType";
             this.cbxType.Size = new System.Drawing.Size(177, 21);
             this.cbxType.TabIndex = 0;
+            this.cbxType.SelectedIndexChanged += new System.EventHandler(this.cbxType_SelectedIndexChanged);
+            //
+            // chkUlaPlus
+            //
+            this.chkUlaPlus.AutoSize = true;
+            this.chkUlaPlus.Location = new System.Drawing.Point(8, 78);
+            this.chkUlaPlus.Name = "chkUlaPlus";
+            this.chkUlaPlus.Text = "Enable ULAplus (automatic)";
+            this.chkUlaPlus.TabIndex = 2;
+            //
+            // lblUlaPlus
+            //
+            this.lblUlaPlus.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.lblUlaPlus.Location = new System.Drawing.Point(8, 103);
+            this.lblUlaPlus.Size = new System.Drawing.Size(276, 38);
+            this.lblUlaPlus.Name = "lblUlaPlus";
+            this.lblUlaPlus.Text = "Software selects the palette.\r\nUnchecked: standard video only.";
             // 
             // ControlSettingsUla
             // 
@@ -140,6 +162,8 @@
 		private System.Windows.Forms.Label lblMasterPercent;
 		private System.Windows.Forms.TrackBar trkMasterVolume;
 		private System.Windows.Forms.Label lblType;
-		private System.Windows.Forms.ComboBox cbxType;
+        private System.Windows.Forms.ComboBox cbxType;
+        private System.Windows.Forms.CheckBox chkUlaPlus;
+        private System.Windows.Forms.Label lblUlaPlus;
 	}
 }

@@ -32,6 +32,8 @@ namespace ZXMAK2.Hardware
     {
         private SpectrumRendererParams m_params;
         private uint[] m_palette;
+        private uint[] m_ulaPlusPalette;
+        private bool m_ulaPlusActive;
 
         protected int[] m_ulaLineOffset;
         protected int[] m_ulaAddrBw;
@@ -72,7 +74,8 @@ namespace ZXMAK2.Hardware
         public virtual void UpdateBorder(int value)
         {
             m_borderIndex = value;
-            m_borderColor = Palette[m_borderIndex & 0x0F];
+            m_borderColor = m_ulaPlusActive ?
+                m_ulaPlusPalette[8 + (value & 7)] : Palette[m_borderIndex & 0x0F];
         }
 
         public virtual void UpdatePalette(int index, uint value)
@@ -243,6 +246,7 @@ namespace ZXMAK2.Hardware
             var renderer = new SpectrumRenderer();
             renderer.Params = this.Params;
             renderer.Palette = this.Palette;
+            renderer.SetUlaPlusPalette(m_ulaPlusPalette, m_ulaPlusActive);
             renderer.MemoryPage = this.MemoryPage;
             renderer.m_flashState = this.m_flashState;
             renderer.m_flashCounter = this.m_flashCounter;
@@ -278,6 +282,16 @@ namespace ZXMAK2.Hardware
         {
             get { return m_memoryPage; }
             set { m_memoryPage = value; }
+        }
+
+        public void SetUlaPlusPalette(uint[] palette, bool active)
+        {
+            if (active && (palette == null || palette.Length != 64))
+                throw new ArgumentException("ULAplus needs 64 palette entries.");
+            m_ulaPlusPalette = palette;
+            m_ulaPlusActive = active;
+            UpdateBorder(m_borderIndex);
+            OnPaletteChanged();
         }
 
         #endregion
@@ -535,6 +549,18 @@ namespace ZXMAK2.Hardware
 
         protected virtual void OnPaletteChanged()
         {
+            if (m_ulaPlusActive)
+            {
+                for (int attribute = 0; attribute < 256; attribute++)
+                {
+                    var group = (attribute >> 6) * 16;
+                    var ink = m_ulaPlusPalette[group + (attribute & 7)];
+                    var paper = m_ulaPlusPalette[group + 8 + ((attribute >> 3) & 7)];
+                    m_ulaInk[attribute] = m_ulaInk[attribute + 256] = ink;
+                    m_ulaPaper[attribute] = m_ulaPaper[attribute + 256] = paper;
+                }
+                return;
+            }
             for (int atd = 0; atd < 256; atd++)
             {
                 m_ulaInk[atd] = Palette[(atd & 7) + ((atd & 0x40) >> 3)];

@@ -454,6 +454,15 @@ internal static class PentEvoProfileProbe
             control.Size = new Size(284, 332);
             control.Init(bus, null, ula);
             AssertLayoutFits(control);
+            var plus = GetField<CheckBox>(control, "chkUlaPlus");
+            Assert(plus.Enabled && !plus.Checked, "ULAplus permission is not default-off");
+            plus.Checked = true;
+            control.Apply();
+            Assert(ula.UlaPlusEnabled && !ula.UlaPlusActive,
+                "ULAplus checkbox did not enable software-controlled mode");
+            plus.Checked = false;
+            control.Apply();
+            Assert(!ula.UlaPlusEnabled, "ULAplus checkbox did not force off");
             var slider = GetField<TrackBar>(control, "trkMasterVolume");
             var audio = GetField<GroupBox>(control, "groupBoxAudio");
             Assert(audio.Bottom > control.Height / 2 &&

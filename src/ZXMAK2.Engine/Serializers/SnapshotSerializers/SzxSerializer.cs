@@ -100,6 +100,9 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
                         case "RAMP":
                             apply_RAMP(data);
                             break;
+                        case "PLTT":
+                            if (initializeMachine) apply_PLTT(data);
+                            break;
                         case "B128":
                             // applyB128 only restores the TR-DOS ROM paging
                             // flag in this serializer. It does not replace the
@@ -119,6 +122,17 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
         }
 
         #region Z80R
+
+        private void apply_PLTT(byte[] data)
+        {
+            var ula = _spec.BusManager.FindDevice<IUlaPlusDevice>();
+            if (ula == null || !ula.UlaPlusEnabled) return;
+            if (data.Length != 66 && data.Length != 67)
+                throw new InvalidDataException("Invalid SZX ULAplus palette block.");
+            var palette = new byte[64];
+            Array.Copy(data, 2, palette, 0, 64);
+            ula.RestoreUlaPlusState(data[1], (byte)(data[0] & 1), palette);
+        }
 
         private const int ZXSTZF_EILAST = 1;
         private const int ZXSTZF_HALTED = 2;
@@ -382,6 +396,19 @@ namespace ZXMAK2.Serializers.SnapshotSerializers
             }
             save_AY(stream);
             save_B128(stream);
+            save_PLTT(stream);
+        }
+
+        private void save_PLTT(Stream stream)
+        {
+            var ula = _spec.BusManager.FindDevice<IUlaPlusDevice>();
+            if (ula == null || !ula.UlaPlusEnabled) return;
+            StreamHelper.Write(stream, Encoding.ASCII.GetBytes("PLTT"));
+            StreamHelper.Write(stream, 67);
+            StreamHelper.Write(stream, (byte)(ula.UlaPlusActive ? 1 : 0));
+            StreamHelper.Write(stream, ula.UlaPlusRegister);
+            StreamHelper.Write(stream, ula.GetUlaPlusPalette());
+            StreamHelper.Write(stream, (byte)0); // Optional Timex modes not implemented.
         }
 
         private SzxModelId GetModelId(ModelId modelId)

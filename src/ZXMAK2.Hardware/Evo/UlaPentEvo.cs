@@ -1,5 +1,6 @@
 using System;
 using System.Xml;
+using System.IO;
 using ZXMAK2.Engine;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
@@ -26,8 +27,29 @@ namespace ZXMAK2.Hardware.Evo
         MultiSoundMax,
     }
 
-    public class UlaPentEvo : UlaAtm450, IUlaFrameTiming
+    public class UlaPentEvo : UlaAtm450, IUlaFrameTiming, IUlaPlusDevice
     {
+        private readonly byte[] m_ulaPlusRaw = new byte[64];
+        private readonly uint[] m_ulaPlusColors = new uint[64];
+        private byte m_ulaPlusRegister;
+        private byte m_ulaPlusMode;
+        private bool m_ulaPlusEnabled;
+
+        public bool UlaPlusEnabled
+        {
+            get { return m_ulaPlusEnabled; }
+            set
+            {
+                if (m_ulaPlusEnabled == value) return;
+                FlushUlaPlus();
+                m_ulaPlusEnabled = value;
+                ResetUlaPlus();
+            }
+        }
+
+        public bool UlaPlusActive { get { return m_ulaPlusEnabled && m_ulaPlusMode == 1; } }
+        public byte UlaPlusRegister { get { return m_ulaPlusRegister; } }
+
         private const int FrameInterruptMasterClocks = 256;
         private int m_requestedRaster;
         private int m_activeRaster;
@@ -83,6 +105,137 @@ namespace ZXMAK2.Hardware.Evo
             else
                 InternalSound = PentEvoInternalSound.None;
             bmgr.Events.SubscribeIntAck(BusIntAcknowledge);
+            // BaseConf low-byte/A14 aliases, but optional host compatibility
+            // permits these ports at every raster (physical r1364: 128K only).
+            bmgr.Events.SubscribeWrIo(0x40FF, 0x003B, WriteUlaPlusRegister);
+            bmgr.Events.SubscribeWrIo(0x40FF, 0x403B, WriteUlaPlusData);
+            bmgr.Events.SubscribeRdIo(0x40FF, 0x403B, ReadUlaPlusData);
+            bmgr.Events.SubscribeReset(ResetUlaPlus);
+        }
+
+        private void FlushUlaPlus()
+        {
+            if (CPU != null) UpdateState(GetCurrentFrameTact());
+        }
+
+        private void ApplyUlaPlusPalette()
+        {
+            SpectrumRenderer.SetUlaPlusPalette(m_ulaPlusColors, UlaPlusActive);
+        }
+
+        private void ResetUlaPlus()
+        {
+            m_ulaPlusRegister = 0;
+            m_ulaPlusMode = 0;
+            ApplyUlaPlusPalette();
+        }
+
+        public override void ResetState()
+        {
+            base.ResetState();
+            ResetUlaPlus();
+        }
+
+        private void WriteUlaPlusRegister(ushort address, byte value, ref bool handled)
+        {
+            if (!UlaPlusEnabled || handled) return;
+            m_ulaPlusRegister = value;
+            handled = true;
+        }
+
+        private void WriteUlaPlusData(ushort address, byte value, ref bool handled)
+        {
+            if (!UlaPlusEnabled || handled || m_ulaPlusRegister >= 128) return;
+            FlushUlaPlus();
+            if (m_ulaPlusRegister < 64)
+            {
+                m_ulaPlusRaw[m_ulaPlusRegister] = value;
+                m_ulaPlusColors[m_ulaPlusRegister] = DecodeUlaPlusColor(value);
+            }
+            else
+                m_ulaPlusMode = value;
+            ApplyUlaPlusPalette();
+            handled = true;
+        }
+
+        private void ReadUlaPlusData(ushort address, ref byte value, ref bool handled)
+        {
+            if (!UlaPlusEnabled || handled || m_ulaPlusRegister >= 128) return;
+            value = m_ulaPlusRegister < 64 ?
+                m_ulaPlusRaw[m_ulaPlusRegister] : m_ulaPlusMode;
+            handled = true;
+        }
+
+        public static uint DecodeUlaPlusColor(byte value)
+        {
+            var blue = ((value & 3) << 1) | ((value & 3) == 0 ? 0 : 1);
+            return 0xFF000000U | ((uint)Expand3((value >> 2) & 7) << 16) |
+                ((uint)Expand3(value >> 5) << 8) | (uint)Expand3(blue);
+        }
+
+        private static int Expand3(int value)
+        {
+            return (value << 5) | (value << 2) | (value >> 1);
+        }
+
+        public byte[] GetUlaPlusPalette()
+        {
+            return (byte[])m_ulaPlusRaw.Clone();
+        }
+
+        public void RestoreUlaPlusState(byte register, byte mode, byte[] palette)
+        {
+            if (!UlaPlusEnabled) return;
+            if (palette == null || palette.Length != 64)
+                throw new ArgumentException("ULAplus needs 64 palette entries.");
+            FlushUlaPlus();
+            for (var i = 0; i < 64; i++)
+            {
+                m_ulaPlusRaw[i] = palette[i];
+                m_ulaPlusColors[i] = DecodeUlaPlusColor(palette[i]);
+            }
+            m_ulaPlusRegister = register;
+            m_ulaPlusMode = mode;
+            ApplyUlaPlusPalette();
+        }
+
+        public override void LoadScreenData(Stream stream)
+        {
+            if (Renderer != SpectrumRenderer || !stream.CanSeek ||
+                (stream.Length - stream.Position != 6912 &&
+                 stream.Length - stream.Position != 6976))
+            {
+                base.LoadScreenData(stream);
+                return;
+            }
+            var extended = stream.Length - stream.Position == 6976;
+            FlushUlaPlus();
+            var offset = 0;
+            while (offset < 6912)
+            {
+                var read = stream.Read(SpectrumRenderer.MemoryPage, offset, 6912 - offset);
+                if (read == 0) throw new EndOfStreamException();
+                offset += read;
+            }
+            ResetUlaPlus();
+            if (extended)
+            {
+                var palette = new byte[64];
+                for (var i = 0; i < 64; i++)
+                {
+                    var value = stream.ReadByte();
+                    if (value < 0) throw new EndOfStreamException();
+                    palette[i] = (byte)value;
+                }
+                RestoreUlaPlusState(0, 1, palette);
+            }
+        }
+
+        public override void SaveScreenData(Stream stream)
+        {
+            base.SaveScreenData(stream);
+            if (Renderer == SpectrumRenderer && UlaPlusActive)
+                stream.Write(m_ulaPlusRaw, 0, 64);
         }
 
         internal void RequestRaster(int mode)
@@ -288,6 +441,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             Name = "PENTEVO";
             Description = "ZX Evolution BaseConf motherboard";
+            for (var i = 0; i < m_ulaPlusColors.Length; i++)
+                m_ulaPlusColors[i] = DecodeUlaPlusColor(0);
             InternalSound = PentEvoInternalSound.AY8910CHRV;
             InternalSoundVolume = 100;
             ZxBusSlot1Enabled = false;
@@ -299,6 +454,7 @@ namespace ZXMAK2.Hardware.Evo
         protected override void OnConfigLoad(XmlNode itemNode)
         {
             base.OnConfigLoad(itemNode);
+            UlaPlusEnabled = Utils.GetXmlAttributeAsBool(itemNode, "ulaPlusEnabled", false);
             InternalSound = Utils.GetXmlAttributeAsEnum(
                 itemNode,
                 "internalSound",
@@ -328,6 +484,7 @@ namespace ZXMAK2.Hardware.Evo
         protected override void OnConfigSave(XmlNode itemNode)
         {
             base.OnConfigSave(itemNode);
+            Utils.SetXmlAttribute(itemNode, "ulaPlusEnabled", UlaPlusEnabled);
             Utils.SetXmlAttributeAsEnum(itemNode, "internalSound", InternalSound);
             Utils.SetXmlAttribute(
                 itemNode, "internalSoundVolume", InternalSoundVolume);
