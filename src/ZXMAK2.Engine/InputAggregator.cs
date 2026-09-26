@@ -58,6 +58,7 @@ namespace ZXMAK2.Engine
 
         private void Release()
         {
+            foreach(var joystick in m_joysticks) joystick.JoystickState=JoystickInput.Empty;
             if (m_hostJoystick == null)
             {
                 return;

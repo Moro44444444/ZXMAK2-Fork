@@ -12,7 +12,7 @@ using ZXMAK2.Engine.Cpu;
 
 namespace ZXMAK2.Hardware.General
 {
-    public enum JoystickInterface { Kempston, Sinclair1, Sinclair2, Cursor, Fuller }
+    public enum JoystickInterface { Kempston, Sinclair1, Sinclair2, Cursor, Fuller, KempstonExtended }
 
     // Keep the original class/XML identity for old machine configurations.
     public class KempstonJoystick : BusDeviceBase, IJoystickKeyboardDevice
@@ -35,6 +35,15 @@ namespace ZXMAK2.Hardware.General
         private double frameSeconds;
         private long frameStart;
         private JoystickInterface interfaceType;
+        private JoystickGameProfile gameProfile;
+        public JoystickGameProfile GameProfile
+        {
+            get { return gameProfile!=null ? gameProfile.Copy() : null; }
+            set { gameProfile=value!=null ? value.Copy() : null;
+                if(gameProfile!=null) { interfaceType=(JoystickInterface)gameProfile.Interface;
+                    gameProfile.Mapping.Reserved.Clear(); foreach(var a in gameProfile.Actions) gameProfile.Mapping.Reserved.Add(a.Binding); }
+                joystickState=null; fireController.Reset(); OnConfigChanged(); }
+        }
 
         public JoystickInterface InterfaceType
         {
@@ -53,7 +62,10 @@ namespace ZXMAK2.Hardware.General
             set { profiles=new Dictionary<string,JoystickMapping>(); if(value!=null) foreach(var p in value) profiles[p.Key]=p.Value.Copy(); fireController.Reset(); OnConfigChanged(); }
         }
         public JoystickMapping Mapping
-        { get { JoystickMapping result; return profiles.TryGetValue(HostId,out result) ? result : new JoystickMapping(); } }
+        { get { JoystickMapping result;
+            if(gameProfile!=null) result=gameProfile.Mapping;
+            else if(!profiles.TryGetValue(HostId,out result)) result=new JoystickMapping();
+            result.SeparateExtraFire=InterfaceType==JoystickInterface.KempstonExtended; return result; } }
 
         #endregion Fields
 
@@ -128,6 +140,8 @@ namespace ZXMAK2.Hardware.General
             {
                 var map=new JoystickMapping(); int mode;
                 map.DeviceName=Utils.GetXmlAttributeAsString(child,"deviceName","");
+                map.Interface=Utils.GetXmlAttributeAsInt32(child,"interface",-1);
+                if(map.Interface<0 || map.Interface>5) map.Interface=-1;
                 mode=Utils.GetXmlAttributeAsInt32(child,"directions",0);
                 map.Directions=(JoystickDirections)Math.Max(0,Math.Min(3,mode));
                 mode=Utils.GetXmlAttributeAsInt32(child,"autoFire",0);
@@ -135,9 +149,15 @@ namespace ZXMAK2.Hardware.General
                 map.DeadZone=Math.Max(5,Math.Min(80,Utils.GetXmlAttributeAsInt32(child,"deadZone",20)));
                 map.FireRate=Math.Max(1,Math.Min(25,Utils.GetXmlAttributeAsInt32(child,"fireRate",10)));
                 for(int i=0;i<6;i++) map.Bindings[i]=Utils.GetXmlAttributeAsString(child,"binding"+i,map.Bindings[i]);
+                for(int i=0;i<3;i++) map.ExtraFire[i]=Utils.GetXmlAttributeAsString(child,"extra"+i,map.ExtraFire[i]);
+                var keys=child.SelectSingleNode("GameProfile") as XmlElement;
+                if(keys!=null) map.KeyActions=JoystickGameProfile.FromXml(keys).Actions;
+                foreach(var a in map.KeyActions) map.Reserved.Add(a.Binding);
                 loaded[Utils.GetXmlAttributeAsString(child,"hostId","")]=map;
             }
             Profiles=loaded;
+            var game=node.SelectSingleNode("GameProfile") as XmlElement;
+            GameProfile=game!=null ? JoystickGameProfile.FromXml(game) : null;
         }
 
         protected override void OnConfigSave(XmlNode node)
@@ -149,17 +169,22 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "port", Port);
             Utils.SetXmlAttribute(node, "bitWidth", BitWidth);
             Utils.SetXmlAttribute(node, "hostId", HostId);
+            foreach(XmlNode old in node.SelectNodes("GameProfile")) node.RemoveChild(old);
+            if(gameProfile!=null) node.AppendChild(gameProfile.ToXml(node.OwnerDocument));
             foreach(XmlNode old in node.SelectNodes("JoystickProfile")) node.RemoveChild(old);
             foreach(var profile in profiles)
             {
                 var child=node.OwnerDocument.CreateElement("JoystickProfile"); node.AppendChild(child);
                 Utils.SetXmlAttribute(child,"hostId",profile.Key);
                 Utils.SetXmlAttribute(child,"deviceName",profile.Value.DeviceName);
+                Utils.SetXmlAttribute(child,"interface",profile.Value.Interface);
                 Utils.SetXmlAttribute(child,"directions",(int)profile.Value.Directions);
                 Utils.SetXmlAttribute(child,"autoFire",(int)profile.Value.AutoFire);
                 Utils.SetXmlAttribute(child,"deadZone",profile.Value.DeadZone);
                 Utils.SetXmlAttribute(child,"fireRate",profile.Value.FireRate);
                 for(int i=0;i<6;i++) Utils.SetXmlAttribute(child,"binding"+i,profile.Value.Bindings[i]);
+                for(int i=0;i<3;i++) Utils.SetXmlAttribute(child,"extra"+i,profile.Value.ExtraFire[i]);
+                if(profile.Value.KeyActions.Count>0) child.AppendChild(new JoystickGameProfile {Actions=profile.Value.KeyActions}.ToXml(node.OwnerDocument));
             }
         }
 
@@ -167,8 +192,9 @@ namespace ZXMAK2.Hardware.General
         {
             base.OnProcessConfigChange();
             Name = "JOYSTICK " + (InterfaceType == JoystickInterface.Sinclair1 ? "SINCLAIR 1" :
-                InterfaceType == JoystickInterface.Sinclair2 ? "SINCLAIR 2" : InterfaceType.ToString().ToUpperInvariant());
-            if (InterfaceType != JoystickInterface.Kempston)
+                InterfaceType == JoystickInterface.Sinclair2 ? "SINCLAIR 2" :
+                InterfaceType == JoystickInterface.KempstonExtended ? "KEMPSTON EXTENDED" : InterfaceType.ToString().ToUpperInvariant());
+            if (InterfaceType != JoystickInterface.Kempston && InterfaceType != JoystickInterface.KempstonExtended)
             {
                 Description = InterfaceType == JoystickInterface.Fuller ? "Fuller joystick: port #007F, active-low directions and Fire" :
                     InterfaceType == JoystickInterface.Sinclair1 ? "Sinclair Joy 1: keys 6, 7, 8, 9, 0" :
@@ -186,7 +212,7 @@ namespace ZXMAK2.Hardware.General
             builder.Append(Environment.NewLine);
             builder.Append(string.Format("Port:  #{0:X4}", Port));
             builder.Append(Environment.NewLine);
-            builder.Append(string.Format("Bits:  {0}", BitWidth));
+            builder.Append(string.Format("Bits:  {0}", InterfaceType==JoystickInterface.KempstonExtended ? 8 : BitWidth));
             builder.Append(Environment.NewLine);
             builder.Append(Environment.NewLine);
             // thanks to weiv for info
@@ -208,11 +234,11 @@ namespace ZXMAK2.Hardware.General
         public override void BusInit(IBusManager bmgr)
         {
             m_memory = m_noDos ? bmgr.FindDevice<IMemoryDevice>() : null;
-            if (InterfaceType == JoystickInterface.Kempston)
+            if (InterfaceType == JoystickInterface.Kempston || InterfaceType == JoystickInterface.KempstonExtended)
                 bmgr.Events.SubscribeRdIo(Mask, Port & Mask, ReadPort1F);
             else if (InterfaceType == JoystickInterface.Fuller)
                 bmgr.Events.SubscribeRdIo(0xFF, 0x7F, ReadPortFuller);
-            else if (bmgr.FindDevice<IKeyboardJoystickSink>() == null)
+            if (bmgr.FindDevice<IKeyboardJoystickSink>() == null)
                 // A machine with only an AT keyboard can still have an
                 // experimental external keyboard-contact joystick attached.
                 bmgr.Events.SubscribeRdIo(1, 0, ReadKeyboardContacts);
@@ -272,7 +298,9 @@ namespace ZXMAK2.Hardware.General
 
         public byte GetKeyboardMask(ushort address)
         {
-            if (InterfaceType == JoystickInterface.Kempston || InterfaceType == JoystickInterface.Fuller) return 0;
+            var map=Mapping;
+            int keys=JoystickGameProfile.KeyboardMask(address,JoystickState as JoystickInput,map,gameProfile!=null ? gameProfile.Actions : map.KeyActions);
+            if (InterfaceType == JoystickInterface.Kempston || InterfaceType == JoystickInterface.KempstonExtended || InterfaceType == JoystickInterface.Fuller) return (byte)keys;
             byte state = GetOutput();
             int pressed = 0;
             if (InterfaceType == JoystickInterface.Sinclair1 && (address & 0x1000) == 0)
@@ -286,7 +314,7 @@ namespace ZXMAK2.Hardware.General
                 if ((address & 0x1000) == 0) pressed |= ((state & 4) << 2) | (state & 8) |
                     ((state & 1) << 2) | ((state & 16) >> 4);
             }
-            return (byte)pressed;
+            return (byte)(pressed|keys);
         }
 
         private byte GetOutput()
@@ -302,7 +330,7 @@ namespace ZXMAK2.Hardware.General
                 long elapsed=frameTiming!=null ? frameTiming.GetFrameTact(tact) : tact-frameStart;
                 double seconds=frameSeconds+Math.Max(0,Math.Min(frameTacts,elapsed))/(double)frameTacts*0.02;
                 value=fireController.Output(raw,Mapping,seconds);
-                if(BitWidth!=8) value&=0x1F;
+                if(InterfaceType!=JoystickInterface.KempstonExtended && BitWidth!=8) value&=0x1F;
                 return value;
             }
             if (JoystickState.IsRight) value |= 0x01;
@@ -311,7 +339,7 @@ namespace ZXMAK2.Hardware.General
             if (JoystickState.IsUp) value |= 0x08;
             if (JoystickState.IsFire) value |= 0x10;
             var extended = JoystickState as IJoystickState8;
-            if (BitWidth == 8 && extended != null)
+            if ((BitWidth == 8 || InterfaceType==JoystickInterface.KempstonExtended) && extended != null)
                 value = (byte)((value & 0x0F) | (extended.KempstonState & 0xF0));
             return value;
         }

@@ -125,6 +125,7 @@
     <Compile Include="Views\Configuration\Devices\CtlSettingsHayesModem.Designer.cs">
       <DependentUpon>CtlSettingsHayesModem.cs</DependentUpon>
     </Compile>
+    <Compile Include="Views\Configuration\Devices\JoystickKeysDialog.cs" />
     <Compile Include="Views\Configuration\Devices\CtlSettingsJoystick.cs">
       <SubType>UserControl</SubType>
     </Compile>

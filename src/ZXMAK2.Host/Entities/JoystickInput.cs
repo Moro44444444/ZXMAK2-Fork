@@ -1,8 +1,92 @@
 using System;
+using System.Collections.Generic;
+using System.Xml;
 using ZXMAK2.Host.Interfaces;
 
 namespace ZXMAK2.Host.Entities
 {
+    public sealed class JoystickKeyAction
+    {
+        public string Name = "";
+        public string Binding = "none";
+        public SpeccyKey Key = SpeccyKey.Space;
+        public bool CapsShift, SymbolShift;
+        public JoystickKeyAction Copy() { return (JoystickKeyAction)MemberwiseClone(); }
+        public string Caption { get { return (CapsShift ? "Caps Shift + " : "") +
+            (SymbolShift ? "Symbol Shift + " : "") + KeyCaption(Key); } }
+        public static string KeyCaption(SpeccyKey key)
+        { string s=key.ToString(); return s.Length==2 && s[0]=='D' ? s.Substring(1) :
+            key==SpeccyKey.CapsShift ? "Caps Shift" : key==SpeccyKey.SymbolShift ? "Symbol Shift" : s; }
+    }
+
+    public sealed class JoystickGameProfile
+    {
+        public string Name = "";
+        public int Interface;
+        public JoystickMapping Mapping = new JoystickMapping();
+        public List<JoystickKeyAction> Actions = new List<JoystickKeyAction>();
+        public JoystickGameProfile Copy()
+        { var p=new JoystickGameProfile {Name=Name,Interface=Interface,Mapping=Mapping.Copy()};
+          foreach(var a in Actions) p.Actions.Add(a.Copy()); return p; }
+        public byte KeyboardMask(ushort address, JoystickInput input)
+        { return KeyboardMask(address,input,Mapping,Actions); }
+        public static byte KeyboardMask(ushort address,JoystickInput input,JoystickMapping mapping,IEnumerable<JoystickKeyAction> actions)
+        {
+            int result=0;
+            foreach(var action in actions) if(mapping.Pressed(input,action.Binding))
+            {
+                result |= KeyMask(address,action.Key);
+                if(action.CapsShift) result |= KeyMask(address,SpeccyKey.CapsShift);
+                if(action.SymbolShift) result |= KeyMask(address,SpeccyKey.SymbolShift);
+            }
+            return (byte)result;
+        }
+        private static int KeyMask(ushort address,SpeccyKey key)
+        {
+            var rows=ZXMAK2.Host.Tools.KeyboardMatrix.DefaultRows;
+            for(int r=0;r<8;r++) if((address & (0x100<<r))==0)
+                for(int c=0;c<5;c++) if(rows[r][c]==key) return 1<<c;
+            return 0;
+        }
+        public XmlElement ToXml(XmlDocument doc)
+        {
+            var node=doc.CreateElement("GameProfile"); node.SetAttribute("name",Name);
+            node.SetAttribute("interface",Interface.ToString());
+            node.SetAttribute("directions",((int)Mapping.Directions).ToString());
+            node.SetAttribute("autoFire",((int)Mapping.AutoFire).ToString());
+            node.SetAttribute("deadZone",Mapping.DeadZone.ToString()); node.SetAttribute("fireRate",Mapping.FireRate.ToString());
+            for(int i=0;i<6;i++) node.SetAttribute("binding"+i,Mapping.Bindings[i]);
+            for(int i=0;i<3;i++) node.SetAttribute("extra"+i,Mapping.ExtraFire[i]);
+            foreach(var a in Actions)
+            {
+                var child=doc.CreateElement("KeyAction"); node.AppendChild(child);
+                child.SetAttribute("name",a.Name); child.SetAttribute("binding",a.Binding);
+                child.SetAttribute("key",a.Key.ToString()); child.SetAttribute("caps",a.CapsShift.ToString());
+                child.SetAttribute("symbol",a.SymbolShift.ToString());
+            }
+            return node;
+        }
+        private static int Number(XmlElement n,string name,int fallback,int max,int min)
+        { int v; return int.TryParse(n.GetAttribute(name),out v) ? Math.Max(min,Math.Min(max,v)) : fallback; }
+        public static JoystickGameProfile FromXml(XmlElement node)
+        {
+            var p=new JoystickGameProfile {Name=node.GetAttribute("name"),Interface=Number(node,"interface",0,5,0)};
+            p.Mapping.Directions=(JoystickDirections)Number(node,"directions",0,3,0);
+            p.Mapping.AutoFire=(JoystickAutoFire)Number(node,"autoFire",0,2,0);
+            p.Mapping.DeadZone=Number(node,"deadZone",20,80,5); p.Mapping.FireRate=Number(node,"fireRate",10,25,1);
+            for(int i=0;i<6;i++) if(node.HasAttribute("binding"+i)) p.Mapping.Bindings[i]=node.GetAttribute("binding"+i);
+            for(int i=0;i<3;i++) if(node.HasAttribute("extra"+i)) p.Mapping.ExtraFire[i]=node.GetAttribute("extra"+i);
+            foreach(XmlElement child in node.SelectNodes("KeyAction"))
+            {
+                SpeccyKey key; bool caps,symbol;
+                if(!Enum.TryParse(child.GetAttribute("key"),out key) || !Enum.IsDefined(typeof(SpeccyKey),key)) continue;
+                bool.TryParse(child.GetAttribute("caps"),out caps); bool.TryParse(child.GetAttribute("symbol"),out symbol);
+                p.Actions.Add(new JoystickKeyAction {Name=child.GetAttribute("name"),Binding=child.GetAttribute("binding"),Key=key,CapsShift=caps,SymbolShift=symbol});
+                if(p.Actions.Count==64) break;
+            }
+            return p;
+        }
+    }
     public enum JoystickDirections { Auto, DPad, Stick, Custom }
     public enum JoystickAutoFire { Off, Hold, Toggle }
 
@@ -37,15 +121,22 @@ namespace ZXMAK2.Host.Entities
     public sealed class JoystickMapping
     {
         public string DeviceName = "";
+        public int Interface = -1; // legacy per-controller profiles inherit the machine's interface
         public JoystickDirections Directions = JoystickDirections.Auto;
         public JoystickAutoFire AutoFire = JoystickAutoFire.Off;
         public int DeadZone = 20;
         public int FireRate = 10;
         // Ordering: up, down, left, right, fire, auto-fire toggle.
         public string[] Bindings = { "a:1:-", "a:1:+", "a:0:-", "a:0:+", "any", "none" };
+        public string[] ExtraFire = { "b:1", "b:2", "b:3" };
+        public List<string> Reserved = new List<string>();
+        public List<JoystickKeyAction> KeyActions = new List<JoystickKeyAction>();
+        public bool SeparateExtraFire;
         public JoystickMapping Copy()
-        { return new JoystickMapping { DeviceName=DeviceName, Directions=Directions, AutoFire=AutoFire,
-            DeadZone=DeadZone, FireRate=FireRate, Bindings=(string[])Bindings.Clone() }; }
+        { var result=new JoystickMapping { DeviceName=DeviceName, Interface=Interface,Directions=Directions, AutoFire=AutoFire,
+            DeadZone=DeadZone, FireRate=FireRate, Bindings=(string[])Bindings.Clone(),
+            ExtraFire=(string[])ExtraFire.Clone(), Reserved=new List<string>(Reserved),SeparateExtraFire=SeparateExtraFire };
+            foreach(var a in KeyActions) result.KeyActions.Add(a.Copy()); return result; }
         public bool Pressed(JoystickInput input, string binding)
         {
             if(input==null || !input.Connected || string.IsNullOrEmpty(binding)) return false;
@@ -72,10 +163,10 @@ namespace ZXMAK2.Host.Entities
             else
             {
                 if(Directions!=JoystickDirections.DPad)
-                { up=Pressed(input,"a:1:-"); down=Pressed(input,"a:1:+");
-                    left=Pressed(input,"a:0:-"); right=Pressed(input,"a:0:+"); }
+                { up=DirectionPressed(input,"a:1:-"); down=DirectionPressed(input,"a:1:+");
+                    left=DirectionPressed(input,"a:0:-"); right=DirectionPressed(input,"a:0:+"); }
                 if(Directions!=JoystickDirections.Stick)
-                { up|=input.Hat(0,0); right|=input.Hat(0,1); down|=input.Hat(0,2); left|=input.Hat(0,3); }
+                { up|=DirectionPressed(input,"p:0:0"); right|=DirectionPressed(input,"p:0:1"); down|=DirectionPressed(input,"p:0:2"); left|=DirectionPressed(input,"p:0:3"); }
             }
             byte result=0;
             if(right && !left) result|=1; if(left && !right) result|=2;
@@ -86,13 +177,19 @@ namespace ZXMAK2.Host.Entities
             {
                 fire=false;
                 for(int i=0;i<input.Buttons.Length;i++)
-                    if(input.Buttons[i] && Bindings[5]!="b:"+i) fire=true;
+                    if(input.Buttons[i] && Bindings[5]!="b:"+i && !Reserved.Contains("b:"+i) &&
+                        (!SeparateExtraFire || Array.IndexOf(ExtraFire,"b:"+i)<0)) fire=true;
             }
             if(fire) result|=16;
-            result|=(byte)(input.KempstonState & 0xE0); // existing 8-bit BaseConf extension
-            for(int i=1;i<4;i++) if(Bindings[5]=="b:"+i) result&=(byte)~(16<<i);
+            for(int i=0;i<3;i++) if(ExtraFire[i]!=Bindings[5] && !Reserved.Contains(ExtraFire[i]) && Pressed(input,ExtraFire[i])) result|=(byte)(32<<i);
             return result;
         }
+        private bool DirectionPressed(JoystickInput input,string binding)
+        {return !Reserved.Contains(binding) && Pressed(input,binding);}
+        public bool IsAutomaticDirection(string binding)
+        {return Directions!=JoystickDirections.Custom &&
+            ((Directions!=JoystickDirections.DPad && (binding=="a:0:-" || binding=="a:0:+" || binding=="a:1:-" || binding=="a:1:+")) ||
+             (Directions!=JoystickDirections.Stick && (binding=="p:0:0" || binding=="p:0:1" || binding=="p:0:2" || binding=="p:0:3")));}
         public static string Caption(string binding)
         {
             if(binding=="any") return "Any button"; if(binding=="none") return "Not assigned";

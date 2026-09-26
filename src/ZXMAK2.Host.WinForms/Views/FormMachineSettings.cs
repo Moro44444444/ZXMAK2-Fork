@@ -23,6 +23,9 @@ namespace ZXMAK2.Host.WinForms.Views
 {
     public class FormMachineSettings : Form, IMachineSettingsView
     {
+        private Dictionary<string,JoystickGameProfile> pendingJoystickProfiles;
+        private bool pendingJoystickProfilesDirty;
+        private bool startingJoystickSettings;
         #region Windows Form Designer generated code
 
         private System.ComponentModel.IContainer components = null;
@@ -437,6 +440,8 @@ namespace ZXMAK2.Host.WinForms.Views
 
         public void Init(IHostService host, IVirtualMachine vm)
         {
+            pendingJoystickProfiles=null; pendingJoystickProfilesDirty=false;
+            startingJoystickSettings=true;
             m_host = host;
             m_vm = vm;
 
@@ -507,6 +512,9 @@ namespace ZXMAK2.Host.WinForms.Views
 
         private void initWorkBus()
         {
+            if(!startingJoystickSettings) foreach(var joystick in m_ctlList.OfType<CtlSettingsJoystick>())
+            {pendingJoystickProfiles=joystick.CaptureProfileLibrary(); pendingJoystickProfilesDirty=joystick.ProfileLibraryDirty;}
+            startingJoystickSettings=false;
             if (m_pentEvoZxBusControl != null)
             {
                 m_pentEvoZxBusControl.ConfigurationChanged -=
@@ -544,6 +552,8 @@ namespace ZXMAK2.Host.WinForms.Views
                         m_workBus,
                         m_host,
                         device);
+                    var joystick=control as CtlSettingsJoystick;
+                    if(joystick!=null && pendingJoystickProfiles!=null) joystick.RestoreProfileLibrary(pendingJoystickProfiles,pendingJoystickProfilesDirty);
                     insertListViewItem(lstNavigation.Items.Count, control, device);
                 }
                 catch (Exception ex)
@@ -782,6 +792,9 @@ namespace ZXMAK2.Host.WinForms.Views
                 m_workBus.SaveConfigXml(root);
 
                 bool running = m_vm.IsRunning;
+                // Internal Apply calls during Add/rebuild only stage edits.
+                // Write the shared profile library at the user's final Apply.
+                foreach(var joystick in m_ctlList.OfType<CtlSettingsJoystick>()) joystick.CommitProfileLibrary();
                 m_vm.DoStop();
 
 

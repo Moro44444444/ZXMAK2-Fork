@@ -56,7 +56,7 @@ internal static class JoystickProbe
                 rglSlider0=32768,rglSlider1=32768,rgdwPOV0=13500,rgdwPOV1=uint.MaxValue,rgdwPOV2=uint.MaxValue,rgdwPOV3=uint.MaxValue,rgbButtons31=128});
             Check(di.Axes[0]==32767 && di.Axes[1]==0 && di.Buttons[31],"DInput axes and button32");
             Check(di.Hat(0,1) && di.Hat(0,2),"DInput diagonal");
-            TestLearn(); TestAutoFire(); TestPersistence(); TestHardwarePort(); TestInterfaces(); TestKeyboardVariants(); TestMachineClock(); TestWindow(args);
+            TestLearn(); TestAutoFire(); TestPersistence(); TestHardwarePort(); TestInterfaces(); TestKeyboardVariants(); TestMachineClock(); TestGameProfiles(); TestWindow(args);
             using(var form=new Form()) using(var native=new DirectJoystick(form))
             {
                 foreach(var d in native.GetAvailableJoysticks()) Console.WriteLine("Detected: "+d.Name+" / "+d.HostId);
@@ -222,6 +222,7 @@ internal static class JoystickProbe
         byte[][] contacts={new byte[] {0,0,0,0,0},new byte[] {8,16,4,2,1},new byte[] {2,1,4,8,16},new byte[] {4,16,16,8,1},new byte[] {8,4,2,1,128}};
         foreach(JoystickInterface mode in Enum.GetValues(typeof(JoystickInterface)))
         {
+            if(mode==JoystickInterface.KempstonExtended) continue; // covered with explicit extra-button tests below
             var bus=new BusManager(); bus.Init(null,true); bus.Disconnect(); bus.Clear();
             bus.Add(new MemoryPentEvo()); bus.Add(new UlaPentEvo());
             var j=new KempstonJoystick {NoDos=false,HostId="interfaces",InterfaceType=mode};
@@ -297,7 +298,7 @@ internal static class JoystickProbe
             var combo=Field<ComboBox>(ui,"cbxType"); Check(((IHostDeviceInfo)combo.SelectedItem).HostId=="saved-offline","UI preserves missing device");
             Field<Button>(ui,"refresh").PerformClick(); Check(host.Controller.Refreshes==1,"Refresh is explicit");
             ui.Apply(); Check(j.HostId=="saved-offline","Apply does not replace missing device");
-            var emulates=Field<ComboBox>(ui,"emulates"); Check(emulates.Items.Count==5,"Five emulated interfaces");
+            var emulates=Field<ComboBox>(ui,"emulates"); Check(emulates.Items.Count==6,"Six emulated interfaces");
             emulates.SelectedIndex=2; Check(j.InterfaceType==JoystickInterface.Kempston,"Interface selection staged until Apply");
             ui.Apply(); Check(j.InterfaceType==JoystickInterface.Sinclair2,"UI applies selected interface");
             combo.SelectedIndex=2;
@@ -307,14 +308,89 @@ internal static class JoystickProbe
             combo.SelectedIndex=2; Check(Field<ComboBox>(ui,"directions").SelectedIndex==1,"UI restores per-device edits");
             ui.Apply(); Check(j.Mapping.AutoFire==JoystickAutoFire.Hold && j.Mapping.FireRate==15,"UI applies autofire");
             Check(j.Profiles["test-xinput"].Directions==JoystickDirections.Stick,"Other device edits retained");
+            var game=new JoystickGameProfile {Name="Elite",Interface=(int)JoystickInterface.KempstonExtended};
+            game.Mapping.Bindings[4]="b:0"; game.Actions.Add(new JoystickKeyAction {Name="Game pause",Binding="b:9",Key=SpeccyKey.P});
+            Field<Dictionary<string,JoystickGameProfile>>(ui,"games")[game.Name]=game;
+            typeof(CtlSettingsJoystick).GetMethod("FillGames",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(ui,null);
+            var choice=Field<ComboBox>(ui,"gameChoice"); choice.SelectedIndex=1;
+            Check(j.GameProfile==null,"Game profile selection staged");
+            Check(emulates.SelectedIndex==5,"Profile restores complete interface");
+            Check(Field<Button[]>(ui,"extraFire")[0].Enabled,"Extended extra button available");
+            string libraryBefore=System.IO.File.ReadAllText(CtlSettingsJoystick.ProfileLibraryPath);
+            ui.Apply(); Check(j.GameProfile.Name=="Elite" && j.GameProfile.Actions[0].Key==SpeccyKey.P,"Apply persists selected game snapshot");
+            Check(System.IO.File.ReadAllText(CtlSettingsJoystick.ProfileLibraryPath)==libraryBefore,"Internal Apply does not write shared library before final confirmation");
+            ui.CommitProfileLibrary(); Check(CtlSettingsJoystick.ReadLibrary(CtlSettingsJoystick.ProfileLibraryPath)[0].Actions[0].Name=="Game pause","Final Apply commits library");
+            choice.SelectedIndex=0; ui.Apply(); Check(j.GameProfile==null,"Return to Standard clears named profile");
+            Check(Field<ComboBox>(ui,"directions").SelectedIndex==1,"Standard retains prior per-controller settings");
+            Check(emulates.SelectedIndex==2,"Standard restores interface too");
             Field<Button[]>(ui,"bindings")[4].PerformClick();
             Check(Field<int>(ui,"learning")==4,"UI enters learn mode");
             object[] escapeArgs={new Message(),Keys.Escape};
             bool escaped=(bool)typeof(CtlSettingsJoystick).GetMethod("ProcessCmdKey",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(ui,escapeArgs);
             Check(escaped && Field<int>(ui,"learning")==-1 && f.Visible,"Esc cancels assignment without closing settings");
             if(args.Length>0) { f.ClientSize=new Size(300,430); Application.DoEvents(); using(var bmp=new Bitmap(ui.Width,ui.Height)) { ui.DrawToBitmap(bmp,new Rectangle(Point.Empty,ui.Size)); bmp.Save(args[0]); } }
+            if(args.Length>0)
+            {
+                var type=typeof(CtlSettingsJoystick).Assembly.GetType("ZXMAK2.Host.WinForms.Views.Configuration.Devices.JoystickKeysDialog");
+                using(var editor=(Form)Activator.CreateInstance(type,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,
+                    new object[] {host.Controller,"test-dinput",game.Actions,game.Mapping,5},null))
+                {editor.StartPosition=FormStartPosition.Manual; editor.Location=new Point(-30000,-30000); editor.Show(); Application.DoEvents();
+                    using(var bmp=new Bitmap(editor.Width,editor.Height)) {editor.DrawToBitmap(bmp,new Rectangle(Point.Empty,editor.Size)); bmp.Save(args[0]+"-keys.png");}}
+            }
             f.Close(); Check(host.Controller.Releases>0,"Preview released on close");
         }
+    }
+    private static void TestGameProfiles()
+    {
+        string dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"ZXMAK2-joystick-test-"+Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir); CtlSettingsJoystick.ProfileLibraryPath=System.IO.Path.Combine(dir,"profiles.xml");
+        var profile=new JoystickGameProfile {Name="Elite",Interface=5};
+        profile.Actions.Add(new JoystickKeyAction {Name="Pause",Binding="b:9",Key=SpeccyKey.P,CapsShift=true,SymbolShift=true});
+        profile.Mapping.Bindings[4]="b:0"; profile.Mapping.AutoFire=JoystickAutoFire.Hold; profile.Mapping.FireRate=15;
+        var copy=profile.Copy(); copy.Actions[0].Name="Changed"; copy.Mapping.Bindings[4]="b:8";
+        Check(profile.Actions[0].Name=="Pause" && profile.Mapping.Bindings[4]=="b:0","Profile copies are independent");
+        CtlSettingsJoystick.WriteLibrary(CtlSettingsJoystick.ProfileLibraryPath,new[] {profile});
+        CtlSettingsJoystick.WriteLibrary(CtlSettingsJoystick.ProfileLibraryPath,new[] {profile});
+        Check(System.IO.File.Exists(CtlSettingsJoystick.ProfileLibraryPath+".bak"),"Profile backup retained");
+        var loaded=CtlSettingsJoystick.ReadLibrary(CtlSettingsJoystick.ProfileLibraryPath)[0];
+        Check(loaded.Name=="Elite" && loaded.Interface==5 && loaded.Mapping.FireRate==15 && loaded.Actions[0].CapsShift && loaded.Actions[0].SymbolShift,"Library roundtrip including shifts");
+        foreach(JoystickInterface mode in Enum.GetValues(typeof(JoystickInterface)))
+        {
+            var bus=new BusManager(); bus.Init(null,true); bus.Disconnect(); bus.Clear();
+            bus.Add(new MemoryPentEvo()); bus.Add(new UlaPentEvo()); var keyboard=new KeyboardDevice(); bus.Add(keyboard);
+            var j=new KempstonJoystick {NoDos=false,HostId="game"}; profile.Interface=(int)mode; j.GameProfile=profile; bus.Add(j);
+            Check(bus.Connect(),"Game-key bus connects "+mode);
+            j.JoystickState=Sample(0,0,uint.MaxValue,9);
+            Check((bus.Cpu.RDPORT(0xDFFE)&31)==30,"Spectrum P contact "+mode);
+            Check((bus.Cpu.RDPORT(0xFEFE)&31)==30,"Caps Shift contact "+mode);
+            Check((bus.Cpu.RDPORT(0x7FFE)&31)==29,"Symbol Shift contact "+mode);
+            Check(j.GetKeyboardMask(0xFFFF)==0,"Unselected key row idle");
+            Check((Read(j)&16)==0,"Game key does not cause Fire");
+            var xml=Node(); j.SaveConfigXml(xml); var restored=new KempstonJoystick(); restored.LoadConfigXml(xml);
+            restored.JoystickState=Sample(0,0,uint.MaxValue,9);
+            Check(restored.InterfaceType==mode && restored.GetKeyboardMask(0xDFFE)==1,"Machine snapshot reload");
+            keyboard.KeyboardState=new DigitKeyboard();
+            Check((bus.Cpu.RDPORT(0x00FE)&31)==28,"Physical and multiple virtual keys combine");
+            j.JoystickState=JoystickInput.Empty; Check(j.GetKeyboardMask(0)==0,"Disconnect releases all game keys");
+            j.JoystickState=Sample(0,0,uint.MaxValue,9); bus.Cpu.RESET(); Check(j.GetKeyboardMask(0)==0,"Reset releases game keys");
+            if(mode==JoystickInterface.KempstonExtended)
+            {j.JoystickState=Sample(0,0,uint.MaxValue,1,2,3); Check(bus.Cpu.RDPORT(31)==224,"Extended three extra Fire bits without primary Fire");}
+            bus.Disconnect();
+        }
+        var plain=new KempstonJoystick {NoDos=false,HostId="plain"};
+        var map=new JoystickMapping(); map.KeyActions.Add(new JoystickKeyAction {Binding="b:0",Key=SpeccyKey.Space}); map.Reserved.Add("b:0");
+        plain.Profiles=new Dictionary<string,JoystickMapping> {{"plain",map}};
+        plain.JoystickState=Sample(0,0,uint.MaxValue,0);
+        Check(plain.GetKeyboardMask(0x7FFE)==1 && (Read(plain)&16)==0,"Standard profile game keys exclude Any Fire");
+        var node=Node(); plain.SaveConfigXml(node); var again=new KempstonJoystick(); again.LoadConfigXml(node); again.JoystickState=Sample(0,0,uint.MaxValue,0);
+        Check(again.GetKeyboardMask(0x7FFE)==1 && (Read(again)&16)==0,"Standard keys survive XML reload");
+        var matrix=ZXMAK2.Host.Tools.KeyboardMatrix.DefaultRows;
+        for(int row=0;row<8;row++) for(int col=0;col<5;col++)
+        {var p=new JoystickGameProfile(); p.Actions.Add(new JoystickKeyAction {Binding="b:0",Key=matrix[row][col]});
+            Check(p.KeyboardMask((ushort)(0xFFFF^(0x100<<row)),Sample(0,0,uint.MaxValue,0))==(1<<col),"All 40 Spectrum key positions");}
+        map.Reserved.Add("a:0:+"); Check((map.Map(Sample(32767,0,uint.MaxValue))&1)==0,"Key-assigned axis excluded from automatic directions");
+        var aggregate=new InputAggregator(new FakeHost(),new IKeyboardDevice[0],new IMouseDevice[0],new IJoystickDevice[] {plain});
+        plain.JoystickState=Sample(0,0,uint.MaxValue,0); aggregate.Dispose(); Check(plain.GetKeyboardMask(0)==0,"Stopping input/pause releases virtual keys");
     }
     private sealed class FakeController : IHostJoystick,IHostJoystickPreview
     {
