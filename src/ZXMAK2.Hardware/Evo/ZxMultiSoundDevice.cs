@@ -43,7 +43,7 @@ namespace ZXMAK2.Hardware.Evo
             new TsFmPsgRenderer("MultiSound YM2203 D1 SSG", PanType.Abc),
             new TsFmPsgRenderer("MultiSound YM2203 D2 SSG", PanType.Cba),
         };
-        private readonly TsFmFmRenderer m_fm = new TsFmFmRenderer();
+        private readonly ITsFmRenderer m_fm;
         private readonly TsFmSaa1099Renderer m_saa;
         private readonly ISoundRenderer[] m_renderers;
         private readonly byte[] m_ymRegister = new byte[2];
@@ -96,6 +96,8 @@ namespace ZXMAK2.Hardware.Evo
         {
             m_isMax = isMax;
             m_isOmni = isOmni;
+            m_fm = isOmni ? (ITsFmRenderer)new OmniOpnFmRenderer() :
+                new TsFmFmRenderer();
             m_saa = new TsFmSaa1099Renderer(isOmni ? 6U : 64U);
             m_gsRam = new byte[isOmni ? 0 :
                 (isMax ? 2 * 1024 * 1024 : 1024 * 1024)];
@@ -423,6 +425,7 @@ namespace ZXMAK2.Hardware.Evo
                 return;
             m_ymRegister[m_ymChip] = value;
             m_psg[m_ymChip].RegAddr = value;
+            m_fm.SetAddress(m_ymChip, value);
         }
 
         private void WriteYmData(ushort address, byte value, ref bool handled)

@@ -75,6 +75,9 @@
     <Compile Include="..\ZX-OmniSound\src\ZxOmniSoundDevice.cs">
       <Link>Evo\ZxOmniSoundDevice.cs</Link>
     </Compile>
+    <Compile Include="..\ZX-OmniSound\src\OmniOpnFmRenderer.cs">
+      <Link>Evo\OmniOpnFmRenderer.cs</Link>
+    </Compile>
     <Compile Include="Evo\ZxMaxOpl3Renderer.cs" />
     <Compile Include="Evo\ZxmMoonSoundDevice.cs" />
     <Compile Include="Evo\ZxNetUsbDevice.cs" />
@@ -177,6 +180,14 @@
     </None>
     <None Include="..\Libraries\YmfmOpl4\ymfm_opl4.dll">
       <Link>ymfm_opl4.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\YmfmOpn\omni_opn.dll">
+      <Link>omni_opn.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\YmfmOpn\LICENSE">
+      <Link>omni-opn.LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\Libraries\YmfmOpl4\LICENSE">

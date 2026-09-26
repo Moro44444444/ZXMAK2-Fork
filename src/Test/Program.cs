@@ -1171,6 +1171,7 @@ namespace Test
         }
 
         private static double s_omniFmFrequency;
+        private static double s_omniYmFmFrequency;
 
         private static void TestZxOmniSound(int sampleRate = 44100)
         {
@@ -1377,6 +1378,19 @@ namespace Test
             var gsReady = (memory.RDMEM_DBG(0x4701) & 1) == 0;
             var externalEnvelopeOk = TestSaaExternalCycles(renderers[3]) &&
                 !TestSaaExternalCycles(renderers[3], true);
+            int ymFm0Peak, ymFm1Peak;
+            double ymFmFrequency;
+            bool ymFmTimerOk;
+            TestOmniOpn(machine, memory, renderers[2], sampleRate,
+                out ymFm0Peak, out ymFm1Peak, out ymFmFrequency,
+                out ymFmTimerOk);
+            if (sampleRate == 44100)
+                s_omniYmFmFrequency = ymFmFrequency;
+            var expectedYmFmFrequency = 617D * 16D * 3500000D /
+                (144D * 1048576D);
+            var ymFmRateOk =
+                Math.Abs(ymFmFrequency - s_omniYmFmFrequency) < 1D &&
+                Math.Abs(ymFmFrequency - expectedYmFmFrequency) < 1D;
             machine.BusManager.Disconnect();
 
             var conflictRejected = true;
@@ -1403,7 +1417,9 @@ namespace Test
                 ym1Peak > 256 && directSaaPeak > 256 &&
                 tsFmSaaPeak > 256 && drivePeak > 0 && oplPeak > 256 &&
                 pcmPeak > 256 && gsPending && gsReady && conflictRejected &&
-                frequencyOk && fmRateOk && externalEnvelopeOk;
+                frequencyOk && fmRateOk && externalEnvelopeOk &&
+                ymFm0Peak > 256 && ymFm1Peak > 256 &&
+                ymFmRateOk && ymFmTimerOk;
             Console.WriteLine("ZX OmniSound: config={0}, owners={1}, " +
                 "YM={2}/{3}, SAA={4}/{5}, Drive={6}, OPL={7}: {8}",
                 configOk, ownershipOk, ym0Peak, ym1Peak,
@@ -1418,8 +1434,79 @@ namespace Test
                 sampleRate, fmFrequency, fmRateOk);
             Console.WriteLine("SAA external envelope address/data cycles: {0}",
                 externalEnvelopeOk ? "PASS" : "FAIL");
+            Console.WriteLine(
+                "YM2203 FM: D1={0}, D2={1}, pitch={2:F3} Hz, " +
+                "rate invariant={3}, timer={4}",
+                ymFm0Peak, ymFm1Peak, ymFmFrequency,
+                ymFmRateOk, ymFmTimerOk);
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static void TestOmniOpn(Spectrum machine,
+            IMemoryDevice memory, ISoundRenderer renderer, int sampleRate,
+            out int firstPeak, out int secondPeak, out double frequency,
+            out bool timerOk)
+        {
+            const ushort start = 0x4000;
+            var peaks = new int[2];
+            frequency = 0D;
+            timerOk = true;
+            for (int chip = 0; chip < 2; chip++)
+            {
+                var program = new System.Collections.Generic.List<byte>();
+                // SAA disabled, FM enabled, register read enabled.
+                AddPortWrite(program, 0xFFFD, (byte)(0xFA | chip));
+                foreach (int slot in new int[] { 0, 4, 8, 12 })
+                {
+                    AddAyWrite(program, (byte)(0x30 + slot), 0x01);
+                    AddAyWrite(program, (byte)(0x40 + slot), 0x30);
+                    AddAyWrite(program, (byte)(0x50 + slot), 0x1F);
+                    AddAyWrite(program, (byte)(0x60 + slot), 0x00);
+                    AddAyWrite(program, (byte)(0x70 + slot), 0x00);
+                    AddAyWrite(program, (byte)(0x80 + slot), 0x0F);
+                }
+                AddAyWrite(program, 0xA4, 0x22);
+                AddAyWrite(program, 0xA0, 0x69);
+                AddAyWrite(program, 0xB0, 0x07);
+                AddAyWrite(program, 0x28, 0xF0);
+                AddAyWrite(program, 0x24, 0xFF);
+                AddAyWrite(program, 0x25, 0x03);
+                AddAyWrite(program, 0x27, 0x05);
+                program.Add(0x18); program.Add(0xFE);
+                for (int i = 0; i < program.Count; i++)
+                    memory.WRMEM_DBG((ushort)(start + i), program[i]);
+                machine.DebugReset();
+                machine.CPU.regs.PC = start;
+                for (int frame = 0; frame < 5; frame++)
+                    machine.ExecuteFrame();
+                peaks[chip] = GetStereoPeak(renderer.AudioBuffer);
+                var opn = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore)
+                    .GetField("m_fm", BindingFlags.Instance |
+                        BindingFlags.NonPublic).GetValue(
+                            machine.BusManager.FindDevice<
+                                ZXMAK2.Hardware.Evo.ZxOmniSoundDevice>());
+                var getStatus = opn.GetType().GetMethod("GetStatus");
+                byte status = (byte)getStatus.Invoke(opn, new object[] { chip });
+                timerOk &= (status & 1) != 0;
+                opn.GetType().GetMethod("SetRegister").Invoke(opn,
+                    new object[] { chip, 0x27, (byte)0x10 });
+                timerOk &= ((byte)getStatus.Invoke(opn,
+                    new object[] { chip }) & 1) == 0;
+                if (chip == 0)
+                {
+                    var audio = new System.Collections.Generic.List<short>();
+                    for (int frame = 0; frame < 100; frame++)
+                    {
+                        machine.ExecuteFrame();
+                        foreach (var sample in renderer.AudioBuffer)
+                            audio.Add(GetLeft(sample));
+                    }
+                    frequency = MeasureToneFrequency(audio, sampleRate);
+                }
+            }
+            firstPeak = peaks[0];
+            secondPeak = peaks[1];
         }
 
         private static bool TestSaaExternalCycles(ISoundRenderer renderer,

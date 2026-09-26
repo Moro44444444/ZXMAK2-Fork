@@ -987,7 +987,17 @@ namespace ZXMAK2.Hardware.Evo
     /// algorithms, feedback, key events, multipliers, levels and ADSR state.
     /// Timers/status are kept independently from the audio generators.
     /// </summary>
-    internal sealed class TsFmFmRenderer : SoundDeviceBase
+    internal interface ITsFmRenderer : ISoundRenderer
+    {
+        bool Enabled { get; set; }
+        void ResetChip();
+        void SetAddress(int chip, byte address);
+        void SetRegister(int chip, int index, byte value);
+        byte GetRegister(int chip, int index);
+        byte GetStatus(int chip);
+    }
+
+    internal sealed class TsFmFmRenderer : SoundDeviceBase, ITsFmRenderer
     {
         private const int ChipCount = 2;
         private const int ChannelCount = 3;
@@ -1034,6 +1044,11 @@ namespace ZXMAK2.Hardware.Evo
         public byte GetStatus(int chip)
         {
             return m_status[chip & 1];
+        }
+
+        public void SetAddress(int chip, byte address)
+        {
+            // Legacy renderer has no address-port side effects.
         }
 
         public byte GetRegister(int chip, int index)
