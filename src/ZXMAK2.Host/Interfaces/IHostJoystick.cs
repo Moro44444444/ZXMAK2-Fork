@@ -4,6 +4,12 @@ using System.Collections.Generic;
 
 namespace ZXMAK2.Host.Interfaces
 {
+    public interface IHostJoystickPreview
+    {
+        Entities.JoystickInput Preview(string hostId);
+        void ReleasePreview();
+        void RefreshControllers();
+    }
     public interface IHostJoystick : IDisposable
     {
         void CaptureHostDevice(string hostId);

@@ -3376,3 +3376,63 @@ ZXM-MoonSound Rev.01 реализована согласно опубликов�
   зазор справа, прежние UI/hotkey/media/ULAplus/master-volume контракты.
   PASS; визуально проверены toolbar и иконки с красными/зелёными/серыми
   точками. v54/v55 не изменены. GitHub не публиковался.
+
+## v57 — PC-джойстики, D-pad/XInput и автоогонь — 2026-09-26
+
+- Пользователь разрешил реализацию после обсуждения. Перед новым этапом
+  сообщил о примерно трёх часах работы текущей машины без зависаний:
+  ULAplus, звук и сеть работают. Новая v57 остаётся тестовой до проверки
+  физических контроллеров пользователем; прежние сборки не изменять.
+- Ветка `codex/v57-joystick-input`, база чистой v56 `6dfaf65`.
+  Основной пользовательский worktree не редактировался.
+- Исправлена причина отсутствия крестовины: прежний backend читает только
+  X/Y, но игнорирует POV. Теперь 8 направлений POV, оси, кнопки DInput,
+  нативный XInput (1.4 / 1.3 / 9.1.0), оба стика и триггеры. HOTAS
+  использует DInput. Windows-имя + `(DInput)` / `(XInput)`; для XInput
+  сопоставление PnP/VID/PID только при однозначности, иначе Controller N.
+- Machine Settings -> JOYSTICK KEMPSTON: PC controller, Refresh controllers,
+  Auto D-pad + stick / D-pad only / Stick only / Custom mapping,
+  dead zone, обучение Up/Down/Left/Right/Fire/Auto-fire toggle,
+  живой индикатор ввода, восстановление назначений по умолчанию.
+  Нажатая до обучения кнопка и колебания оси не назначаются случайно.
+  Правый щелчок очищает, Esc отменяет обучение, timeout 10 секунд.
+- Автоогонь: Off / While Fire is held / Toggle button, 1–25 Гц,
+  default 10. Время машины, включая долю кадра; не wall-clock timer.
+  Focus loss/disconnect/Refresh/reset отключают Toggle; удержанная кнопка
+  не перезапускает его при возвращении фокуса до отпускания.
+  Режим/частота сохраняются, активная защёлка не сохраняется.
+- Отдельные XML JoystickProfile по hostId: имя Windows, направления,
+  назначения, dead zone и автоогонь. Старые XML совместимы. Отключённое
+  устройство остаётся в списке; Apply не заменяет его другим.
+  BaseConf 8-bit Kempston сохраняет дополнительные биты 5/6/7.
+  Fire на бите 4 настраивается независимо. Аппаратные порты не менялись.
+- Честные ограничения: XInput даёт слот, не постоянный ID экземпляра;
+  несколько XI-геймпадов после перестановки слотов надо проверить в Input.
+  DInput читает первые 32 кнопки, 8 осей, 4 POV. Разные DI-интерфейсы
+  с одинаковым именем не склеиваются; различаются `[2]`, `[3]`.
+  Fuller/Cursor/Sinclair и произвольные keyboard bindings не добавлялись.
+- Release: 0 ошибок, прежние два missing-ruleset warning.
+  JoystickProbe: 2588 проверок PASS (включая реальные события/часы модели
+  BaseConf и сброс CPU, XML, UI Refresh, Esc, отсутствие устройства,
+  нормализацию DI/XI, обучение, фокус и автоогонь). Это synthetic input:
+  Windows при сборке обнаружила только None и Keyboard Numpad.
+  Проверка физического геймпада/HOTAS ещё не выполнена.
+- PentEvoProfileProbe PASS: прежние меню, hotkey isolation, носители,
+  ULAplus/master volume и слоты. UlaPlusProbe: 33579 PASS.
+  `/master-volume`, `/evo-display`, `/multisoundmax`, `/multisound`, `/tsfm`,
+  `/moonsound`, `/zxnetusb` PASS. Готовая portable-папка также проверена
+  joystick/UI probe и `/master-volume`, `/multisoundmax`, `/moonsound`.
+- Папка: `L:\Work_two\ZX\ZXMAK2-v57-ZXEVO-BC-Beta1-Joystick-Test-20260926\release`.
+  Копия v56, замена только Host.dll / Host.WinForms.dll / Hardware.dll:
+  по SHA-256 остальные прежние файлы совпадают. Новые документы:
+  README-B57.txt, JOYSTICKS.md, HOTKEYS.md. Удалены только временно
+  скопированные автопроверки этой сборки; ZXMAK2.exe/прошивки/native sound
+  не менялись. GitHub не публиковался, стабильной v57 не объявлялась.
+- SHA-256 Host.dll:
+  `253210CBD9E4E02723F803AE30C291CF18277F0F9E1BC90C48B9AA4DF99517C2`.
+  Host.WinForms.dll:
+  `28321F8A05C40F72C9E02E7527CAA54551D968DC464183E900B05C4840FEB065`.
+  Hardware.dll:
+  `886CB3A02B3BB80CA424C42C83F40577D9416DCAD5E971134EC86295552937D8`.
+- Инструкция: `docs/JOYSTICKS.md`. Глобальные сочетания сохранены;
+  локальная Esc во время обучения записана в `docs/HOTKEYS.md`.

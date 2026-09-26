@@ -5,6 +5,9 @@ using ZXMAK2.Engine;
 using ZXMAK2.Engine.Interfaces;
 using ZXMAK2.Engine.Entities;
 using System.Text;
+using System.Collections.Generic;
+using ZXMAK2.Host.Entities;
+using ZXMAK2.Engine.Cpu;
 
 
 namespace ZXMAK2.Hardware.General
@@ -20,6 +23,22 @@ namespace ZXMAK2.Hardware.General
         private int m_mask;
         private int m_port;
         private int m_bitWidth;
+        private readonly JoystickFireController fireController = new JoystickFireController();
+        private Dictionary<string,JoystickMapping> profiles = new Dictionary<string,JoystickMapping>();
+        private IJoystickState joystickState;
+        private CpuUnit cpu;
+        private IUlaDevice ula;
+        private IUlaFrameTiming frameTiming;
+        private double frameSeconds;
+        private long frameStart;
+
+        public Dictionary<string,JoystickMapping> Profiles
+        {
+            get { var copy=new Dictionary<string,JoystickMapping>(); foreach(var p in profiles) copy[p.Key]=p.Value.Copy(); return copy; }
+            set { profiles=new Dictionary<string,JoystickMapping>(); if(value!=null) foreach(var p in value) profiles[p.Key]=p.Value.Copy(); fireController.Reset(); OnConfigChanged(); }
+        }
+        public JoystickMapping Mapping
+        { get { JoystickMapping result; return profiles.TryGetValue(HostId,out result) ? result : new JoystickMapping(); } }
 
         #endregion Fields
 
@@ -88,6 +107,21 @@ namespace ZXMAK2.Hardware.General
             Port = Utils.GetXmlAttributeAsInt32(node, "port", Port);
             BitWidth = Utils.GetXmlAttributeAsInt32(node, "bitWidth", BitWidth);
             HostId = Utils.GetXmlAttributeAsString(node, "hostId", HostId);
+            var loaded=new Dictionary<string,JoystickMapping>();
+            foreach(XmlNode child in node.SelectNodes("JoystickProfile"))
+            {
+                var map=new JoystickMapping(); int mode;
+                map.DeviceName=Utils.GetXmlAttributeAsString(child,"deviceName","");
+                mode=Utils.GetXmlAttributeAsInt32(child,"directions",0);
+                map.Directions=(JoystickDirections)Math.Max(0,Math.Min(3,mode));
+                mode=Utils.GetXmlAttributeAsInt32(child,"autoFire",0);
+                map.AutoFire=(JoystickAutoFire)Math.Max(0,Math.Min(2,mode));
+                map.DeadZone=Math.Max(5,Math.Min(80,Utils.GetXmlAttributeAsInt32(child,"deadZone",20)));
+                map.FireRate=Math.Max(1,Math.Min(25,Utils.GetXmlAttributeAsInt32(child,"fireRate",10)));
+                for(int i=0;i<6;i++) map.Bindings[i]=Utils.GetXmlAttributeAsString(child,"binding"+i,map.Bindings[i]);
+                loaded[Utils.GetXmlAttributeAsString(child,"hostId","")]=map;
+            }
+            Profiles=loaded;
         }
 
         protected override void OnConfigSave(XmlNode node)
@@ -98,6 +132,18 @@ namespace ZXMAK2.Hardware.General
             Utils.SetXmlAttribute(node, "port", Port);
             Utils.SetXmlAttribute(node, "bitWidth", BitWidth);
             Utils.SetXmlAttribute(node, "hostId", HostId);
+            foreach(XmlNode old in node.SelectNodes("JoystickProfile")) node.RemoveChild(old);
+            foreach(var profile in profiles)
+            {
+                var child=node.OwnerDocument.CreateElement("JoystickProfile"); node.AppendChild(child);
+                Utils.SetXmlAttribute(child,"hostId",profile.Key);
+                Utils.SetXmlAttribute(child,"deviceName",profile.Value.DeviceName);
+                Utils.SetXmlAttribute(child,"directions",(int)profile.Value.Directions);
+                Utils.SetXmlAttribute(child,"autoFire",(int)profile.Value.AutoFire);
+                Utils.SetXmlAttribute(child,"deadZone",profile.Value.DeadZone);
+                Utils.SetXmlAttribute(child,"fireRate",profile.Value.FireRate);
+                for(int i=0;i<6;i++) Utils.SetXmlAttribute(child,"binding"+i,profile.Value.Bindings[i]);
+            }
         }
 
         protected override void OnProcessConfigChange()
@@ -136,6 +182,10 @@ namespace ZXMAK2.Hardware.General
         {
             m_memory = m_noDos ? bmgr.FindDevice<IMemoryDevice>() : null;
             bmgr.Events.SubscribeRdIo(Mask, Port & Mask, ReadPort1F);
+            cpu=bmgr.CPU; ula=bmgr.FindDevice<IUlaDevice>(); frameTiming=ula as IUlaFrameTiming;
+            bmgr.Events.SubscribeBeginFrame(delegate { frameStart=cpu.Tact; });
+            bmgr.Events.SubscribeEndFrame(delegate { frameSeconds+=0.02; });
+            bmgr.Events.SubscribeReset(delegate { fireController.Reset(); frameSeconds=0; frameStart=cpu.Tact; joystickState=null; });
         }
 
         public override void BusConnect()
@@ -144,17 +194,22 @@ namespace ZXMAK2.Hardware.General
 
         public override void BusDisconnect()
         {
+            fireController.Reset(); joystickState=null;
         }
 
         #endregion IBusDevice
 
 
-        public IJoystickState JoystickState { get; set; }
+        public IJoystickState JoystickState
+        {
+            get { return joystickState; }
+            set { joystickState=value; fireController.Sample(value as JoystickInput,Mapping); }
+        }
         
         public string HostId 
         {
             get { return m_hostId; }
-            set { m_hostId = value; OnConfigChanged(); }
+            set { m_hostId = value ?? ""; fireController.Reset(); joystickState=null; OnConfigChanged(); }
         }
 
 
@@ -167,6 +222,17 @@ namespace ZXMAK2.Hardware.General
             value = 0x00;
             if (JoystickState == null)
                 return;
+            var raw=JoystickState as JoystickInput;
+            if(raw!=null)
+            {
+                int frameTacts=ula!=null ? Math.Max(1,ula.FrameTactCount) : 71680;
+                long tact=cpu!=null ? cpu.Tact : frameStart;
+                long elapsed=frameTiming!=null ? frameTiming.GetFrameTact(tact) : tact-frameStart;
+                double seconds=frameSeconds+Math.Max(0,Math.Min(frameTacts,elapsed))/(double)frameTacts*0.02;
+                value=fireController.Output(raw,Mapping,seconds);
+                if(BitWidth!=8) value&=0x1F;
+                return;
+            }
             if (JoystickState.IsRight) value |= 0x01;
             if (JoystickState.IsLeft) value |= 0x02;
             if (JoystickState.IsDown) value |= 0x04;

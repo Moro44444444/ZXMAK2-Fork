@@ -52,6 +52,7 @@
     <Compile Include="Entities\DlgResult.cs" />
     <Compile Include="Entities\FrameInfo.cs" />
     <Compile Include="Entities\HostDeviceInfo.cs" />
+    <Compile Include="Entities\JoystickInput.cs" />
     <Compile Include="Entities\IconDescriptor.cs" />
     <Compile Include="Entities\Key.cs" />
     <Compile Include="Entities\FrameSound.cs" />
