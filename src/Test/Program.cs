@@ -62,6 +62,11 @@ namespace Test
                 TestMultiSoundMidi();
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/omni-opl")
+            {
+                TestOmniMaxOplCompatibility();
+                return;
+            }
             if (args.Length >= 1 && args[0].ToLower() == "/evo-display")
             {
                 TestEvoDisplayModes();
@@ -1766,6 +1771,119 @@ namespace Test
                 passed ? "PASS" : "FAIL");
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static void TestOmniMaxOplCompatibility()
+        {
+            for (int dos = 0; dos < 2; ++dos)
+            {
+                byte[] referenceStatus = null;
+                uint[] referenceAudio = null;
+                for (int card = 0; card < 2; ++card)
+                {
+                    var omni = card == 1
+                        ? new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice() : null;
+                    ZXMAK2.Hardware.Evo.ZxMultiSoundCore board = omni != null
+                        ? (ZXMAK2.Hardware.Evo.ZxMultiSoundCore)omni
+                        : new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice();
+                    IMemoryDevice memory = new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+                    var machine = GetTestMachine(Resources.machines_test);
+                    machine.BusManager.Disconnect();
+                    machine.BusManager.Clear();
+                    machine.BusManager.Add((BusDeviceBase)memory);
+                    machine.BusManager.Add(new ZXMAK2.Hardware.Spectrum.UlaSpectrum48());
+                    machine.BusManager.Add(board);
+                    if (!machine.BusManager.Connect())
+                        throw new InvalidOperationException("OPL comparison connect failed");
+                    if (omni != null)
+                    {
+                        var hostMemory = new ZXMAK2.Hardware.Evo.MemoryPentEvo();
+                        typeof(ZXMAK2.Hardware.MemoryBase).GetField("m_dosen",
+                            BindingFlags.Instance | BindingFlags.NonPublic)
+                            .SetValue(hostMemory, dos != 0);
+                        typeof(ZXMAK2.Hardware.Evo.ZxmMoonSoundDevice)
+                            .GetField("m_hostMemory", BindingFlags.Instance | BindingFlags.NonPublic)
+                            .SetValue(omni.MoonSound, hostMemory);
+                    }
+                    var program = new System.Collections.Generic.List<byte>();
+                    AddPortReadAndStore(program, 0x12C4, 0x6000);
+                    AddPortReadAndStore(program, 0x34C6, 0x6001);
+                    AddPortReadAndStore(program, 0x56C5, 0x6002);
+                    AddPortReadAndStore(program, 0x78C7, 0x6003);
+                    // Standard OPL detection reset and OPL3 mode selection.
+                    AddMoonSoundFmWrite(program, 0x12C4, 0x04, 0x60);
+                    AddMoonSoundFmWrite(program, 0x12C4, 0x04, 0x80);
+                    AddPortReadAndStore(program, 0x12C4, 0x6004);
+                    AddMoonSoundFmWrite(program, 0x34C6, 0x05, 0x01);
+                    AddPortReadAndStore(program, 0x34C6, 0x6005);
+                    AddPortReadAndStore(program, 0x12C4, 0x6006);
+                    // Exercise voices in both OPL3 register banks.
+                    for (int bank = 0; bank < 2; ++bank)
+                    {
+                        ushort port = (ushort)(bank == 0 ? 0x12C4 : 0x34C6);
+                        AddMoonSoundFmWrite(program, port, 0x20, 0x01);
+                        AddMoonSoundFmWrite(program, port, 0x23, 0x01);
+                        AddMoonSoundFmWrite(program, port, 0x40, 0x10);
+                        AddMoonSoundFmWrite(program, port, 0x43, 0x00);
+                        AddMoonSoundFmWrite(program, port, 0x60, 0xF0);
+                        AddMoonSoundFmWrite(program, port, 0x63, 0xF0);
+                        AddMoonSoundFmWrite(program, port, 0x80, 0x77);
+                        AddMoonSoundFmWrite(program, port, 0x83, 0x77);
+                        AddMoonSoundFmWrite(program, port, 0xC0, (byte)(bank == 0 ? 0x10 : 0x20));
+                        AddMoonSoundFmWrite(program, port, 0xA0, (byte)(bank == 0 ? 0x98 : 0x62));
+                        AddMoonSoundFmWrite(program, port, 0xB0, 0x31);
+                    }
+                    AddMoonSoundFmWrite(program, 0x12C4, 0x02, 0xFF);
+                    AddMoonSoundFmWrite(program, 0x12C4, 0x04, 0x01);
+                    program.Add(0x18); program.Add(0xFE);
+                    for (int i = 0; i < program.Count; ++i)
+                        memory.WRMEM_DBG((ushort)(0x4000 + i), program[i]);
+                    machine.IsRunning = false;
+                    machine.DebugReset();
+                    machine.CPU.regs.PC = 0x4000;
+                    var renderers = new System.Collections.Generic.List<ISoundRenderer>(board.SoundRenderers);
+                    ISoundRenderer renderer = omni != null ? omni.MoonSound : renderers[5];
+                    var audio = new System.Collections.Generic.List<uint>();
+                    for (int frame = 0; frame < 4; ++frame)
+                    {
+                        machine.ExecuteFrame();
+                        audio.AddRange(renderer.AudioBuffer);
+                    }
+                    program.Clear();
+                    AddPortReadAndStore(program, 0x12C4, 0x6007);
+                    AddMoonSoundFmWrite(program, 0x12C4, 0x04, 0x80);
+                    AddPortReadAndStore(program, 0x34C6, 0x6008);
+                    for (int i = 0; i < program.Count; ++i)
+                        memory.WRMEM_DBG((ushort)(0x5000 + i), program[i]);
+                    machine.CPU.regs.PC = 0x5000;
+                    while (machine.CPU.regs.PC < 0x5000 + program.Count)
+                        machine.DebugStepInto();
+                    var status = new byte[9];
+                    for (int i = 0; i < status.Length; ++i)
+                        status[i] = memory.RDMEM_DBG((ushort)(0x6000 + i));
+                    if (card == 0)
+                    {
+                        referenceStatus = status;
+                        referenceAudio = audio.ToArray();
+                    }
+                    else
+                    {
+                        bool equal = status[0] == 0 && status[2] == 0xFF &&
+                            status[3] == 0xFF && (status[7] & 0xC0) == 0xC0 &&
+                            (status[8] & 0xE0) == 0 && audio.Count == referenceAudio.Length &&
+                            GetStereoPeak(renderer.AudioBuffer) > 64;
+                        for (int i = 0; i < status.Length; ++i)
+                            equal &= status[i] == referenceStatus[i];
+                        for (int i = 0; equal && i < audio.Count; ++i)
+                            equal &= audio[i] == referenceAudio[i];
+                        Console.WriteLine("Omni/Max OPL3 DOSEN={0}: status={1}, stereo PCM identical={2}: {3}",
+                            dos, BitConverter.ToString(status), equal, equal ? "PASS" : "FAIL");
+                        if (!equal) Environment.ExitCode = 1;
+                    }
+                    machine.BusManager.Disconnect();
+                    machine.Dispose();
+                }
+            }
         }
 
         private static void TestMultiSoundMidi()

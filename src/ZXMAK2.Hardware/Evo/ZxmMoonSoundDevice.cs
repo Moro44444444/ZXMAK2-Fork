@@ -56,6 +56,9 @@ namespace ZXMAK2.Hardware.Evo
         // Experimental OmniSound output adapter; legacy MoonSound remains
         // bit-identical at its accepted 44.1 kHz path.
         public bool ResampleHostOutput { get; set; }
+        // OmniSound shares the Max OPL3 and MoonSound OPL4 FM port group.
+        // Select Max's decoder/reset status without duplicating FM voices.
+        internal bool MaxOpl3Interface { get; set; }
 
         public override void BusInit(IBusManager bmgr)
         {
@@ -126,6 +129,8 @@ namespace ZXMAK2.Hardware.Evo
                 if (m_core == IntPtr.Zero)
                     throw new InvalidOperationException(
                         "ymfm could not create a YMF278B instance");
+                if (MaxOpl3Interface)
+                    NativeMethods.Read(m_core, 0);
                 ResetResampler();
             }
             catch (Exception ex)
@@ -162,7 +167,11 @@ namespace ZXMAK2.Hardware.Evo
         {
             RenderToCurrentTime();
             if (m_core != IntPtr.Zero)
+            {
                 NativeMethods.Reset(m_core);
+                if (MaxOpl3Interface)
+                    NativeMethods.Read(m_core, 0);
+            }
             ResetResampler();
         }
 
@@ -201,7 +210,7 @@ namespace ZXMAK2.Hardware.Evo
         private void WriteFmPort(ushort address, byte value,
             ref bool handled)
         {
-            if (!AreExpansionPortsAvailable)
+            if (!MaxOpl3Interface && !AreExpansionPortsAvailable)
                 return;
             RenderToCurrentTime();
             if (m_core != IntPtr.Zero)
@@ -212,7 +221,8 @@ namespace ZXMAK2.Hardware.Evo
         private void ReadFmPort(ushort address, ref byte value,
             ref bool handled)
         {
-            if (!AreExpansionPortsAvailable)
+            if ((MaxOpl3Interface && handled) ||
+                (!MaxOpl3Interface && !AreExpansionPortsAvailable))
                 return;
             RenderToCurrentTime();
             // Both even ports expose the common YMF278B status.  OPL3 data
