@@ -57,6 +57,11 @@ namespace Test
                 TestZxOmniSound(96000);
                 return;
             }
+            if (args.Length >= 1 && args[0].ToLower() == "/midisynth")
+            {
+                TestMultiSoundMidi();
+                return;
+            }
             if (args.Length >= 1 && args[0].ToLower() == "/evo-display")
             {
                 TestEvoDisplayModes();
@@ -1205,14 +1210,14 @@ namespace Test
             var core = typeof(ZXMAK2.Hardware.Evo.ZxMultiSoundCore);
             var gsRam = (byte[])core.GetField("m_gsRam",
                 BindingFlags.Instance | BindingFlags.NonPublic).GetValue(board);
-            var ownershipOk = renderers.Count == 6 &&
+            var ownershipOk = renderers.Count == 7 &&
                 gsRam.Length == 0 && !board.EffectiveGeneralSoundEnabled &&
                 board.EffectiveYmEnabled && board.EffectiveSaaEnabled &&
                 board.EffectiveSoundDriveEnabled && board.MoonSound.CoreAvailable;
             var mixerGains = (int[])typeof(FrameSound).GetField("_sourceGains",
                 BindingFlags.Instance | BindingFlags.NonPublic)
                 .GetValue(machine.BusManager.SoundFrame);
-            ownershipOk &= mixerGains.Length == 7;
+            ownershipOk &= mixerGains.Length == 8;
             foreach (var gain in mixerGains) ownershipOk &= gain == 140;
 
             const ushort start = 0x4000;
@@ -1736,7 +1741,7 @@ namespace Test
             var renderers = new System.Collections.Generic.List<ISoundRenderer>(
                 board.SoundRenderers);
             var saaPeak = GetStereoPeak(renderers[3].AudioBuffer);
-            var oplPeak = GetStereoPeak(renderers[4].AudioBuffer);
+            var oplPeak = GetStereoPeak(renderers[5].AudioBuffer);
             memory.WRMEM_DBG(0x4600, 0x18);
             memory.WRMEM_DBG(0x4601, 0xFE);
             machine.CPU.regs.PC = 0x4600;
@@ -1761,6 +1766,76 @@ namespace Test
                 passed ? "PASS" : "FAIL");
             if (!passed)
                 Environment.ExitCode = 1;
+        }
+
+        private static void TestMultiSoundMidi()
+        {
+            for (int card = 0; card < 3; ++card)
+            {
+                ZXMAK2.Hardware.Evo.ZxMultiSoundCore board = card == 0
+                    ? (ZXMAK2.Hardware.Evo.ZxMultiSoundCore)
+                        new ZXMAK2.Hardware.Evo.ZxMultiSoundDevice()
+                    : card == 1
+                        ? (ZXMAK2.Hardware.Evo.ZxMultiSoundCore)
+                            new ZXMAK2.Hardware.Evo.ZxMultiSoundMaxDevice()
+                        : new ZXMAK2.Hardware.Evo.ZxOmniSoundDevice();
+                IMemoryDevice memory =
+                    new ZXMAK2.Hardware.Spectrum.MemorySpectrum48();
+                var machine = GetTestMachine(Resources.machines_test);
+                machine.BusManager.Disconnect();
+                machine.BusManager.Clear();
+                machine.BusManager.Add((BusDeviceBase)memory);
+                machine.BusManager.Add(new ZXMAK2.Hardware.Spectrum.UlaSpectrum48());
+                machine.BusManager.Add(board);
+                if (!machine.BusManager.Connect())
+                    throw new InvalidOperationException("MIDI test board did not connect");
+                var renderers = new System.Collections.Generic.List<ISoundRenderer>(
+                    board.SoundRenderers);
+                var midi = renderers[4];
+                for (int chip = 0; chip < 2; ++chip)
+                {
+                    const ushort start = 0x4000;
+                    var program = new System.Collections.Generic.List<byte>();
+                    AddPortWrite(program, 0xFFFD, (byte)(0xFE | chip));
+                    AddAyWrite(program, 0x07, 0xFC); // AY port A output
+                    AddPortWrite(program, 0xFFFD, 0x0E);
+                    AddSerialMidiByte(program, 0xC0); // piano program
+                    AddSerialMidiByte(program, 0x00);
+                    AddSerialMidiByte(program, 0x90); // note on
+                    AddSerialMidiByte(program, 60);
+                    AddSerialMidiByte(program, 100);
+                    program.Add(0x18);
+                    program.Add(0xFE);
+                    for (int i = 0; i < program.Count; ++i)
+                        memory.WRMEM_DBG((ushort)(start + i), program[i]);
+                    machine.IsRunning = false;
+                    machine.DebugReset();
+                    machine.CPU.regs.PC = start;
+                    int peak = 0;
+                    for (int frame = 0; frame < 3; ++frame)
+                    {
+                        machine.ExecuteFrame();
+                        peak = Math.Max(peak, GetStereoPeak(midi.AudioBuffer));
+                    }
+                    Console.WriteLine("{0} MIDI AY chip {1} peak={2}: {3}",
+                        board.Name, chip + 1, peak,
+                        peak > 100 ? "PASS" : "FAIL");
+                    if (peak <= 100)
+                        Environment.ExitCode = 1;
+                }
+                machine.BusManager.Disconnect();
+                machine.Dispose();
+            }
+        }
+
+        private static void AddSerialMidiByte(
+            System.Collections.Generic.List<byte> program, byte value)
+        {
+            AddPortWrite(program, 0xBFFD, 0xFA); // start, A2 low
+            for (int bit = 0; bit < 8; ++bit)
+                AddPortWrite(program, 0xBFFD,
+                    (byte)((value & (1 << bit)) != 0 ? 0xFE : 0xFA));
+            AddPortWrite(program, 0xBFFD, 0xFE); // stop, A2 high
         }
 
         private static void TestEvoDisplayModes()

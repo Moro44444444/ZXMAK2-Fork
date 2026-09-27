@@ -45,6 +45,7 @@ namespace ZXMAK2.Hardware.Evo
         };
         private readonly ITsFmRenderer m_fm;
         private readonly TsFmSaa1099Renderer m_saa;
+        private readonly MidiSynthRenderer m_midi = new MidiSynthRenderer();
         private readonly ISoundRenderer[] m_renderers;
         private readonly byte[] m_ymRegister = new byte[2];
         private readonly byte[] m_ymPrescale = { 6, 6 };
@@ -99,17 +100,17 @@ namespace ZXMAK2.Hardware.Evo
             m_isOmni = isOmni;
             m_fm = isOmni ? (ITsFmRenderer)new OmniOpnFmRenderer() :
                 new TsFmFmRenderer();
-            m_saa = new TsFmSaa1099Renderer(isOmni ? 6U : 64U);
+            m_saa = new TsFmSaa1099Renderer();
             m_gsRam = new byte[isOmni ? 0 :
                 (isMax ? 2 * 1024 * 1024 : 1024 * 1024)];
             Name = isMax ? "ZX-MultiSound Max" : "ZX-MultiSound Rev.A2";
             Description = isMax
                 ? "ZX-MultiSound Max for ZXBUS: 2 x YM2203, SAA1099, " +
                   "General Sound 16 MHz/2 MB, SoundDrive and YMF262 OPL3. " +
-                  "External SAM2695 MIDI is not emulated."
+                  "MIDI via YM port A2 with a virtual GM synthesizer."
                 : "ZX-MultiSound Rev.A2 for ZXBUS: 2 x YM2203, SAA1099, " +
                   "General Sound 16 MHz/1 MB with ROM 1.05b and SounDrive. " +
-                  "The external SAM2695 synthesizer is not emulated.";
+                  "MIDI via YM port A2 with a virtual GM synthesizer.";
             Category = BusDeviceCategory.Music;
             AutomaticConfiguration = true;
             YmEnabled = true;
@@ -124,12 +125,12 @@ namespace ZXMAK2.Hardware.Evo
             m_renderers = isMax && !isOmni
                 ? new ISoundRenderer[]
                   {
-                      m_psg[0], m_psg[1], m_fm, m_saa,
+                      m_psg[0], m_psg[1], m_fm, m_saa, m_midi,
                       new ZxMaxOpl3Renderer(),
                   }
                 : new ISoundRenderer[]
                   {
-                      m_psg[0], m_psg[1], m_fm, m_saa,
+                      m_psg[0], m_psg[1], m_fm, m_saa, m_midi,
                   };
             ResetBoard();
         }
@@ -385,6 +386,7 @@ namespace ZXMAK2.Hardware.Evo
                 m_psg[1].SetChipFrequency(1750000);
             }
             m_saa.ResetChip();
+            m_midi.ResetChip();
             m_saa.ClockEnabled = false;
             m_gsPage = 0;
             m_gsCommand = 0;
@@ -452,10 +454,7 @@ namespace ZXMAK2.Hardware.Evo
             if (m_effectiveSaa && TsFmSaaPortCompatibility &&
                 m_tsFmSaaSelected)
             {
-                if (m_isOmni)
-                    m_saa.SetData(value);
-                else
-                    m_saa.SetReg(m_saa.RegAddr, value);
+                m_saa.SetData(value);
                 return;
             }
             if (!m_effectiveYm)
@@ -511,10 +510,7 @@ namespace ZXMAK2.Hardware.Evo
                 m_saa.RegAddr = value;
             else
             {
-                if (m_isOmni)
-                    m_saa.SetData(value);
-                else
-                    m_saa.SetReg(m_saa.RegAddr, value);
+                m_saa.SetData(value);
             }
         }
 
@@ -778,6 +774,8 @@ namespace ZXMAK2.Hardware.Evo
             var state = m_ira[chip];
             state.OutState = value;
             state.DirOut = (m_psg[chip].GetReg(PsgRegId.MIXER_CONTROL) & 0x40) != 0;
+            if (state.DirOut)
+                m_midi.WritePortA(chip, value);
             var handler = IraHandler;
             if (handler != null)
                 handler(this, state);

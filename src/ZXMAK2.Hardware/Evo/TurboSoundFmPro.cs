@@ -235,7 +235,7 @@ namespace ZXMAK2.Hardware.Evo
         {
             if (SaaSelected)
             {
-                m_saa.SetReg(m_saa.RegAddr, value);
+                m_saa.SetData(value);
                 return;
             }
 
@@ -263,7 +263,7 @@ namespace ZXMAK2.Hardware.Evo
             if ((address & 0x0100) != 0)
                 m_saa.RegAddr = value;
             else
-                m_saa.SetReg(m_saa.RegAddr, value);
+                m_saa.SetData(value);
         }
 
         private void ReadPort(ushort addr, ref byte value, ref bool handled)
@@ -489,11 +489,10 @@ namespace ZXMAK2.Hardware.Evo
         private int m_externalSampleRate;
         private byte[] m_externalPcm;
 
-        public TsFmSaa1099Renderer(uint oversamplePower = 64U)
+        public TsFmSaa1099Renderer(uint oversamplePower = 6U)
         {
             // SAASound's API takes log2(factor), not the factor itself.
-            // Keep the accepted legacy board setting until listening tests;
-            // OmniSound explicitly supplies 6 for real 64x oversampling.
+            // Six selects real 64x oversampling on every SAA board.
             m_externalOversample = oversamplePower;
             Name = "TSFM SAA1099";
             Description = "Philips SAA1099, 8 MHz, 6 tone/noise channels";

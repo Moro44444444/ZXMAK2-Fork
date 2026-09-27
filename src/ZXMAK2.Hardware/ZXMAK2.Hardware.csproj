@@ -70,6 +70,7 @@
     <Compile Include="DeviceExample.cs" />
     <Compile Include="Evo\AYCHRV.cs" />
     <Compile Include="Evo\TurboSoundFmPro.cs" />
+    <Compile Include="Evo\MidiSynthRenderer.cs" />
     <Compile Include="Evo\ZxMultiSoundDevice.cs" />
     <Compile Include="Evo\ZxMultiSoundMaxDevice.cs" />
     <Compile Include="..\ZX-OmniSound\src\ZxOmniSoundDevice.cs">
@@ -184,6 +185,22 @@
     </None>
     <None Include="..\ZX-OmniSound\native\YmfmOpn\omni_opn.dll">
       <Link>omni_opn.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\MidiSynth\omni_midi.dll">
+      <Link>omni_midi.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\MidiSynth\GeneralUser-GS.sf2">
+      <Link>GeneralUser-GS.sf2</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\MidiSynth\GeneralUser-GS.LICENSE.txt">
+      <Link>GeneralUser-GS.LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\ZX-OmniSound\native\TinySoundFont\LICENSE">
+      <Link>omni-midi.LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\ZX-OmniSound\native\YmfmOpn\LICENSE">

@@ -599,6 +599,7 @@
             this.tbrButtonFullScreen.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.tbrButtonFullScreen.Name = "tbrButtonFullScreen";
             this.tbrButtonFullScreen.Size = new System.Drawing.Size(36, 36);
+            this.tbrButtonFullScreen.ToolTipText = "Full Screen (Alt+Enter)";
             // 
             // tbrButtonQuickLoad
             // 

@@ -111,3 +111,8 @@ MainViewModel.cs, CmosPentEvo.cs и обработчики окон отладч
 - Refresh controllers и настройки автоогня доступны кнопками в
   Machine Settings → JOYSTICK KEMPSTON; глобальных горячих клавиш для них нет.
 - Factory Reset Ctrl+Alt+F12 не переопределён.
+
+## v61 — подсказка полного экрана
+
+- На кнопке Full Screen показана подсказка `Full Screen (Alt+Enter)`.
+  Назначение Alt+Enter и перехват Enter для гостевой машины не менялись.
