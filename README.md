@@ -10,7 +10,34 @@ documentation. Registers, I/O ports, timing modes, board revisions and
 conflict rules are implemented from those specifications. The maintained
 configuration uses current compatible BIOS and ROM images.
 
-![ZX Evo BaseConf — EVO Reset Service](docs/images/zx-evo-baseconf.png)
+## Screenshots / Скриншоты
+
+<table>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0001.png" alt="ZXMAK2 screenshot 0001" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0006.png" alt="ZXMAK2 screenshot 0006" width="480"></td>
+</tr>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0007.png" alt="ZXMAK2 screenshot 0007" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0008.png" alt="ZXMAK2 screenshot 0008" width="480"></td>
+</tr>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0010.png" alt="ZXMAK2 screenshot 0010" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0011.png" alt="ZXMAK2 screenshot 0011" width="480"></td>
+</tr>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0012.png" alt="ZXMAK2 screenshot 0012" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0015.png" alt="ZXMAK2 screenshot 0015" width="480"></td>
+</tr>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0017.png" alt="ZXMAK2 screenshot 0017" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0019.png" alt="ZXMAK2 screenshot 0019" width="480"></td>
+</tr>
+<tr>
+<td><img src="docs/images/screenshots/Screenshot_0021.png" alt="ZXMAK2 screenshot 0021" width="480"></td>
+<td><img src="docs/images/screenshots/Screenshot_0023.png" alt="ZXMAK2 screenshot 0023" width="480"></td>
+</tr>
+</table>
 
 ## ZX Evolution BaseConf capabilities
 
