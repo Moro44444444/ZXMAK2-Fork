@@ -1,127 +1,125 @@
-# ZXMAK2 Fork — Extended ZX Evolution Emulator
+# ZXMAK2 Fork — ZX Evo BaseConf RC1
 
-ZXMAK2 Fork is an extended ZX Evolution emulator for Windows, based on
-ZXMAK2 and focused on the ZX Evolution BaseConf platform. It is intended for
-running ZX Evolution software, games, operating systems and expansion
-hardware in a convenient configurable virtual machine.
+ZXMAK2 Fork is a Windows emulator focused on ZX Evolution BaseConf. It models
+the machine as a configurable virtual system: processor, memory, firmware,
+storage, display modes and expansion hardware can be changed without leaving
+the emulator.
 
-The implementation is guided by the official ZX Evolution, NedoPC and chip
-manufacturer documentation. Expansion-board registers, ports, operating
-modes and conflict rules are modelled from that documentation and from the
-latest publicly available board and firmware revisions applicable to the
-emulated configuration. The test profile uses compatible current BIOS and ROM
-builds for the supported machine configuration.
+The implementation follows published ZX Evolution, NedoPC and chip-maker
+documentation. Registers, I/O ports, timing modes, board revisions and
+conflict rules are implemented from those specifications. The maintained
+configuration uses current compatible BIOS and ROM images.
 
 ![ZX Evo BaseConf — EVO Reset Service](docs/images/zx-evo-baseconf.png)
 
-## Main capabilities
+## ZX Evolution BaseConf capabilities
 
-- Configurable CPU speed (3.5, 7 and 14 MHz), memory, TR-DOS, keyboard,
-  mouse, joystick, tape and storage devices.
-- Two equal ZXBUS slots. A board can be installed in either slot; invalid
-  duplicate or conflicting combinations are prevented.
-- ZXBUS expansion boards: TurboSound FM Pro, ZX-MultiSound, NeoGS,
-  ZXM-MoonSound and ZXNetUSB Rev.C.
-- Internal AY/YM sound plus SAA1099, General Sound, SoundDrive, FM, PCM and
-  wavetable/OPL4 audio paths provided by the expansion boards.
-- Four floppy drives, IDE/HDD, Z-controller SD card, separate NeoGS SD card,
-  CD-ROM access through Windows optical drives, and TAP tape playback.
-- Clear toolbar media status: green means inserted, red means empty, and grey
-  means that the device is unavailable or disabled. Tape, disks, SD cards and
-  CD-ROM can be mounted and ejected directly from the toolbar.
-- ZXNetUSB Rev.C Ethernet support through a WIZnet W5300 model. TCP, UDP,
-  DHCP and DNS use regular Windows networking without TAP drivers, network
-  adapter capture or administrator rights, enabling network-aware NedoOS
-  software.
-- Full Screen, border/no-border display, aspect-preserving, fixed-pixel and
-  square-pixel scaling, video filters, antialiasing and hotkeys.
-- Warm Reset, CMOS Reset and Factory Reset are available from the VM menu and
-  keyboard shortcuts.
+- 3.5, 7 and 14 MHz CPU modes; configurable memory, TR-DOS, keyboard, mouse,
+  joystick, tape and reset behaviour.
+- Optional **ULAplus** compatibility. When it is enabled in ULA settings,
+  supporting software selects the 64-colour palette automatically; disabling
+  it retains standard Spectrum video.
+- Two equivalent ZXBUS slots. Boards can be placed in either slot, while
+  duplicate and incompatible combinations are rejected.
+- Four floppy drives, IDE/HDD, Z-controller SD, independent NeoGS microSD,
+  CD-ROM access through Windows optical drives, TAP playback and mounting or
+  ejecting media from the toolbar.
+- ZXNetUSB Rev.C with WIZnet W5300, TCP, UDP, DHCP and DNS through regular
+  Windows networking; no TAP driver, network-adapter capture or administrator
+  rights are required.
+- Full Screen (`Alt+Enter`), border/no-border display, scaling modes, video
+  filters, antialiasing, Master Volume, configurable PC joystick mapping,
+  Warm Reset, CMOS Reset and Factory Reset.
 
-The project is continuously checked with CPU, ULA, media, sound-board and
-renderer-performance tests. Stable builds are preserved separately, while new
-work is developed and tested in isolated branches to retain a reliable
-rollback point.
+## Sound hardware
 
-## Current public beta
+| Board | Emulated facilities |
+| --- | --- |
+| **Neo General Sound (NeoGS C-VS)** | General Sound, MOD, MP3, VS1011 and its own microSD card. |
+| **TurboSound FM Pro Rev.C** | Dual YM2203 with FM and SAA1099. |
+| **ZX-MultiSound Rev.A2** | Two YM2203, SAA1099, General Sound, SoundDrive and MIDI. |
+| **ZX-MultiSound Max** | MultiSound facilities plus 2 MB General Sound and OPL2/OPL3 playback, including VGM. |
+| **ZXM-MoonSound Rev.01** | YMF278B OPL4, PCM/wavetable playback, YRW801-M ROM and sample RAM. |
+| **ZX OmniSound Virtual** | A virtual universal card combining NeoGS, MultiSound audio, MIDI, SoundDrive, Max-compatible OPL2/OPL3/VGM and MoonSound OPL4 in one ZXBUS slot. |
 
-### ZX Evolution BaseConf Beta 1 — B50
+The emulator models the board interfaces and prevents hardware-port conflicts.
+Sound output is mixed with per-board calibration and a Master Volume control.
+`ZX OmniSound Virtual` has a 40% output increase as part of its single final
+mix stage.
 
-The current public build is **Beta 1**, based on the accepted BaseConf B50
-configuration and including the latest supported sound boards, media controls
-and ZXNetUSB Rev.C Ethernet support.
+## Current release
 
-[**Download the Beta 1 portable ZIP**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.8-beta1/ZXMAK2-ZXEvo-BaseConf-Beta-1.zip)
-or read the [Beta 1 release notes](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.8-beta1).
+[**ZXMAK2 Fork — ZX Evo BaseConf RC1**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v1.0-rc1)
+is the current portable release for the ZX Evo BaseConf RC1 configuration.
 
-The archive has one root folder and excludes personal machine state, mounted
-media images, logs, PDB files and the Yamaha YRW801-M instrument ROM. A
-legally obtained ROM can be placed beside `ZXMAK2.exe` to enable MoonSound
-PCM/wavetable playback. Extract it and run `ZXMAK2.exe`.
+The archive excludes personal machine state, mounted media, logs, PDB files
+and the Yamaha YRW801-M instrument ROM. Place a legally obtained YRW801-M ROM
+beside `ZXMAK2.exe` to enable MoonSound PCM/wavetable playback.
 
-Older versions are available in the [Releases archive](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
+Stable builds and working states are retained as rollback points. CPU, ULA,
+media, sound-board and renderer tests accompany the development work.
 
 ---
 
-# ZXMAK2 Fork — расширенный эмулятор ZX Evolution
+# ZXMAK2 Fork — ZX Evo BaseConf RC1
 
-ZXMAK2 Fork — расширенный эмулятор ZX Evolution для Windows, созданный на
-основе ZXMAK2 и ориентированный на платформу ZX Evolution BaseConf. Он
-предназначен для запуска программ, игр, операционных систем и плат расширения
-ZX Evolution в удобной настраиваемой виртуальной машине.
+ZXMAK2 Fork — эмулятор для Windows, ориентированный на ZX Evolution BaseConf.
+Машина моделируется как настраиваемая виртуальная система: процессор, память,
+прошивки, накопители, видеорежимы и платы расширения меняются прямо в
+эмуляторе.
 
-Реализация опирается на официальную техническую документацию ZX Evolution,
-NedoPC и производителей микросхем. Регистры, порты, режимы работы и правила
-конфликтов плат расширения моделируются по этой документации и последним
-доступным публичным ревизиям плат и прошивок, применимым к конфигурации
-эмулятора. В тестовой конфигурации используются совместимые актуальные BIOS и
-ROM для поддерживаемой машины.
+Реализация опирается на опубликованную документацию ZX Evolution, NedoPC и
+производителей микросхем. Регистры, порты, режимы, ревизии плат и правила
+конфликтов воспроизводятся по этой документации. В поддерживаемой конфигурации
+используются совместимые актуальные BIOS и ROM.
 
-## Основные возможности
+## Возможности ZX Evolution BaseConf
 
-- Настройка частоты процессора 3,5 / 7 / 14 МГц, памяти, TR-DOS, клавиатуры,
-  мыши, джойстика, ленты и накопителей.
-- Два равноправных слота ZXBUS. Плату можно установить в любой слот; ошибочные
-  дублирующие или конфликтующие комбинации не допускаются.
-- Платы ZXBUS: TurboSound FM Pro, ZX-MultiSound, NeoGS, ZXM-MoonSound и
-  ZXNetUSB Rev.C.
-- Внутренний звук AY/YM, а также SAA1099, General Sound, SoundDrive, FM, PCM
-  и wavetable/OPL4-тракты плат расширения.
-- Четыре FDD-дисковода, IDE/HDD, SD-карта Z-controller, отдельная SD-карта
-  NeoGS, CD-ROM через оптические приводы Windows и воспроизведение лент TAP.
-- Наглядное состояние носителей на панели инструментов: зелёный — вставлен,
-  красный — пусто, серый — устройство отключено или недоступно. Ленты, диски,
-  SD-карты и CD-ROM монтируются и извлекаются непосредственно с панели.
-- Сетевая часть ZXNetUSB Rev.C через модель WIZnet W5300. TCP, UDP, DHCP и DNS
-  используют обычную сеть Windows без TAP-драйверов, захвата сетевой карты и
-  прав администратора, предоставляя сетевой доступ программам NedoOS.
-- Полноэкранный режим, рамка или режим без рамки, масштабирование с сохранением
-  пропорций, фиксированный и квадратный пиксель, видеофильтры, антиалиасинг и
-  горячие клавиши.
-- Warm Reset, CMOS Reset и Factory Reset доступны из меню VM и с клавиатуры.
+- Режимы процессора 3,5 / 7 / 14 МГц, настраиваемые память, TR-DOS,
+  клавиатура, мышь, джойстик, лента и сброс машины.
+- Опциональная совместимость с **ULAplus**. При включении в настройках ULA
+  программа сама выбирает 64-цветную палитру; в выключенном состоянии работает
+  стандартное Spectrum-видео.
+- Два равноправных слота ZXBUS. Плату можно ставить в любой слот, а дублирующие
+  и несовместимые комбинации не допускаются.
+- Четыре FDD-дисковода, IDE/HDD, SD Z-controller, независимая microSD NeoGS,
+  CD-ROM через оптические приводы Windows, TAP и загрузка/извлечение носителей
+  с панели инструментов.
+- ZXNetUSB Rev.C с WIZnet W5300, TCP, UDP, DHCP и DNS через обычную сеть
+  Windows без TAP-драйверов, захвата сетевого адаптера и прав администратора.
+- Полноэкранный режим (`Alt+Enter`), рамка/без рамки, масштабирование,
+  видеофильтры, антиалиасинг, Master Volume, настройка PC-джойстика, Warm
+  Reset, CMOS Reset и Factory Reset.
 
-Проект регулярно проверяется тестами процессора, ULA, носителей, звуковых плат
-и производительности рендеринга. Стабильные сборки хранятся отдельно, а новые
-возможности разрабатываются и проверяются в изолированных ветках — всегда
-остаётся надёжная точка отката.
+## Звуковое оборудование
 
-## Текущая публичная бета-версия
+| Плата | Эмулируемые возможности |
+| --- | --- |
+| **Neo General Sound (NeoGS C-VS)** | General Sound, MOD, MP3, VS1011 и собственная microSD-карта. |
+| **TurboSound FM Pro Rev.C** | Два YM2203, FM и SAA1099. |
+| **ZX-MultiSound Rev.A2** | Два YM2203, SAA1099, General Sound, SoundDrive и MIDI. |
+| **ZX-MultiSound Max** | Возможности MultiSound, General Sound 2 МБ и OPL2/OPL3, включая VGM. |
+| **ZXM-MoonSound Rev.01** | YMF278B OPL4, PCM/wavetable-воспроизведение, ROM YRW801-M и sample RAM. |
+| **ZX OmniSound Virtual** | Виртуальная универсальная плата: NeoGS, звук MultiSound, MIDI, SoundDrive, OPL2/OPL3/VGM как у Max и OPL4 MoonSound в одном слоте ZXBUS. |
 
-### ZX Evolution BaseConf Beta 1 — B50
+Эмулятор моделирует интерфейсы плат и предотвращает конфликты аппаратных
+портов. Звук смешивается с калибровкой уровней отдельных плат и общей
+регулировкой Master Volume. У `ZX OmniSound Virtual` прибавка выхода 40%
+выполняется один раз на окончательном микшировании.
 
-Текущая публичная сборка — **Beta 1**, основанная на принятой конфигурации
-BaseConf B50. В неё включены последние поддерживаемые звуковые платы, элементы
-управления носителями и сетевая поддержка ZXNetUSB Rev.C.
+## Текущий выпуск
 
-[**Скачать portable ZIP Beta 1**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/download/v0.8-beta1/ZXMAK2-ZXEvo-BaseConf-Beta-1.zip)
-или открыть [примечания к выпуску Beta 1](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v0.8-beta1).
+[**ZXMAK2 Fork — ZX Evo BaseConf RC1**](https://github.com/Moro44444444/ZXMAK2-Fork/releases/tag/v1.0-rc1)
+— текущая portable-версия конфигурации ZX Evo BaseConf RC1.
 
-В архиве одна корневая папка; личные состояния машины, смонтированные образы,
-логи, PDB-файлы и инструментальный ROM Yamaha YRW801-M исключены. Собственную
-законно полученную копию ROM можно положить рядом с `ZXMAK2.exe`, чтобы работала
-PCM/wavetable-часть MoonSound. Распакуйте архив и запустите `ZXMAK2.exe`.
+Из архива исключены личные состояния машины, смонтированные носители, логи,
+PDB-файлы и инструментальный ROM Yamaha YRW801-M. Законно полученную копию
+YRW801-M можно положить рядом с `ZXMAK2.exe`, чтобы работала PCM/wavetable
+часть MoonSound.
 
-Предыдущие версии сохранены в [архиве релизов](https://github.com/Moro44444444/ZXMAK2-Fork/releases).
+Стабильные сборки и рабочие состояния сохраняются как точки отката. В ходе
+разработки выполняются тесты процессора, ULA, носителей, звуковых плат и
+производительности рендеринга.
 
 ## History
 
